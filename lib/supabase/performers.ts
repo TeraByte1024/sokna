@@ -1,0 +1,2 @@
+export const SUPABASE_PERFORMERS_TABLE =
+  process.env.NEXT_PUBLIC_SUPABASE_PERFORMERS_TABLE ?? "performers";
