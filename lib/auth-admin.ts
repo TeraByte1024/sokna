@@ -14,7 +14,7 @@ async function getIsAdminUncached(): Promise<boolean> {
 
   const email = user.email.trim();
 
-  const adminClient = createAdminClient(); // 여기서 Secret Key 사용
+  const adminClient = createAdminClient();
   const { data, error } = await adminClient
     .from(SUPABASE_ADMINS_TABLE)
     .select("id")

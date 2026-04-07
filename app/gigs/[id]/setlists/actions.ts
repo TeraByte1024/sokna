@@ -2,26 +2,21 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import type { PartConfigs, SetlistLink } from "@/lib/setlist";
+import type { SetlistFormValues } from "@/lib/setlist";
 
 export async function addSetlist(
   gigId: string,
-  payload: {
-    title: string;
-    artist: string;
-    description: string;
-    part_config: PartConfigs;
-    references: SetlistLink[];
-  }
+  payload: SetlistFormValues,
 ) {
   const supabase = await createClient();
   const { error } = await supabase.from("setlists").insert({
-    gig_id: gigId,
+    gig_id: Number(gigId),
     title: payload.title,
     artist: payload.artist,
+    required_parts: payload.requiredParts,
+    sheet_exists: payload.sheetExists,
     description: payload.description,
-    part_config: payload.part_config,
-    references: payload.references,
+    links: payload.links,
   });
 
   if (error) throw error;

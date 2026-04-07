@@ -1,275 +1,393 @@
 "use client";
 
-import { useCallback, useId, useRef, useState, useTransition, useEffect } from "react";
+import { useCallback, useRef, useState, useTransition, useEffect } from "react";
 import { useParams } from "next/navigation";
-import { Plus, Trash2, Loader2, ExternalLink } from "lucide-react";
+import { Plus, Loader2, AlarmClock, Link as LinkIcon } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { PartChip } from "@/components/setlists/part-chip";
-import {
-  type Setlist,
-  type SetlistLink,
-  type PartConfigs,
-  mapSetlistRow,
-} from "@/lib/setlist";
-import { addSetlist, deleteSetlist } from "@/app/gigs/[id]/setlists/actions";
+import { Card, CardContent } from "@/components/ui/card";
 
-type LinkRow = SetlistLink & { _key: string };
+import { Badge } from "@/components/ui/badge";
+import {
+	type Setlist,
+	parseSetlist,
+	defaultRequiredParts,
+	SetlistFormValues,
+} from "@/lib/setlist";
+
+import { SetlistDrawer } from "@/components/setlists/setlist-drawer";
+import { SetlistNewModal } from "@/components/setlists/setlist-new-modal";
+import { addSetlist } from "@/app/gigs/[id]/setlists/actions";
+import { cn } from "@/lib/utils";
+
+const DEADLINE_COLUMN = "meeting_date";
+const DEFAULT_REQUIRED_PARTS = defaultRequiredParts();
+const DEFAULT_FORM_STATE: SetlistFormValues = {
+	title: "",
+	artist: "",
+	requiredParts: [...DEFAULT_REQUIRED_PARTS],
+	sheetExists: false,
+	description: "",
+	links: [],
+};
+
+/**
+ * 마감 기한까지 남은 시간을 계산 (회의 1일 전 마감)
+ */
+const getRemainingTime = (targetDate: string) => {
+	if (!targetDate) return { dd: 0, hh: 0, mm: 0, isOver: true };
+
+	const deadline = new Date(targetDate);
+	// 회의 날짜의 24시간 전(전날 같은 시간)을 실제 마감으로 설정
+	deadline.setDate(deadline.getDate() - 1);
+
+	const now = new Date();
+	const diff = deadline.getTime() - now.getTime();
+
+	if (diff <= 0) return { dd: 0, hh: 0, mm: 0, isOver: true };
+
+	return {
+		dd: Math.floor(diff / (1000 * 60 * 60 * 24)),
+		hh: Math.floor((diff / (1000 * 60 * 60)) % 24),
+		mm: Math.floor((diff / (1000 * 60)) % 60),
+		isOver: false,
+	};
+};
+
+/**
+ * 오늘 기준 D-Day 문자열 반환
+ */
+const getDDay = (targetDate: string) => {
+	if (!targetDate) return "";
+
+	const target = new Date(targetDate);
+	const now = new Date();
+
+	// 시간 제외하고 날짜만 비교
+	now.setHours(0, 0, 0, 0);
+	target.setHours(0, 0, 0, 0);
+
+	const diffDays = Math.ceil(
+		(target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
+	);
+
+	if (diffDays === 0) return "D-Day";
+	return diffDays > 0 ? `D-${diffDays}` : `D+${Math.abs(diffDays)}`;
+};
 
 export function SetlistPanel() {
-  const params = useParams();
-  const gigId = params.id as string;
-  const dialogRef = useRef<HTMLDialogElement>(null);
-  const supabase = createClient();
+	const params = useParams();
+	const gigId = params.id as string;
+	const dialogRef = useRef<HTMLDialogElement>(null);
+	const supabase = createClient();
 
-  const [isPending, startTransition] = useTransition();
-  const [songs, setSongs] = useState<Setlist[]>([]);
-  const [userId, setUserId] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+	const [isPending, startTransition] = useTransition();
+	const [songs, setSongs] = useState<Setlist[]>([]);
+	const [selectedSong, setSelectedSong] = useState<Setlist | null>(null); // 서랍에 표시할 곡
+	const [gigInfo, setGigInfo] = useState<{
+		title: string;
+		meetingDate: string;
+	} | null>(null);
+	const [isLoading, setIsLoading] = useState(true);
+	const [timeLeft, setTimeLeft] = useState(getRemainingTime(""));
 
-  // Form States
-  const [title, setTitle] = useState("");
-  const [artist, setArtist] = useState("");
-  const [description, setDescription] = useState("");
-  const [linkRows, setLinkRows] = useState<LinkRow[]>([{ youtubeUrl: "", _key: "init" }]);
+	const [form, setForm] = useState(DEFAULT_FORM_STATE);
+	const [newPart, setNewPart] = useState("");
 
-  // 핵심: 세션 구성을 string 배열로 관리
-  const [parts, setParts] = useState<string[]>([]);
-  const [isAddingPart, setIsAddingPart] = useState(false);
+	useEffect(() => {
+		async function init() {
+			setIsLoading(true);
+			try {
+				const [gigRes, setlistRes] = await Promise.all([
+					supabase
+						.from("gigs")
+						.select(`title, ${DEADLINE_COLUMN}`)
+						.eq("id", gigId)
+						.single(),
+					supabase
+						.from("setlists")
+						.select(
+							`*,
+                author:users (
+                  name,
+                  generation
+                )
+              `,
+						)
+						.eq("gig_id", gigId)
+						.order("created_at", { ascending: false }),
+				]);
 
-  const handleIncrement = (partName: string) => {
-    setParts((prev) => [...prev, partName]);
-  };
+				if (gigRes.data) {
+					const mDate = gigRes.data[DEADLINE_COLUMN] || "";
+					setGigInfo({
+						title: gigRes.data.title || "무제",
+						meetingDate: mDate,
+					});
+					setTimeLeft(getRemainingTime(mDate));
+				}
+				if (setlistRes.data) setSongs(setlistRes.data.map(parseSetlist));
+			} finally {
+				setIsLoading(false);
+			}
+		}
+		init();
+	}, [gigId, supabase]);
 
-  // 1명 제거 핸들러 (마지막 인덱스부터 지워서 자연스럽게 처리)
-  const handleDecrement = (partName: string) => {
-    setParts((prev) => {
-      const index = prev.lastIndexOf(partName);
-      if (index > -1) {
-        const next = [...prev];
-        next.splice(index, 1);
-        return next;
-      }
-      return prev;
-    });
-  };
+	useEffect(() => {
+		if (!gigInfo?.meetingDate) return;
+		const timer = setInterval(
+			() => setTimeLeft(getRemainingTime(gigInfo.meetingDate)),
+			60000,
+		);
+		return () => clearInterval(timer);
+	}, [gigInfo?.meetingDate]);
 
-  const handleAddPart = (newPart: string) => {
-    setParts((prev) => [...prev, newPart]);
-    setIsAddingPart(false);
-  };
-  const groupedParts = parts.reduce((acc, curr) => {
-    acc[curr] = (acc[curr] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
+	const resetForm = useCallback(() => {
+		setForm(DEFAULT_FORM_STATE as Setlist);
+		setNewPart("");
+	}, []);
 
-  // 기본 세션 구성 정의
-  const DEFAULT_SESSIONS = ["보컬", "기타", "베이스", "드럼", "건반"];
+	// 4. 링크(refs) 업데이트 로직을 form 내부로 통합
+	const updateRef = (idx: number, field: "url" | "note", val: string) => {
+		setForm((prev) => {
+			const nextLinks = [...prev.links];
+			nextLinks[idx] = { ...nextLinks[idx], [field]: val };
+			return { ...prev, links: nextLinks };
+		});
+	};
 
-  useEffect(() => {
-    async function init() {
-      setIsLoading(true);
-      try {
-        const [authRes, dbRes] = await Promise.all([
-          supabase.auth.getUser(),
-          supabase.from("setlists").select("*").eq("gig_id", gigId).order("created_at", { ascending: false })
-        ]);
-        if (authRes.data.user) setUserId(authRes.data.user.id);
-        if (dbRes.data) setSongs(dbRes.data.map(mapSetlistRow));
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setIsLoading(false);
-      }
-    }
-    init();
-  }, [gigId, supabase]);
+	const handleSubmit = async (e: React.FormEvent) => {
+		e.preventDefault();
+		startTransition(async () => {
+			try {
+				await addSetlist(gigId, form);
 
-  const resetForm = useCallback(() => {
-    setTitle("");
-    setArtist("");
-    setDescription("");
-    setParts([...DEFAULT_SESSIONS]);
-    setIsAddingPart(false);
-    setLinkRows([{ youtubeUrl: "", _key: crypto.randomUUID() }]);
-  }, []);
+				closeDialog();
+				window.location.reload();
+			} catch (e) {
+				alert("저장에 실패했습니다: " + (e as Error).message);
+			}
+		});
+	};
 
-  const openDialog = () => { resetForm(); dialogRef.current?.showModal(); };
-  const closeDialog = () => dialogRef.current?.close();
+	if (isLoading)
+		return (
+			<div className="flex justify-center py-10">
+				<Loader2 className="animate-spin text-muted-foreground" />
+			</div>
+		);
 
-  const handleDeletePart = (partName: string) => {
-    // 해당 파트 명을 가진 항목 중 하나만 제거
-    setParts((prev) => {
-      const index = prev.indexOf(partName);
-      if (index > -1) {
-        const next = [...prev];
-        next.splice(index, 1);
-        return next;
-      }
-      return prev;
-    });
-  };
+	const openDialog = () => {
+		resetForm();
+		dialogRef.current?.showModal();
+	};
+	const closeDialog = () => dialogRef.current?.close();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+	return (
+		<div className="relative flex flex-col gap-8 w-full max-w-5xl mx-auto px-4 pb-20">
+			{/* 헤더 섹션 */}
+			<div className="border-b pb-6 space-y-4">
+				<h1 className="text-2xl font-extrabold tracking-tight flex items-center gap-2">
+					{gigInfo?.meetingDate && (
+						<Badge
+							variant="default"
+							className="text-xs px-2 py-0 h-5 bg-primary text-primary-foreground rounded font-bold"
+						>
+							{getDDay(gigInfo.meetingDate)}
+						</Badge>
+					)}
+					<span>{gigInfo?.title} 선곡회의</span>
+				</h1>
 
-    // parts 배열을 다시 기존의 PartConfigs(객체) 형태로 변환하여 전송
-    const partConfig: PartConfigs = parts.reduce((acc, curr) => {
-      acc[curr] = (acc[curr] || 0) + 1;
-      return acc;
-    }, {} as any);
+				<div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-muted/30 p-4 rounded-xl border border-dashed">
+					<div className="text-sm font-medium w-full sm:w-auto text-left">
+						{timeLeft.isOver ? (
+							<span className="text-muted-foreground font-bold">
+								곡 추천이 마감되었습니다.
+							</span>
+						) : (
+							<div className="flex items-center gap-2 text-muted-foreground">
+								<AlarmClock className="size-4 text-primary" />
+								<span>
+									선곡 마감까지{" "}
+									<span className="text-primary font-bold">
+										{timeLeft.dd}일 {timeLeft.hh}시간 {timeLeft.mm}분
+									</span>{" "}
+									남았어요.
+								</span>
+							</div>
+						)}
+					</div>
+					<Button
+						onClick={openDialog}
+						size="lg"
+						disabled={timeLeft.isOver}
+						className="w-full sm:w-auto shadow-md"
+					>
+						<Plus className="size-4 mr-2" /> 곡 추천하기
+					</Button>
+				</div>
+			</div>
 
-    const links = linkRows
-      .map(({ youtubeUrl, segmentNote }) => ({
-        youtubeUrl: youtubeUrl.trim(),
-        segmentNote: segmentNote?.trim() || undefined,
-      }))
-      .filter((l) => l.youtubeUrl.length > 0);
+			{/* 카드 리스트: 클릭 시 selectedSong 설정 */}
+			<section className="grid gap-4">
+				{songs.length === 0 ? (
+					<Card className="bg-muted/10 border-dashed border-2 py-16 text-center text-muted-foreground">
+						아직 추천된 곡이 없습니다.
+					</Card>
+				) : (
+					songs.map((song) => (
+						<div
+							key={song.id}
+							onClick={() => setSelectedSong(song)}
+							className="cursor-pointer"
+						>
+							<SetlistCard song={song} />
+						</div>
+					))
+				)}
+			</section>
 
-    startTransition(async () => {
-      try {
-        await addSetlist(gigId, {
-          title: title.trim(),
-          artist: artist.trim(),
-          description: description.trim(),
-          part_config: partConfig,
-          references: links,
-        });
-        closeDialog();
-        window.location.reload();
-      } catch (err) {
-        alert("저장에 실패했습니다.");
-      }
-    });
-  };
+			{/* 등록 모달 */}
+			<SetlistNewModal
+				ref={dialogRef}
+				form={form}
+				setForm={setForm}
+				// form 내부의 값을 꺼내서 전달
+				parts={form.requiredParts}
+				setParts={(newParts) =>
+					setForm((prev) => ({
+						...prev,
+						requiredParts:
+							typeof newParts === "function"
+								? newParts(prev.requiredParts)
+								: newParts,
+					}))
+				}
+				refs={form.links}
+				updateRef={updateRef}
+				newPart={newPart}
+				setNewPart={setNewPart}
+				isPending={isPending}
+				onSubmit={handleSubmit}
+				onClose={closeDialog}
+			/>
 
-  if (isLoading) return <div className="flex justify-center py-10"><Loader2 className="animate-spin text-muted-foreground" /></div>;
+			<SetlistDrawer
+				song={selectedSong}
+				onClose={() => setSelectedSong(null)}
+			/>
 
-  return (
-    <div className="flex flex-col gap-8 w-full">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">선곡회의</h1>
-          <p className="text-muted-foreground mt-2 text-sm">공연하고 싶은 곡을 추천해 주세요.</p>
-        </div>
-        <Button onClick={openDialog} className="shrink-0">
-          <Plus className="size-4 mr-2" /> 후보곡 추가
-        </Button>
-      </div>
-
-      <section className="grid gap-4">
-        {songs.length === 0 ? (
-          <Card className="bg-muted/20 border-dashed">
-            <CardContent className="py-10 text-center text-sm text-muted-foreground">
-              아직 추천된 곡이 없습니다.
-            </CardContent>
-          </Card>
-        ) : (
-          songs.map((song) => (
-            <SetlistCard key={song.id} song={song} onDelete={(id) => { }} canDelete={song.createdBy === userId} />
-          ))
-        )}
-      </section>
-
-      <dialog
-        ref={dialogRef}
-        className="fixed left-1/2 top-1/2 z-50 w-[min(calc(100vw-1rem),32rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border bg-background p-0 shadow-2xl backdrop:bg-black/50 backdrop:backdrop-blur-sm"
-      >
-        <form onSubmit={handleSubmit} className="flex flex-col max-h-[90vh]">
-          <div className="border-b px-6 py-4 font-semibold">후보곡 등록</div>
-
-          <div className="overflow-y-auto px-6 py-4 space-y-6">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label>곡 제목</Label>
-                <Input value={title} onChange={(e) => setTitle(e.target.value)} required />
-              </div>
-              <div className="space-y-2">
-                <Label>아티스트</Label>
-                <Input value={artist} onChange={(e) => setArtist(e.target.value)} required />
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <Label className="text-xs text-muted-foreground uppercase tracking-wider">세션 구성</Label>
-              <div className="flex flex-wrap gap-2 items-center border rounded-lg p-3 min-h-[3rem] bg-muted/5 shadow-sm transition-all">
-                {Object.entries(groupedParts).map(([name, count]) => (
-                  <PartChip
-                    key={name}
-                    label={name}
-                    count={count}
-                    onIncrement={() => handleIncrement(name)}
-                    onDecrement={() => handleDecrement(name)}
-                  />
-                ))}
-
-                {isAddingPart ? (
-                  <PartChip
-                    isEditing
-                    onConfirm={handleAddPart}
-                    onCancel={() => setIsAddingPart(false)}
-                  />
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setIsAddingPart(true)}
-                    className={`
-                        flex items-center justify-center h-8 px-4 rounded-full 
-                        border border-dashed border-muted-foreground/40 
-                        text-muted-foreground hover:text-primary hover:border-primary hover:bg-primary/5 
-                        transition-all active:scale-95 group
-                      `}
-                    title="새 파트 추가"
-                  >
-                    <Plus className="size-3.5 mr-1.5 group-hover:scale-110 transition-transform" />
-                    <span className="text-[13px] font-bold">파트 추가</span>
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label>설명 / 어필</Label>
-              <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-2 border-t px-6 py-4">
-            <Button type="button" variant="ghost" onClick={closeDialog}>취소</Button>
-            <Button type="submit" disabled={isPending}>등록</Button>
-          </div>
-        </form>
-      </dialog>
-    </div>
-  );
+			{/* 서랍 열렸을 때 배경 어둡게 처리 */}
+			{selectedSong && (
+				<div
+					className="fixed inset-0 z-[90] bg-black/40 backdrop-blur-sm transition-opacity"
+					onClick={() => setSelectedSong(null)}
+				/>
+			)}
+		</div>
+	);
 }
 
-// SetlistCard는 이전 답변의 구조를 유지하되 스타일만 통일시켰습니다.
-function SetlistCard({ song, onDelete, canDelete }: { song: Setlist; onDelete: (id: string) => void; canDelete: boolean }) {
-  return (
-    <Card className="overflow-hidden">
-      <CardHeader className="flex flex-row items-start justify-between pb-2 space-y-0">
-        <div className="space-y-1">
-          <CardTitle className="text-lg">{song.title}</CardTitle>
-          <CardDescription>{song.artist}</CardDescription>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4 text-sm">
-        <div className="flex flex-wrap gap-2">
-          {Object.entries(song.partConfigs).map(([label, count]) => (
-            count > 0 && (
-              <div key={label} className="bg-muted px-2 py-1 rounded text-[11px] font-medium">
-                {label} <span className="text-primary ml-0.5">{count}</span>
-              </div>
-            )
-          ))}
-        </div>
-        {song.description && <p className="text-muted-foreground leading-relaxed">{song.description}</p>}
-      </CardContent>
-    </Card>
-  );
+function SetlistCard({
+	song,
+}: {
+	song: Setlist & { author?: { name: string; generation: number } };
+}) {
+	// 중복된 파트 카운트 로직
+	const partCounts = song.requiredParts.reduce(
+		(acc, p) => {
+			acc[p] = (acc[p] || 0) + 1;
+			return acc;
+		},
+		{} as Record<string, number>,
+	);
+	const uniqueParts = Array.from(new Set(song.requiredParts));
+
+	return (
+		<Card className="group hover:border-blue-400 transition-all shadow-sm overflow-hidden border-slate-200 bg-white">
+			<CardContent className="p-5 space-y-4">
+				{/* 1열: [곡 제목 - 아티스트] [악보 유무] */}
+				<div className="flex items-baseline justify-between gap-2">
+					<div className="flex items-baseline gap-2 min-w-0">
+						<h3 className="text-lg font-bold text-slate-900 truncate group-hover:text-blue-600 transition-colors">
+							{song.title}
+						</h3>
+						<span className="text-sm text-slate-500 font-medium truncate">
+							- {song.artist}
+						</span>
+					</div>
+					<span
+						className={cn(
+							"text-[12px] font-bold shrink-0 px-2 py-0.5 rounded-md",
+							song.sheetExists
+								? "text-slate-400 bg-slate-100"
+								: "text-red-500 bg-red-50 border border-red-100",
+						)}
+					>
+						악보 {song.sheetExists ? "있음" : "없음"}
+					</span>
+				</div>
+
+				{/* 2열: 세션 구성 칩 & 작성자(이름+기수) */}
+				<div className="flex items-center justify-between gap-4">
+					<div className="flex flex-wrap gap-1.5 flex-1">
+						{uniqueParts.map((part) => (
+							<div
+								key={part}
+								className="flex items-center bg-slate-100 text-slate-700 rounded-md h-7 px-2.5 gap-1.5 border border-slate-200"
+							>
+								<span className="text-[11px] font-bold">{part}</span>
+								<span className="text-[10px] font-black bg-slate-800 text-white px-1.5 py-0.5 rounded shadow-sm">
+									{partCounts[part]}
+								</span>
+							</div>
+						))}
+					</div>
+
+					{/* ✅ 작성자 정보: users 테이블에서 가져온 데이터 바인딩 */}
+					<div className="shrink-0 text-[12px] font-bold text-slate-500 bg-slate-50 px-2 py-1 rounded-lg border border-slate-100">
+						{song.author ? (
+							<>
+								<span className="text-slate-900">{song.author.name}</span>
+								<span className="ml-1 text-slate-400 font-medium">
+									({song.author.generation}기)
+								</span>
+							</>
+						) : (
+							"알 수 없음"
+						)}
+					</div>
+				</div>
+
+				{/* 3열: 곡의 어필 (말줄임표 적용) */}
+				{song.description && (
+					<div className="pt-3 border-t border-slate-100">
+						<p className="text-sm text-slate-600 truncate text-left italic">
+							&ldquo;{song.description}&rdquo;
+						</p>
+					</div>
+				)}
+
+				{/* 참고 링크 */}
+				{song.links.length > 0 && (
+					<div className="flex flex-wrap gap-x-3 gap-y-1 pt-1">
+						{song.links.map((link, idx) => (
+							<a
+								key={idx}
+								href={link.url}
+								target="_blank"
+								rel="noreferrer"
+								className="flex items-center gap-1 text-[11px] text-blue-500 hover:text-blue-700 transition-colors font-medium"
+							>
+								<LinkIcon className="size-3" />
+								{link.note || "참고"}
+							</a>
+						))}
+					</div>
+				)}
+			</CardContent>
+		</Card>
+	);
 }

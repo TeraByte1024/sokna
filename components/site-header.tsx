@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { EnvVarWarning } from "@/components/env-var-warning";
 import { AuthButton } from "@/components/auth-button";
 import { SiteNav } from "@/components/site-nav";
-import { CLUB_NAME } from "@/lib/club";
+import { CLUB_NAME_KOREAN } from "@/lib/club";
 import { hasEnvVars } from "@/lib/utils";
 
 export function SiteHeader() {
@@ -15,7 +15,7 @@ export function SiteHeader() {
             href="/"
             className="shrink-0 max-w-[11rem] sm:max-w-none text-left leading-snug hover:opacity-90 transition-opacity"
           >
-            {CLUB_NAME}
+            {CLUB_NAME_KOREAN}
           </Link>
           <Suspense fallback={<div className="w-20" />}>
             <SiteNav />

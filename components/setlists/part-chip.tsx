@@ -1,93 +1,81 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Minus, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { motion, DragControls } from "framer-motion";
+import { useRef } from "react";
 
 interface PartChipProps {
-  label?: string;
-  count?: number;
-  isEditing?: boolean;
-  onConfirm?: (value: string) => void;
-  onCancel?: () => void;
-  onDecrement?: (e: React.MouseEvent) => void;
-  onIncrement?: (e: React.MouseEvent) => void;
+	label: string;
+	count: number;
+	isDragging: boolean;
+	dragControls: DragControls;
+	onLongPressStart: () => void;
+	onClick: (e: React.MouseEvent) => void;
 }
 
 export function PartChip({
-  label,
-  count = 1,
-  isEditing,
-  onConfirm,
-  onCancel,
-  onDecrement,
-  onIncrement,
+	label,
+	count,
+	isDragging,
+	dragControls,
+	onLongPressStart,
+	onClick,
 }: PartChipProps) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [value, setValue] = useState("");
+	const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  useEffect(() => {
-    if (isEditing) inputRef.current?.focus();
-  }, [isEditing]);
+	const handlePointerDown = (e: React.PointerEvent) => {
+		timerRef.current = setTimeout(() => {
+			onLongPressStart();
+			dragControls.start(e);
+		}, 400);
+	};
 
-  if (isEditing) {
-    return (
-      <div className="flex items-center bg-primary/10 border border-primary/30 rounded-full px-3 py-1 animate-in fade-in zoom-in duration-200">
-        <input
-          ref={inputRef}
-          type="text"
-          placeholder="파트명..."
-          className="bg-transparent border-none outline-none text-[13px] w-20 placeholder:text-muted-foreground font-bold"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") value.trim() ? onConfirm?.(value.trim()) : onCancel?.();
-            if (e.key === "Escape") onCancel?.();
-          }}
-          onBlur={() => (value.trim() ? onConfirm?.(value.trim()) : onCancel?.())}
-        />
-      </div>
-    );
-  }
+	const clearTimer = () => {
+		if (timerRef.current) clearTimeout(timerRef.current);
+	};
 
-  return (
-    <div
-      className={cn(
-        "group relative flex items-center bg-secondary text-secondary-foreground rounded-full overflow-hidden",
-        "border border-muted/30 transition-all shadow-sm select-none h-8"
-      )}
-    >
-      {/* 1. 플러스 영역: 파트명 + 아이콘 (왼쪽 라운드 포함) */}
-      <div
-        onClick={onIncrement}
-        className={cn(
-          "relative z-10 flex items-center gap-1.5 pl-3.5 pr-1.5 h-full cursor-pointer transition-colors",
-          "hover:bg-emerald-500/15 group/add"
-        )}
-      >
-        <span className="text-[13px] text-foreground font-bold tracking-tight whitespace-nowrap">
-          {label}
-        </span>
-        <Plus className="size-3 text-muted-foreground group-hover/add:text-emerald-600 transition-colors" />
-      </div>
-
-      {/* 2. 숫자 표시부: 배경 제거 및 폰트 강조 */}
-      <div className="relative z-30 h-full flex items-center px-1 bg-secondary">
-        <span className="text-[13px] text-primary font-black min-w-[0.9rem] text-center">
-          {count}
-        </span>
-      </div>
-
-      {/* 3. 마이너스 영역 (오른쪽 라운드 포함) */}
-      <div
-        onClick={onDecrement}
-        className={cn(
-          "relative z-10 flex items-center justify-center pl-1.5 pr-3.5 h-full cursor-pointer transition-colors",
-          "hover:bg-destructive/15 group/minus"
-        )}
-      >
-        <Minus className="size-3 text-muted-foreground group-hover/minus:text-destructive transition-colors" />
-      </div>
-    </div>
-  );
+	return (
+		<motion.div
+			layout // 순서 변경 시 부드럽게 이동
+			onPointerDown={handlePointerDown}
+			onPointerUp={clearTimer}
+			onPointerLeave={clearTimer}
+			// ✅ 흔들림 애니메이션
+			animate={isDragging ? { rotate: [-1, 1, -1] } : { rotate: 0 }}
+			transition={
+				isDragging
+					? {
+							rotate: { repeat: Infinity, duration: 0.15, ease: "linear" },
+						}
+					: { rotate: { duration: 0.1 } }
+			}
+			whileDrag={{ scale: 1.1, zIndex: 50 }}
+			className={cn(
+				// ✅ 배경색 통합 및 강조 디자인 (Royal Blue & Deep Navy 조합)
+				"group flex items-center rounded-lg border shadow-sm h-9 px-4 gap-3 select-none touch-none transition-all duration-200",
+				isDragging
+					? "border-blue-600 bg-blue-600 text-white shadow-xl ring-4 ring-blue-500/20"
+					: "border-slate-200 bg-white text-slate-700 cursor-pointer hover:border-blue-500 hover:bg-blue-50/50 active:scale-95 shadow-sm",
+			)}
+			onClick={onClick}
+		>
+			<span
+				className={cn(
+					"text-[13px] font-bold tracking-tight",
+					isDragging ? "text-white" : "text-slate-800",
+				)}
+			>
+				{label}
+			</span>
+			{/* ✅ 배경 구분 없이 텍스트 강조만 진행 */}
+			<span
+				className={cn(
+					"text-[11px] font-black min-w-[1.2rem] text-center px-1.5 py-0.5 rounded",
+					isDragging ? "bg-white/20 text-white" : "bg-blue-100 text-blue-700",
+				)}
+			>
+				{count}
+			</span>
+		</motion.div>
+	);
 }
