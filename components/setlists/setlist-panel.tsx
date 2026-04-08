@@ -210,9 +210,14 @@ export function SetlistPanel() {
 							<div className="flex items-center gap-2 text-muted-foreground">
 								<AlarmClock className="size-4 text-primary" />
 								<span>
-									선곡 마감까지{" "}
+									추천 마감까지{" "}
 									<span className="text-primary font-bold">
-										{timeLeft.dd}일 {timeLeft.hh}시간 {timeLeft.mm}분
+										{/* ✅ 상위 단위가 있으면 하위 단위를 표시하지 않는 로직 */}
+										{timeLeft.dd > 0
+											? `${timeLeft.dd}일`
+											: timeLeft.hh > 0
+												? `${timeLeft.hh}시간`
+												: `${timeLeft.mm}분`}
 									</span>{" "}
 									남았어요.
 								</span>
