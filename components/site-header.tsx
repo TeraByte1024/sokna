@@ -1,11 +1,9 @@
 import Link from "next/link";
 import Image from "next/image"; // Image 컴포넌트 추가
 import { Suspense } from "react";
-import { EnvVarWarning } from "@/components/env-var-warning";
 import { AuthButton } from "@/components/auth-button";
 import { SiteNav } from "@/components/site-nav";
 import { CLUB_NAME_KOREAN } from "@/lib/club";
-import { hasEnvVars } from "@/lib/utils";
 
 export function SiteHeader() {
 	return (
@@ -29,13 +27,9 @@ export function SiteHeader() {
 						<SiteNav />
 					</Suspense>
 				</div>
-				{!hasEnvVars ? (
-					<EnvVarWarning />
-				) : (
-					<Suspense>
-						<AuthButton />
-					</Suspense>
-				)}
+				<Suspense>
+					<AuthButton />
+				</Suspense>
 			</div>
 		</header>
 	);
