@@ -4,8 +4,6 @@ import { ThemeSwitcher } from "@/components/theme-switcher";
 import { SiInstagram, SiYoutube } from '@icons-pack/react-simple-icons';
 
 export function SiteFooter() {
-	const currentYear = new Date().getFullYear();
-
 	return (
 		<footer className="w-full border-t bg-background">
 			<div className="max-w-5xl mx-auto px-5 py-12 md:py-16">
@@ -31,7 +29,7 @@ export function SiteFooter() {
 								한양대학교 중앙 밴드 동아리 소리로 크는 나무
 							</p>
 							<p className="text-[10px] text-muted-foreground/60 mt-1 uppercase tracking-wider">
-								© {currentYear} SOKNA. All rights reserved.
+								© 2026 SOKNA. All rights reserved.
 							</p>
 						</div>
 					</div>
@@ -41,7 +39,7 @@ export function SiteFooter() {
 						{/* SNS 아이콘 레이아웃 */}
 						<div className="flex items-center gap-5">
 							<a
-								href="https://www.instagram.com/hanyang_sokna/" // 실제 주소로 수정하세요!
+								href="https://www.instagram.com/sokna_1986/"
 								target="_blank"
 								rel="noreferrer"
 								className="text-muted-foreground hover:text-pink-500 transition-colors"
@@ -50,7 +48,7 @@ export function SiteFooter() {
 								<SiInstagram className="size-5 fill-current" />
 							</a>
 							<a
-								href="https://www.youtube.com/@SOKNA" // 실제 주소로 수정하세요!
+								href="https://www.youtube.com/@sokna_1986"
 								target="_blank"
 								rel="noreferrer"
 								className="text-muted-foreground hover:text-red-600 transition-colors"
