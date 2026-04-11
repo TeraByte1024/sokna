@@ -108,10 +108,13 @@ export function SetlistPanel() {
 						.from("setlists")
 						.select(
 							`*,
-                author:users (
-                  name,
-                  generation
-                )
+                created_by:performers (
+									part,
+									...users (
+										name,
+										generation
+									)
+								)
               `,
 						)
 						.eq("gig_id", gigId)
@@ -126,6 +129,7 @@ export function SetlistPanel() {
 					});
 					setTimeLeft(getRemainingTime(mDate));
 				}
+				console.log(setlistRes.data);
 				if (setlistRes.data) setSongs(setlistRes.data.map(parseSetlist));
 			} finally {
 				setIsLoading(false);
@@ -298,7 +302,9 @@ export function SetlistPanel() {
 function SetlistCard({
 	song,
 }: {
-	song: Setlist & { author?: { name: string; generation: number } };
+	song: Setlist & {
+		createdBy?: { name: string; part: string; generation: number };
+	};
 }) {
 	// 중복된 파트 카운트 로직
 	const partCounts = song.requiredParts.reduce(
@@ -341,24 +347,24 @@ function SetlistCard({
 						{uniqueParts.map((part) => (
 							<div
 								key={part}
-								className="flex items-center bg-slate-100 text-slate-700 rounded-md h-7 px-2.5 gap-1.5 border border-slate-200"
+								className="flex items-center bg-slate-100 text-slate-700 rounded-2xl h-7 px-2.5 gap-1.5 border border-slate-200"
 							>
 								<span className="text-[11px] font-bold">{part}</span>
-								<span className="text-[10px] font-black bg-slate-800 text-white px-1.5 py-0.5 rounded shadow-sm">
+								<span className="text-[12px] font-extrabold">
 									{partCounts[part]}
 								</span>
 							</div>
 						))}
 					</div>
 
-					{/* ✅ 작성자 정보: users 테이블에서 가져온 데이터 바인딩 */}
+					{/* 작성자 정보 */}
 					<div className="shrink-0 text-[12px] font-bold text-slate-500 bg-slate-50 px-2 py-1 rounded-lg border border-slate-100">
-						{song.author ? (
+						{song.createdBy ? (
 							<>
-								<span className="text-slate-900">{song.author.name}</span>
-								<span className="ml-1 text-slate-400 font-medium">
-									({song.author.generation}기)
+								<span className="mr-1 text-slate-400 font-medium">
+									{song.createdBy.generation}기
 								</span>
+								<span className="text-slate-900">{song.createdBy.name}</span>
 							</>
 						) : (
 							"알 수 없음"

@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.4"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       admins: {
@@ -172,7 +197,7 @@ export type Database = {
         Row: {
           artist: string | null
           created_at: string
-          created_by: string
+          created_by: number | null
           description: string | null
           gig_id: number
           id: number
@@ -185,7 +210,7 @@ export type Database = {
         Insert: {
           artist?: string | null
           created_at?: string
-          created_by: string
+          created_by?: number | null
           description?: string | null
           gig_id: number
           id?: number
@@ -198,7 +223,7 @@ export type Database = {
         Update: {
           artist?: string | null
           created_at?: string
-          created_by?: string
+          created_by?: number | null
           description?: string | null
           gig_id?: number
           id?: number
@@ -213,7 +238,7 @@ export type Database = {
             foreignKeyName: "setlists_created_by_fkey"
             columns: ["created_by"]
             isOneToOne: false
-            referencedRelation: "users"
+            referencedRelation: "performers"
             referencedColumns: ["id"]
           },
           {
@@ -383,6 +408,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {},
   },
