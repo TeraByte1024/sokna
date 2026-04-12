@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState, useTransition, useEffect } from "react";
 import { useParams } from "next/navigation";
-import { Plus, Loader2, AlarmClock, Link as LinkIcon } from "lucide-react";
+import { Plus, Loader2, AlarmClock } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -375,27 +375,9 @@ function SetlistCard({
 				{/* 3열: 곡의 어필 (말줄임표 적용) */}
 				{song.description && (
 					<div className="pt-3 border-t border-slate-100">
-						<p className="text-sm text-slate-600 truncate text-left italic">
-							&ldquo;{song.description}&rdquo;
+						<p className="text-sm text-slate-600 ellipsis text-left">
+							{song.description}
 						</p>
-					</div>
-				)}
-
-				{/* 참고 링크 */}
-				{song.links.length > 0 && (
-					<div className="flex flex-wrap gap-x-3 gap-y-1 pt-1">
-						{song.links.map((link, idx) => (
-							<a
-								key={idx}
-								href={link.url}
-								target="_blank"
-								rel="noreferrer"
-								className="flex items-center gap-1 text-[11px] text-blue-500 hover:text-blue-700 transition-colors font-medium"
-							>
-								<LinkIcon className="size-3" />
-								{link.note || "참고"}
-							</a>
-						))}
 					</div>
 				)}
 			</CardContent>
