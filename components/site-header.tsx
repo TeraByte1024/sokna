@@ -7,7 +7,7 @@ import { CLUB_NAME_KOREAN } from "@/lib/club";
 
 export function SiteHeader() {
 	return (
-		<header className="w-full flex justify-center border-b border-b-foreground/10 h-16">
+		<header className="w-full flex justify-center border-b border-b-foreground/10 h-16 sticky top-0 bg-background/80 backdrop-blur-md z-50">
 			<div className="w-full max-w-5xl flex justify-between items-center p-3 px-5 text-sm">
 				<div className="flex flex-wrap gap-3 sm:gap-5 items-center font-semibold min-w-0">
 					<Link

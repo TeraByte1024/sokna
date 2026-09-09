@@ -60,6 +60,30 @@ export type Database = {
         }
         Relationships: []
       }
+      photos: {
+        Row: {
+          id: string
+          url: string
+          title: string
+          caption: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          url: string
+          title: string
+          caption?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          url?: string
+          title?: string
+          caption?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
       gigs: {
         Row: {
           created_at: string
