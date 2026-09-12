@@ -22,11 +22,12 @@ async function MembersLoader() {
   const supabase = await createClient();
   const isAdmin = await getIsAdmin();
 
-  // 기수가 등록된 부원 정보 조회
+  // 기수가 등록된 부원 중 승인된 부원 정보만 조회
   const { data: rows, error } = await supabase
     .from("users")
     .select("id, name, generation, part")
     .not("generation", "is", null)
+    .eq("status", "approved")
     .order("generation", { ascending: true })
     .order("name", { ascending: true });
 

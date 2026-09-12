@@ -22,6 +22,7 @@ export async function createGig(formData: FormData): Promise<GigActionResult> {
   if (!title) return { ok: false, error: "공연 제목은 필수입니다." };
 
   const perform_date = emptyToNull(formData.get("perform_date"));
+  if (!perform_date) return { ok: false, error: "공연 일시는 필수입니다." };
   const meeting_date = emptyToNull(formData.get("meeting_date"));
 
   // 프론트엔드에서 전달된 참여자 JSON 파싱
@@ -52,12 +53,12 @@ export async function createGig(formData: FormData): Promise<GigActionResult> {
 
   // 2. 참여자 매핑 데이터 준비 (N:M 관계)
   if (performersList.length > 0) {
-    // DB에 등록된 유저(id가 있는 경우)만 매핑 테이블에 저장
     const mappingData = performersList
-      .filter(p => p.id && !p.email?.startsWith('temp-'))
-      .map(p => ({
+      .filter((p): p is { id: string; name: string; email?: string } => Boolean(p.id && !p.email?.startsWith("temp-")))
+      .map((p) => ({
         gig_id: newGig.id,
-        performer_id: p.id,
+        user_id: p.id,
+        part: "세션",
       }));
 
     if (mappingData.length > 0) {

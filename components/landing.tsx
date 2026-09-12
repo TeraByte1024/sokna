@@ -7,6 +7,7 @@ import { CLUB_NAME_KOREAN } from "@/lib/club";
 import { ChevronDown, Sparkles, Music, Camera, Calendar, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
+import { ANNIVERSARY_CONFIG } from "@/lib/anniversary";
 
 const SECTIONS = [
   {
@@ -148,18 +149,18 @@ export function Landing() {
           </div>
           <div className="flex-1 text-center sm:text-left space-y-1">
             <p className="text-xs font-extrabold uppercase tracking-[0.25em] text-amber-400">
-              40th Anniversary · 1986 — 2026
+              {ANNIVERSARY_CONFIG.landingBanner.badge}
             </p>
             <p className="text-lg sm:text-xl font-black text-white tracking-tight">
-              소리로 크는 나무 40주년 기념 공연
+              {ANNIVERSARY_CONFIG.landingBanner.title}
             </p>
             <p className="text-sm text-slate-400 font-light">
-              40년의 울림을 함께할 소크나인의 참석을 기다립니다
+              {ANNIVERSARY_CONFIG.landingBanner.description}
             </p>
           </div>
           <div className="shrink-0 inline-flex items-center gap-2 bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-bold text-sm px-5 py-2.5 rounded-full group-hover:shadow-[0_0_20px_rgba(245,158,11,0.3)] transition-shadow">
             <span className="text-base leading-none">🎂</span>
-            <span>40주년 행사 바로가기</span>
+            <span>{ANNIVERSARY_CONFIG.landingBanner.buttonText}</span>
             <ArrowRight className="size-3.5 group-hover:translate-x-0.5 transition-transform" />
           </div>
         </div>

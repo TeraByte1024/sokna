@@ -303,7 +303,7 @@ function SetlistCard({
 	song,
 }: {
 	song: Setlist & {
-		createdBy?: { name: string; part: string; generation: number };
+		createdBy?: { name: string; part: string; generation: number } | null;
 	};
 }) {
 	// 중복된 파트 카운트 로직

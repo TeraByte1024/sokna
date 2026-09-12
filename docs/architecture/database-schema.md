@@ -77,15 +77,20 @@ erDiagram
 ## 2. 테이블 상세 명세 (Table Specifications)
 
 ### 2.1 `users` (회원 정보)
-동아리 회원의 기본 인적사항 및 활동 정보를 관리합니다.
+동아리 회원의 기본 인적사항, 가입 승인 상태 및 활동 정보를 관리합니다.
 
 | 컬럼명 | 데이터 타입 | Nullable | 기본값 | 설명 |
 | :--- | :--- | :--- | :--- | :--- |
 | `id` | `uuid` | NO | - | 회원 고유 ID (Supabase auth.users.id 매핑) |
 | `name` | `text` | NO | - | 회원 이름 (실명) |
-| `generation` | `int4` | YES | null | 동아리 기수 (예: 24) |
-| `part` | `text` | YES | null | 주 활동 파트 (보컬, 기타, 베이스, 드럼, 건반 등) |
-| `created_at` | `timestamptz` | NO | `now()` | 생성 일시 |
+| `generation` | `int4` | YES | null | 동아리 기수 (예: 39) |
+| `part` | `text` | YES | null | 주 활동 파트 (보컬, 기타, 베이스, 드럼, 건반, 창작 등) |
+| `email` | `text` | YES | null | 회원 이메일 주소 |
+| `status` | `text` | NO | `'pending'` | 회원 승인 상태 (`'pending'`, `'approved'`, `'rejected'`) |
+| `applied_at` | `timestamptz` | NO | `now()` | 가입 신청 일시 |
+| `approved_at` | `timestamptz` | YES | null | 관리자 승인 일시 |
+| `marketing_opt_in` | `bool` | NO | `false` | 웹 푸시/행사 소식 수신 선택 동의 여부 |
+| `created_at` | `timestamptz` | NO | `now()` | 레코드 생성 일시 |
 
 ### 2.2 `admins` (관리자 목록)
 공연 생성, 공지 발송 등 관리자 권한을 부여받은 사용자 목록입니다.
@@ -170,23 +175,6 @@ erDiagram
 | `title` | `text` | NO | - | 사진 제목 |
 | `caption` | `text` | YES | null | 사진 설명 및 캡션 |
 | `created_at` | `timestamptz` | NO | `now()` | 등록 일시 |
-
-### 2.9 `gig_attendees` (공연 동문/회원 참석 신청 현황)
-40주년 기념 공연 등 특정 공연의 동문 및 회원 참석 여부(RSVP) 설문 응답입니다.
-
-| 컬럼명 | 데이터 타입 | Nullable | 기본값 | 설명 |
-| :--- | :--- | :--- | :--- | :--- |
-| `id` | `int8` (Identity) | NO | 자동증가 | 응답 식별자 |
-| `gig_id` | `int8` | NO | - | FK → `gigs(id)` |
-| `name` | `text` | NO | - | 참석자 성함 |
-| `generation` | `int4` | YES | null | 동아리 기수 |
-| `part` | `text` | YES | null | 활동 파트 |
-| `phone` | `text` | YES | null | 연락처 |
-| `attendance_status` | `text` | NO | `'attending'` | 참석 상태 (`attending`, `declined`, `uncertain`) |
-| `guests_count` | `int4` | NO | `0` | 동반 인원수 |
-| `memo` | `text` | YES | null | 남기실 말씀 및 응원 메시지 |
-| `created_at` | `timestamptz` | NO | `now()` | 제출 일시 |
-
 ---
 
 

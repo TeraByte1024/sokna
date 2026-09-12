@@ -108,17 +108,19 @@ function FadeIn({
 /* ─── Main Anniversary Inner Component ─── */
 
 export function AnniversaryInner() {
+  const config = ANNIVERSARY_CONFIG;
+
   const [timeLeft, setTimeLeft] = useState<TimeLeft>(
-    calculateTimeLeft(ANNIVERSARY_CONFIG.eventDate)
+    calculateTimeLeft(config.eventDate)
   );
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setTimeLeft(calculateTimeLeft(ANNIVERSARY_CONFIG.eventDate));
+      setTimeLeft(calculateTimeLeft(config.eventDate));
     }, 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [config.eventDate]);
 
   const { scrollYProgress } = useScroll({
     target: containerRef,
@@ -126,8 +128,6 @@ export function AnniversaryInner() {
   });
   const heroOpacity = useTransform(scrollYProgress, [0, 0.3], [1, 0]);
   const heroScale = useTransform(scrollYProgress, [0, 0.3], [1, 1.1]);
-
-  const config = ANNIVERSARY_CONFIG;
 
   return (
     <div
@@ -164,7 +164,7 @@ export function AnniversaryInner() {
           {/* 40주년 뱃지 */}
           <div className="inline-flex items-center gap-2 text-amber-300 font-extrabold text-xs uppercase tracking-[0.25em] bg-amber-500/10 border border-amber-500/20 px-5 py-2 rounded-full backdrop-blur-sm">
             <Sparkles className="size-3.5" />
-            40th Anniversary · 1986 — 2026
+            {config.hero.badge}
           </div>
 
           {/* 로고 엠블럼 */}
@@ -178,11 +178,11 @@ export function AnniversaryInner() {
           <div className="space-y-3">
             <h1 className="text-4xl sm:text-5xl lg:text-7xl font-black tracking-tighter leading-[1.05]">
               <span className="bg-clip-text text-transparent bg-gradient-to-b from-white via-amber-50 to-amber-200/80">
-                {config.concertTitle}
+                {config.hero.title}
               </span>
             </h1>
             <p className="text-sm sm:text-base text-amber-300/80 font-medium tracking-wide">
-              {config.concertSubtitle}
+              {config.hero.subtitle}
             </p>
           </div>
 
@@ -197,7 +197,7 @@ export function AnniversaryInner() {
           {/* D-Day 카운트다운 */}
           <div className="pt-4">
             <p className="text-xs text-amber-400/60 uppercase tracking-[0.4em] mb-5 font-bold">
-              D-Day Countdown
+              {config.hero.countdownLabel}
             </p>
             <div className="flex items-center justify-center gap-4 sm:gap-8">
               <CountdownUnit value={timeLeft.days} label="Days" />
@@ -222,7 +222,7 @@ export function AnniversaryInner() {
               href="#attendance"
               className="group inline-flex items-center gap-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-bold text-sm px-7 py-3 rounded-full transition-all duration-300 shadow-[0_0_20px_rgba(245,158,11,0.25)] hover:shadow-[0_0_30px_rgba(245,158,11,0.4)]"
             >
-              참석 신청하기
+              {config.hero.ctaAttendanceText}
               <ArrowRight className="size-4 group-hover:translate-x-0.5 transition-transform" />
             </a>
             <a
@@ -230,7 +230,7 @@ export function AnniversaryInner() {
               className="inline-flex items-center gap-2 border border-slate-700 hover:border-slate-500 text-slate-300 hover:text-white font-medium text-sm px-7 py-3 rounded-full transition-all duration-300 backdrop-blur-sm"
             >
               <Calendar className="size-4" />
-              행사 일정 보기
+              {config.hero.ctaScheduleText}
             </a>
           </div>
         </motion.div>
@@ -257,21 +257,20 @@ export function AnniversaryInner() {
             <div className="text-center space-y-4 max-w-2xl mx-auto">
               <div className="inline-flex items-center gap-2 text-amber-400 font-extrabold text-xs uppercase tracking-[0.2em] bg-amber-500/10 border border-amber-500/20 px-4 py-1.5 rounded-full">
                 <Music className="size-3.5" />
-                Performance Showcase
+                {config.showcase.badge}
               </div>
               <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight">
                 <span className="bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">
-                  40년의 열정을 무대에 담다
+                  {config.showcase.title}
                 </span>
               </h2>
               <p className="text-slate-400 text-sm sm:text-base leading-relaxed font-light">
-                한양대학교와 한양여자대학교에서 뜨겁게 울려 퍼진 소크나의 사운드.
-                40년간 이어진 합주실의 밤과 무대 위의 전율을 사진으로 돌아봅니다.
+                {config.showcase.description}
               </p>
             </div>
           </FadeIn>
 
-          {/* 포토 그리드: Masonry-inspired 레이아웃 */}
+          {/* 포토 그리드 */}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
             {config.heroPhotos.map((photo, index) => (
               <FadeIn
@@ -312,11 +311,11 @@ export function AnniversaryInner() {
             <div className="text-center space-y-4 max-w-2xl mx-auto">
               <div className="inline-flex items-center gap-2 text-emerald-400 font-extrabold text-xs uppercase tracking-[0.2em] bg-emerald-500/10 border border-emerald-500/20 px-4 py-1.5 rounded-full">
                 <Calendar className="size-3.5" />
-                Schedule & Venue
+                {config.scheduleSection.badge}
               </div>
               <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight">
                 <span className="bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">
-                  행사 안내
+                  {config.scheduleSection.title}
                 </span>
               </h2>
             </div>
@@ -331,13 +330,15 @@ export function AnniversaryInner() {
                   <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-400">
                     <Clock className="size-5" />
                   </div>
-                  <h3 className="text-lg font-bold text-white">일시</h3>
+                  <h3 className="text-lg font-bold text-white">
+                    {config.scheduleSection.dateLabel}
+                  </h3>
                 </div>
                 <p className="text-2xl font-black text-white tracking-tight">
                   {config.eventDateDisplay}
                 </p>
                 <p className="text-sm text-slate-400">
-                  접수 시작: 오후 4:30 ~
+                  {config.receptionTimeDisplay}
                 </p>
               </div>
 
@@ -347,7 +348,9 @@ export function AnniversaryInner() {
                   <div className="p-2.5 rounded-xl bg-rose-500/10 text-rose-400">
                     <MapPin className="size-5" />
                   </div>
-                  <h3 className="text-lg font-bold text-white">장소</h3>
+                  <h3 className="text-lg font-bold text-white">
+                    {config.scheduleSection.venueLabel}
+                  </h3>
                 </div>
                 <p className="text-xl font-bold text-white">
                   {config.venue.name}
@@ -360,7 +363,7 @@ export function AnniversaryInner() {
                   className="inline-flex items-center gap-1.5 text-sm text-amber-400 hover:text-amber-300 font-medium transition-colors"
                 >
                   <ExternalLink className="size-3.5" />
-                  네이버 지도에서 보기
+                  {config.scheduleSection.mapButtonText}
                 </a>
               </div>
             </div>
@@ -374,7 +377,9 @@ export function AnniversaryInner() {
                   <Train className="size-5" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-bold text-white mb-1">대중교통</h4>
+                  <h4 className="text-sm font-bold text-white mb-1">
+                    {config.scheduleSection.subwayLabel}
+                  </h4>
                   <p className="text-sm text-slate-400 leading-relaxed">
                     {config.venue.subway}
                   </p>
@@ -385,7 +390,9 @@ export function AnniversaryInner() {
                   <Car className="size-5" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-bold text-white mb-1">주차</h4>
+                  <h4 className="text-sm font-bold text-white mb-1">
+                    {config.scheduleSection.parkingLabel}
+                  </h4>
                   <p className="text-sm text-slate-400 leading-relaxed">
                     {config.venue.parking}
                   </p>
@@ -399,7 +406,7 @@ export function AnniversaryInner() {
             <div className="space-y-6">
               <h3 className="text-xl font-bold text-white flex items-center gap-2">
                 <Clock className="size-5 text-amber-400" />
-                프로그램 순서
+                {config.scheduleSection.timetableTitle}
               </h3>
               <div className="space-y-3">
                 {config.timetables.map((item, index) => {
@@ -425,7 +432,8 @@ export function AnniversaryInner() {
                               "text-sm font-bold tabular-nums",
                               style.text
                             )}
-                          >
+                          />
+                          <span className={cn("text-sm font-bold tabular-nums", style.text)}>
                             {item.time}
                           </span>
                         </div>
@@ -459,16 +467,15 @@ export function AnniversaryInner() {
             <div className="text-center space-y-4 max-w-2xl mx-auto">
               <div className="inline-flex items-center gap-2 text-indigo-400 font-extrabold text-xs uppercase tracking-[0.2em] bg-indigo-500/10 border border-indigo-500/20 px-4 py-1.5 rounded-full">
                 <Camera className="size-3.5" />
-                Archive Gallery
+                {config.archiveSection.badge}
               </div>
               <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight">
                 <span className="bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">
-                  40년의 발자취
+                  {config.archiveSection.title}
                 </span>
               </h2>
               <p className="text-slate-400 text-sm sm:text-base font-light leading-relaxed">
-                1986년 창립부터 지금 이 순간까지, 소크나가 걸어온 40년의 시간을
-                사진으로 되돌아봅니다.
+                {config.archiveSection.description}
               </p>
             </div>
           </FadeIn>
@@ -513,7 +520,7 @@ export function AnniversaryInner() {
                 className="group inline-flex items-center gap-2 border border-slate-700 hover:border-indigo-500/50 text-slate-300 hover:text-indigo-300 font-medium text-sm px-6 py-3 rounded-full transition-all duration-300"
               >
                 <Sparkles className="size-4" />
-                동아리 전체 역사 보기
+                {config.archiveSection.historyButtonText}
                 <ArrowRight className="size-3.5 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
               </Link>
               <Link
@@ -521,7 +528,7 @@ export function AnniversaryInner() {
                 className="group inline-flex items-center gap-2 border border-slate-700 hover:border-indigo-500/50 text-slate-300 hover:text-indigo-300 font-medium text-sm px-6 py-3 rounded-full transition-all duration-300"
               >
                 <Camera className="size-4" />
-                사진 갤러리 전체 보기
+                {config.archiveSection.photosButtonText}
                 <ArrowRight className="size-3.5 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
               </Link>
             </div>
@@ -530,7 +537,7 @@ export function AnniversaryInner() {
       </section>
 
       {/* ───────────────────────────────────────────────────── */}
-      {/* SECTION 5 — 공연 참석 신청 폼                         */}
+      {/* SECTION 5 — 공연 참석 신청 (RSVP via Google Form)     */}
       {/* ───────────────────────────────────────────────────── */}
       <section
         id="attendance"
@@ -539,25 +546,7 @@ export function AnniversaryInner() {
         {/* 앰비언트 */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-amber-500/5 rounded-full blur-[120px] pointer-events-none" />
 
-        <div className="max-w-3xl mx-auto space-y-12 relative z-10">
-          <FadeIn>
-            <div className="text-center space-y-4 max-w-xl mx-auto">
-              <div className="inline-flex items-center gap-2 text-amber-400 font-extrabold text-xs uppercase tracking-[0.2em] bg-amber-500/10 border border-amber-500/20 px-4 py-1.5 rounded-full">
-                <Sparkles className="size-3.5" />
-                Attendance Registration
-              </div>
-              <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight">
-                <span className="bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">
-                  참석 신청
-                </span>
-              </h2>
-              <p className="text-slate-400 text-sm sm:text-base font-light leading-relaxed">
-                40주년 기념 공연에 함께해 주실 소크나인 여러분의 참석 여부를
-                알려주세요.
-              </p>
-            </div>
-          </FadeIn>
-
+        <div className="max-w-3xl mx-auto relative z-10">
           <FadeIn delay={0.1}>
             <AttendanceForm />
           </FadeIn>
@@ -584,10 +573,10 @@ export function AnniversaryInner() {
               </div>
             </div>
             <p className="text-xl sm:text-2xl font-black tracking-tight bg-clip-text text-transparent bg-gradient-to-b from-white to-amber-200/80">
-              소리로 크는 나무, 40년의 울림
+              {config.footer.slogan}
             </p>
             <p className="text-sm text-slate-500 font-light">
-              © 2026 소크나 (SOKNA). All Rights Reserved.
+              {config.footer.copyright}
             </p>
           </div>
         </FadeIn>

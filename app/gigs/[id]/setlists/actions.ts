@@ -35,7 +35,7 @@ export async function addSetlist(gigId: string, payload: SetlistFormValues) {
 		required_parts: payload.requiredParts, // _text (JS 배열 ['보컬', '기타'] 전달)
 		sheet_exists: payload.sheetExists, // bool
 		description: payload.description, // text
-		links: payload.links, // jsonb
+		links: (payload.links ?? []) as unknown as import("@/lib/supabase/database.types").Json, // jsonb
 		created_by: performer.id, // int8 (Foreign Key)
 	});
 

@@ -3,7 +3,8 @@
 ## 1. 개요 및 접근 권한
 - **URL 경로**: `/40th-anniversary`
 - **대상 사용자**: 모든 사용자 (방문자, 동아리 재학생 YB, 역대 졸업생 OB)
-- **목적**: 1986년 창립된 '소리로 크는 나무'의 40주년 기념 공연 안내, 타임테이블, 행사장 오시는 길, 사진 아카이브 열람 및 동문 참석 여부(RSVP) 조사.
+- **목적**: 1986년 창립된 '소리로 크는 나무'의 40주년 기념 공연 안내, 타임테이블, 행사장 오시는 길, 사진 아카이브 열람 및 구글 폼 기반 동문 참석 여부(RSVP) 신청 연동.
+- **설정 원칙**: 공연 정보(일시, 장소, 타임테이블, 사진) 및 페이지 전반의 텍스트 설명(헤더, 안내 문구, 유의사항, 구글 폼 링크)은 `@/lib/anniversary.ts`의 `ANNIVERSARY_CONFIG` 단일 참조(SSOT)로 일원화하여 코드 상에서 손쉽게 수정 및 관리합니다.
 
 ---
 
@@ -35,13 +36,13 @@
 | 📸 40년의 기록, 사진 아카이브 (Visual Archive Gallery)            |
 |  - 1980s~90s, 2000s, 2010s, 2020s 시대별 대표 사진 6종 그리드    |
 +-------------------------------------------------------------------+
-| 📝 동문 참석 여부 조사 (RSVP Attendance Form)                      |
-|  - 참석 / 미정 / 불참 상태 선택                                  |
-|  - 성함, 기수, 파트, 연락처, 동반인 수, 남기실 말씀              |
-|  - [ 참석 여부 제출하기 ]                                         |
+| 📝 동문 참석 여부 등록 (RSVP via Google Forms)                    |
+|  - 구글 폼 바로가기 CTA 버튼 ([ 구글 폼으로 참석 신청하기 ])      |
+|  - 참석 안내 및 유의사항 체크리스트 (YB/OB 누구나 신청, 동반인 등)|
+|  - 문의처 빠른 링크 (카카오톡 오픈채팅, 이메일, 전화번호)         |
 +-------------------------------------------------------------------+
-| 💬 문의 및 오픈채팅 (Contact)                                      |
-|  - 전화 / 이메일 / 카카오톡 오픈채팅방 링크                      |
+| 💬 푸터 및 카피라이트 (Footer)                                    |
+|  - 소리로 크는 나무, 40년의 울림 / 저작권 표기                    |
 +-------------------------------------------------------------------+
 ```
 
@@ -50,33 +51,37 @@
 ## 3. 사용자 인터랙션 및 UX 흐름 (Step-by-Step)
 
 1. **실시간 D-Day 카운트다운 (`calculateTimeLeft`)**:
-   - `2026-11-07T17:00:00+09:00` 기준으로 남은 일, 시간, 분, 초가 매초 단위로 갱신됩니다.
+   - `ANNIVERSARY_CONFIG.eventDate` 기준으로 남은 일, 시간, 분, 초가 매초 단위로 갱신됩니다.
 2. **행사장 길찾기**:
-   - `[네이버 지도 바로가기]` 클릭 시 네이버 지도 백남음악관 검색 결과로 새 창 이동.
-3. **참석 조사 폼 제출 (`AttendanceForm`)**:
-   - 사용자가 `참석(🎸)`, `미정(🤔)`, `불참(😢)` 중 하나를 선택.
-   - 이름(필수), 기수, 파트, 연락처, 동반인 수, 전하고 싶은 메시지 작성.
-   - `[참석 여부 제출하기]` 버튼 클릭 시 서버 액션(`submitGigAttendance`) 호출.
-   - 제출 완료 시 축하 애니메이션과 함께 확인 메시지 화면(`submitted === true`)으로 전환.
-4. **상단 네비게이션 강조**:
+   - `[네이버 지도 바로가기]` 클릭 시 네이버 지도 백남음악관 검색 결과(`ANNIVERSARY_CONFIG.venue.mapUrl`)로 새 창 이동.
+3. **참석 신청 연동 (`AttendanceForm`)**:
+   - 별도의 DB 테이블을 생성하지 않고, 응답 수집 및 관리를 일원화하기 위해 **공식 구글 폼**으로 연결됩니다.
+   - 사용자가 `[구글 폼으로 참석 신청하기]` 버튼 클릭 시 `ANNIVERSARY_CONFIG.rsvp.googleFormUrl`로 새 창 이동하여 신청서 작성.
+   - 하단 유의사항 박스에서 동반인 안내, 좌석 배정, 문의처(카카오톡 오픈채팅, 이메일, 전화)를 바로 확인 가능.
+4. **상단 네비게이션 및 홈 배너 연동**:
    - 헤더의 `40주년` 메뉴는 앰버 색상 배지(`highlight: true`)로 시각적 주목도를 높였습니다.
+   - 메인 랜딩 페이지(`components/landing.tsx`)의 40주년 배너 역시 `ANNIVERSARY_CONFIG.landingBanner`를 참조하여 일관된 정보를 제공합니다.
 
 ---
 
-## 4. 백엔드 데이터 연동 (`app/40th-anniversary/actions.ts`)
+## 4. 데이터 및 설정 구조 (`lib/anniversary.ts`)
 
-- **참석 등록 (`submitGigAttendance`)**:
-  - 대상 테이블: `gig_attendees`
-  - 레코드 필드: `gig_id`, `name`, `generation`, `part`, `phone`, `attendance_status`, `guests_count`, `memo`
-  - 등록 완료 시 `revalidatePath("/40th-anniversary")` 호출.
-- **참석 현황 집계 (`getGigAttendeesCount`)**:
-  - 해당 공연 ID의 참석/불참/미정 총합 통계 반환.
+모든 텍스트 설명과 행사 정보는 `ANNIVERSARY_CONFIG` 객체에서 일원화 관리됩니다:
+
+- `metadata`: 페이지 SEO 제목 및 설명
+- `landingBanner`: 홈 화면 배너 텍스트
+- `hero`: 히어로 섹션 타이틀, 카운트다운 라벨, 버튼 문구
+- `showcase`: 쇼케이스 소개 문구 및 `heroPhotos`
+- `eventDate`, `eventDateDisplay`, `venue`, `contact`: 행사 기본 정보 및 오시는 길
+- `scheduleSection`, `timetables`: 타임테이블 순서 및 카테고리
+- `archiveSection`, `archivePhotos`: 40년 발자취 갤러리 문구 및 사진
+- `rsvp`: 구글 폼 URL(`googleFormUrl`), 버튼 문구, 유의사항 목록(`notices`)
+- `footer`: 슬로건 및 저작권 문구
 
 ---
 
 ## 5. 관련 소스 코드 파일
-- 페이지 라우트: [app/40th-anniversary/page.tsx](file:///c:/dev/sokna/app/40th-anniversary/page.tsx)
-- 메인 인터페이스: [app/40th-anniversary/anniversary-inner.tsx](file:///c:/dev/sokna/app/40th-anniversary/anniversary-inner.tsx)
-- 참석 설문 폼: [app/40th-anniversary/attendance-form.tsx](file:///c:/dev/sokna/app/40th-anniversary/attendance-form.tsx)
-- 서버 액션: [app/40th-anniversary/actions.ts](file:///c:/dev/sokna/app/40th-anniversary/actions.ts)
-- 행사 설정 데이터: [lib/anniversary.ts](file:///c:/dev/sokna/lib/anniversary.ts)
+- 페이지 라우트: [app/40th-anniversary/page.tsx](file:///d:/dev/sokna/app/40th-anniversary/page.tsx)
+- 메인 인터페이스: [app/40th-anniversary/anniversary-inner.tsx](file:///d:/dev/sokna/app/40th-anniversary/anniversary-inner.tsx)
+- 참석 신청 안내 컴포넌트: [app/40th-anniversary/attendance-form.tsx](file:///d:/dev/sokna/app/40th-anniversary/attendance-form.tsx)
+- 행사 설정 및 텍스트 SSOT: [lib/anniversary.ts](file:///d:/dev/sokna/lib/anniversary.ts)

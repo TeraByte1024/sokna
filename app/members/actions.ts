@@ -28,13 +28,14 @@ export async function addMemberAction(
 
     const supabase = await createClient();
     
-    // UUID 생성 후 삽입
+    // UUID 생성 후 삽입 (관리자가 직접 등록하므로 status: "approved")
     const id = crypto.randomUUID();
     const { error } = await supabase.from("users").insert({
       id,
       name: trimmedName,
       generation,
       part: part.trim() || null,
+      status: "approved",
     });
 
     if (error) {

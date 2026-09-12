@@ -20,6 +20,7 @@ import {
   updateMemberAction,
   deleteMemberAction,
 } from "./actions";
+import { toast } from "@/components/ui/sonner";
 import type { Member } from "./page";
 
 interface MembersInnerProps {
@@ -133,9 +134,15 @@ export function MembersInner({ initialMembers, isAdmin }: MembersInnerProps) {
 
     setIsSubmitting(false);
     if (res.ok) {
+      if (modalMode === "add") {
+        toast.success(`${formName} 회원을 추가했습니다.`);
+      } else {
+        toast.success(`${formName} 회원의 정보를 수정했습니다.`);
+      }
       closeModal();
     } else {
       setFormError(res.error);
+      toast.error(res.error || "처리에 실패했습니다.");
     }
   };
 
@@ -144,8 +151,10 @@ export function MembersInner({ initialMembers, isAdmin }: MembersInnerProps) {
     if (!isAdmin) return;
     if (confirm("정말로 이 부원 정보를 삭제하시겠습니까?")) {
       const res = await deleteMemberAction(id);
-      if (!res.ok) {
-        alert(`삭제 실패: ${res.error}`);
+      if (res.ok) {
+        toast.success("부원 정보를 삭제했습니다.");
+      } else {
+        toast.error(`삭제 실패: ${res.error}`);
       }
     }
   };

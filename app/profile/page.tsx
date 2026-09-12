@@ -1,0 +1,54 @@
+import { redirect } from "next/navigation";
+import { SiteLayout } from "@/components/site-layout";
+import { PageContainer } from "@/components/page-container";
+import { createClient } from "@/lib/supabase/server";
+import { getIsAdmin } from "@/lib/auth-admin";
+import { ProfileForm, ProfileUser } from "./profile-form";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "내 정보 | 소크나",
+  description: "소크나 회원 프로필 조회 및 정보 수정",
+};
+
+export default async function ProfilePage() {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/auth/login");
+  }
+
+  // 1. users 테이블에서 본인 프로필 조회
+  const { data: userRow } = await supabase
+    .from("users")
+    .select("id, name, generation, part, email, status, applied_at, approved_at, marketing_opt_in")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  // 2. 관리자 권한 확인
+  const isAdmin = await getIsAdmin();
+
+  const profileUser: ProfileUser = {
+    id: user.id,
+    email: userRow?.email ?? user.email ?? null,
+    name: userRow?.name ?? (user.user_metadata?.full_name || user.user_metadata?.name || ""),
+    generation: userRow?.generation ? Number(userRow.generation) : null,
+    part: userRow?.part ?? null,
+    status: userRow?.status ?? "pending",
+    applied_at: userRow?.applied_at ?? user.created_at,
+    approved_at: userRow?.approved_at ?? null,
+    marketing_opt_in: userRow?.marketing_opt_in ?? false,
+  };
+
+  return (
+    <SiteLayout>
+      <PageContainer>
+        <ProfileForm user={profileUser} isAdmin={isAdmin} />
+      </PageContainer>
+    </SiteLayout>
+  );
+}
