@@ -1,0 +1,73 @@
+# 01. 메인 랜딩 페이지 (`/`)
+
+## 1. 개요 및 접근 권한
+- **URL 경로**: `/`
+- **대상 사용자**: 모든 사용자 (방문자, 일반 회원, 관리자)
+- **목적**: 동아리(소리로 크는 나무)의 아이덴티티와 주요 활동(공연, 정기 모임, 친목)을 시각적으로 전달하고, 공연 정보 및 로그인/회원가입으로 연결하는 진입점.
+
+---
+
+## 2. 디자인 및 화면 레이아웃 (Layout & Visuals)
+
+```
++-------------------------------------------------------------------+
+| [SOKNA Logo]    [공연]                     [Sign in] [Sign up]     | <- SiteHeader
++-------------------------------------------------------------------+
+|                                                                   |
+|                      [Logo with Glow Circle]                      |
+|                         소리로 크는 나무                          | <- Hero Section
+|                   소리로 하나되는 우리들의 무대                   |    (h-screen, bg-black)
+|                                v                                  |
++-------------------------------------------------------------------+
+| [Image Background]                                                |
+| THE PERFORMANCE (합주 / 공연)                                     | <- Parallax Section 1
+| "무대 위에서 하나 되는 전율, 우리의 목소리가 세상에 닿는 순간."    |
++-------------------------------------------------------------------+
+| [Image Background]                                                |
+| THE SESSION (정기 모임)                                           | <- Parallax Section 2
+| "매주 함께 고민하고 성장하는 시간. 음악 그 이상의 가치를 공유합니다."|
++-------------------------------------------------------------------+
+| [Image Background]                                                |
+| THE PEOPLE (친목)                                                 | <- Parallax Section 3
+| "한양대와 한양여대가 만나는 접점. 평생 함께할 인연을 쌓아갑니다."  |
++-------------------------------------------------------------------+
+| [SOKNA Branding]  |  동아리 소개 및 링크  |  © SOKNA              | <- SiteFooter
++-------------------------------------------------------------------+
+```
+
+---
+
+## 3. 사용자 인터랙션 및 UX 흐름 (User Interactions)
+
+1. **초기 로드 (First Impression)**:
+   - 다크 테마 기반의 히어로 섹션에서 클럽 로고와 타이틀이 위로 서서히 떠오르는 페이드인 애니메이션 실행 (`framer-motion`, 1.5초).
+   - 하단 스크롤 인디케이터가 깜빡이며 사용자의 스크롤을 유도.
+2. **40주년 기념 배너 (Anniversary CTA)**:
+   - 히어로 섹션 하단에 40주년 기념 공연 안내 배너 배치.
+   - 클릭 시 `/40th-anniversary` 페이지로 이동.
+   - CTA 버튼: `🎂 40주년 행사 바로가기` (생일 케이크 이모지 및 호버 글로우 효과).
+3. **스크롤 패럴랙스 (Storytelling)**:
+   - 스크롤을 내리면 3개의 테마 섹션(공연, 모임, 친목)이 전환되며 배경 이미지와 감성적인 카피라이트 노출.
+4. **네비게이션 이동**:
+   - 상단 헤더: `공연`(/gigs), `역사`(/history), `부원`(/members), `갤러리`(/photos), 그리고 하이라이트된 `🎂 40주년`(/40th-anniversary) 링크 제공.
+   - 비로그인 상태: `Sign in` 클릭 시 `/auth/login`, `Sign up` 클릭 시 `/auth/sign-up`으로 이동.
+   - 로그인 상태: 본인의 이메일 주소와 `로그아웃` 버튼이 표시되며, 로그아웃 클릭 시 세션 종료 후 리로드.
+
+---
+
+## 4. UI 상태 (States)
+
+- **비로그인 상태 (Default)**:
+  - 헤더 우측에 `Sign in`, `Sign up` 버튼 표시.
+- **로그인 상태**:
+  - 헤더 우측에 `유저 이메일` 및 `로그아웃` 버튼 표시.
+
+---
+
+## 5. 관련 소스 코드 파일
+- 페이지 라우트: [app/page.tsx](file:///c:/dev/sokna/app/page.tsx)
+- 랜딩 메인 컴포넌트: [components/landing.tsx](file:///c:/dev/sokna/components/landing.tsx)
+- 상단 헤더: [components/site-header.tsx](file:///c:/dev/sokna/components/site-header.tsx)
+- 네비게이션: [components/site-nav.tsx](file:///c:/dev/sokna/components/site-nav.tsx)
+- 인증 버튼: [components/auth-button.tsx](file:///c:/dev/sokna/components/auth-button.tsx)
+- 푸터: [components/site-footer.tsx](file:///c:/dev/sokna/components/site-footer.tsx)

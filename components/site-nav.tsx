@@ -15,7 +15,7 @@ const links: NavLink[] = [
   { href: "/history", label: "역사" },
   { href: "/members", label: "부원" },
   { href: "/photos", label: "갤러리" },
-  { href: "/40th-anniversary", label: "40주년", highlight: true },
+  { href: "/40th-anniversary", label: "🎂 40주년", highlight: true },
 ];
 
 export function SiteNav() {

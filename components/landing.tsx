@@ -157,8 +157,9 @@ export function Landing() {
               40년의 울림을 함께할 소크나인의 참석을 기다립니다
             </p>
           </div>
-          <div className="shrink-0 inline-flex items-center gap-1.5 bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-bold text-sm px-5 py-2.5 rounded-full group-hover:shadow-[0_0_20px_rgba(245,158,11,0.3)] transition-shadow">
-            자세히 보기
+          <div className="shrink-0 inline-flex items-center gap-2 bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-bold text-sm px-5 py-2.5 rounded-full group-hover:shadow-[0_0_20px_rgba(245,158,11,0.3)] transition-shadow">
+            <span className="text-base leading-none">🎂</span>
+            <span>40주년 행사 바로가기</span>
             <ArrowRight className="size-3.5 group-hover:translate-x-0.5 transition-transform" />
           </div>
         </div>
