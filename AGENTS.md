@@ -12,4 +12,7 @@
    - DB 스키마가 변경된 경우 `docs/architecture/database-schema.md` 갱신 및 `npm run types`를 실행합니다.
    - 신규 추가된 문서는 `docs/README.md`에 링크를 등록합니다.
 
+## Git 작업 원칙
+- **임의 Push 금지**: 사용자의 명시적인 지시 없이는 어떠한 경우에도 임의로 `git push`를 실행하지 않습니다.
+
 자세한 문서 목록 및 구조는 [docs/README.md](file:///c:/dev/sokna/docs/README.md)를 참고하십시오.

@@ -16,6 +16,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { GoogleSignInButton } from "@/components/google-sign-in-button";
+import { UserPlus } from "lucide-react";
 
 export function LoginForm({
   className,
@@ -132,14 +133,21 @@ export function LoginForm({
 
               <GoogleSignInButton text="Google 계정으로 로그인" />
             </div>
-            <div className="mt-5 text-center text-xs text-muted-foreground">
-              계정이 없으신가요?{" "}
-              <Link
-                href="/auth/sign-up"
-                className="text-primary font-medium underline underline-offset-4 hover:opacity-80"
-              >
-                회원가입 신청
-              </Link>
+            <div className="mt-6 pt-5 border-t border-border/60">
+              <div className="rounded-lg border border-primary/25 bg-primary/5 p-4 text-center space-y-2.5">
+                <div className="flex items-center justify-center gap-1.5 text-xs font-semibold text-foreground">
+                  <UserPlus className="w-4 h-4 text-primary" />
+                  <span>소리로 크는 나무가 처음이신가요?</span>
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  신규 부원 및 동문 회원은 회원가입 신청 후 운영진 승인을 통해 선곡 회의 및 공연 참가 등 모든 기능을 이용하실 수 있습니다.
+                </p>
+                <Button asChild variant="outline" size="sm" className="w-full border-primary/40 hover:border-primary hover:bg-primary/10 text-primary font-semibold text-xs h-9">
+                  <Link href="/auth/sign-up">
+                    신규 회원가입 신청하기
+                  </Link>
+                </Button>
+              </div>
             </div>
           </form>
         </CardContent>

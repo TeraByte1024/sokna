@@ -3,8 +3,8 @@ import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { createClient } from "@/lib/supabase/server";
 import { getIsAdmin } from "@/lib/auth-admin";
-import { LogoutButton } from "./logout-button";
-import { ShieldAlert, ShieldCheck, Clock, User } from "lucide-react";
+import { UserProfileMenu } from "./user-profile-menu";
+import { ShieldAlert, ShieldCheck, Clock } from "lucide-react";
 
 export async function AuthButton() {
   const supabase = await createClient();
@@ -14,14 +14,9 @@ export async function AuthButton() {
 
   if (!user) {
     return (
-      <div className="flex gap-2">
-        <Button asChild size="sm" variant={"outline"}>
-          <Link href="/auth/login">Sign in</Link>
-        </Button>
-        <Button asChild size="sm" variant={"default"}>
-          <Link href="/auth/sign-up">Sign up</Link>
-        </Button>
-      </div>
+      <Button asChild size="sm" variant="default" className="h-8 px-3 text-xs sm:text-sm font-semibold shrink-0 shadow-sm">
+        <Link href="/auth/login">회원 로그인</Link>
+      </Button>
     );
   }
 
@@ -37,10 +32,14 @@ export async function AuthButton() {
       .eq("id", user.sub)
       .maybeSingle();
 
+    const metadata = user.user_metadata as Record<string, unknown> | undefined;
+    const metaFullName = typeof metadata?.full_name === "string" ? metadata.full_name : null;
+    const metaName = typeof metadata?.name === "string" ? metadata.name : null;
+
     userName =
       userProfile?.name?.trim() ||
-      (user.user_metadata as Record<string, any> | undefined)?.full_name ||
-      (user.user_metadata as Record<string, any> | undefined)?.name ||
+      metaFullName ||
+      metaName ||
       null;
     userStatus = userProfile?.status ?? null;
   }
@@ -83,24 +82,11 @@ export async function AuthButton() {
         </Badge>
       )}
 
-      {/* 내 정보(프로필) 바로가기 버튼 */}
-      <Button asChild size="sm" variant="ghost" className="h-8 gap-1 px-2.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted">
-        <Link href="/profile" title="내 정보 확인 및 수정">
-          <User className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline font-medium">내 정보</span>
-        </Link>
-      </Button>
-
-      {/* 사용자 이름 표시 (이메일 대신 이름 표시, 클릭 시 프로필로 이동) */}
-      <Link
-        href="/profile"
-        title={`내 정보 관리 (${user.email})`}
-        className="text-foreground/90 hover:text-primary transition-colors hidden md:inline truncate max-w-[130px] font-semibold text-xs"
-      >
-        {userName ? `${userName} 님` : user.email}
-      </Link>
-
-      <LogoutButton />
+      {/* 프로필 아이콘 클릭 시 float 메뉴 (내 정보 | 로그아웃) */}
+      <UserProfileMenu
+        userName={userName}
+        userEmail={user.email}
+      />
     </div>
   );
 }
