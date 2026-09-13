@@ -10,13 +10,14 @@ import {
 } from "@/components/ui/card";
 import { getIsAdmin } from "@/lib/auth-admin";
 import { hasEnvVars } from "@/lib/utils";
+import { ArrowLeft, ShieldAlert } from "lucide-react";
 
 export async function GigNewInner() {
   if (!hasEnvVars) {
     return (
-      <p className="text-sm text-muted-foreground">
+      <div className="p-6 border border-destructive/20 rounded-2xl bg-destructive/10 text-destructive text-sm">
         Supabase 환경 변수를 설정한 뒤 이용할 수 있습니다.
-      </p>
+      </div>
     );
   }
 
@@ -24,35 +25,32 @@ export async function GigNewInner() {
 
   if (!isAdmin) {
     return (
-      <Card className="max-w-lg">
-        <CardHeader>
-          <CardTitle>접근 제한</CardTitle>
-          <CardDescription>
-            공연 추가는 관리자 권한이 필요합니다.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-wrap gap-2">
-          <Button asChild variant="outline" size="sm">
-            <Link href="/auth/login">로그인</Link>
-          </Button>
-          <Button asChild variant="ghost" size="sm">
-            <Link href="/gigs">목록으로</Link>
-          </Button>
-        </CardContent>
-      </Card>
+      <div className="flex flex-col gap-6 w-full max-w-lg mx-auto py-12">
+        <Card className="border-border/60 shadow-md">
+          <CardHeader className="text-center pb-4">
+            <div className="mx-auto size-12 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center mb-2">
+              <ShieldAlert className="size-6" />
+            </div>
+            <CardTitle className="text-xl">접근 제한</CardTitle>
+            <CardDescription className="text-sm">
+              공연 추가 및 관리는 관리자 권한이 필요합니다.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex justify-center gap-3 pt-2">
+            <Button asChild variant="outline">
+              <Link href="/gigs">공연 목록으로</Link>
+            </Button>
+            <Button asChild>
+              <Link href="/auth/login">로그인</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-8 w-full max-w-2xl">
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">
-          공연 추가
-        </h1>
-        <p className="text-muted-foreground mt-2 text-sm">
-          새로운 공연을 추가합니다.
-        </p>
-      </div>
+    <div className="w-full pb-16">
       <GigCreateForm />
     </div>
   );

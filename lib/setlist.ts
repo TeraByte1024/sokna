@@ -13,10 +13,12 @@ export interface Setlist {
   description: string;
   updatedAt: string;
   createdAt: string;
+  orderNum: number;
   createdBy: {
     name: string;
     part: string;
     generation: number;
+    userId?: string | null;
   } | null;
   links: SetlistLink[];
 }
@@ -37,13 +39,14 @@ export function parseSetlist(row: any): Setlist {
     : [];
 
   // 중첩된 조인 데이터(performers -> users) 추출
-  // row.created_by: { part, generation, name: { name } } 구조 대응
-  const createdBy = row.created_by;
-  const safeCreatedBy = createdBy 
+  // row.created_by: { part, generation, name: { name }, user_id } 구조 대응
+  const createdBy = row.created_by_performer || row.created_by;
+  const safeCreatedBy = createdBy && typeof createdBy === "object"
     ? {
         name: createdBy.name || "익명",
         part: createdBy.part || "미지정",
         generation: createdBy.generation || 0,
+        userId: createdBy.user_id || null,
       }
     : null;
 
@@ -57,10 +60,12 @@ export function parseSetlist(row: any): Setlist {
     description: row.description ?? "",
     createdAt: row.created_at,
     updatedAt: row.updated_at ?? row.created_at,
+    orderNum: row.order_num ?? 0,
     createdBy: safeCreatedBy,
     links: safeLinks,
   };
 }
+
 
 export function defaultRequiredParts(): string[] {
   return ["보컬", "기타", "베이스", "드럼", "건반"];

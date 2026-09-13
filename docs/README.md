@@ -36,7 +36,12 @@ docs/
 │   ├── 06-40th-anniversary.md     # 40주년 기념 공연 페이지 (/40th-anniversary) 명세
 │   ├── 07-history.md              # 동아리 역사 소개 페이지 (/history) 명세
 │   ├── 08-members.md              # 역대 부원 소개 페이지 (/members) 명세
-│   └── 09-photos.md               # 갤러리 사진첩 페이지 (/photos) 명세
+│   ├── 09-photos.md               # 갤러리 사진첩 페이지 (/photos) 명세
+│   ├── 10-gig-detail.md           # 공연 상세 정보 페이지 (/gigs/[id]) 명세
+│   ├── 11-gig-join.md             # 공연 참가 신청 페이지 (/gigs/[id]/join) 명세
+│   ├── 12-gig-edit.md             # 공연 수정 페이지 (/gigs/[id]/edit) [관리자] 명세
+│   ├── 13-profile.md              # 회원 정보 수정 페이지 (/profile) 명세
+│   └── 14-admin-members.md        # 관리자 회원 관리 페이지 (/admin/members) 명세
 ├── features/                      # 도메인별 기능 명세
 │   ├── roles-and-permissions.md   # 역할별(방문자/회원/참여자/관리자) 기능 매트릭스 및 권한 가이드
 │   ├── authentication.md          # 인증, 세션 관리 및 관리자 권한 명세
@@ -67,6 +72,11 @@ docs/
 | **07** | [동아리 역사](./pages/07-history.md) | `/history` | 1986년 창립부터 현재까지 연혁 타임라인 및 마일스톤 |
 | **08** | [역대 부원](./pages/08-members.md) | `/members` | 기수별 역대 부원 명단, 관리자 부원 등록/수정/삭제 CRUD |
 | **09** | [갤러리 사진첩](./pages/09-photos.md) | `/photos` | 공연/연습 사진 그리드, 라이트박스 뷰어, 관리자 사진 관리 CRUD |
+| **10** | [공연 상세 정보](./pages/10-gig-detail.md) | `/gigs/[id]` | 공연 일정, D-Day, 세션 명단, 셋리스트 현황, 선곡 회의 CTA |
+| **11** | [공연 참가 신청](./pages/11-gig-join.md) | `/gigs/[id]/join` | **로그인 회원 전용**: 비회원 차단, 선곡회의 일정 확인, 참가 여부(참여/불참/미정) 제출, 이탈 방지 팝업 |
+| **12** | [공연 수정](./pages/12-gig-edit.md) | `/gigs/[id]/edit` | **관리자 전용**: 공연 기본 정보, 일정, 포스터, 공개 여부 및 세션원 명단 수정, 이탈 방지 팝업 |
+| **13** | [회원 정보 수정](./pages/13-profile.md) | `/profile` | **로그인 회원 전용**: 이름, 기수, 담당 세션 파트, 행사 소식 수신 동의 수정, 이탈 방지 팝업 |
+| **14** | [관리자 회원 관리](./pages/14-admin-members.md) | `/admin/members` | **관리자 전용**: 가입 대기 회원 승인/반려, 부원 정보 수정, 관리자 권한 관리, 이탈 방지 팝업 |
 
 
 ### ⚙️ 시스템 및 도메인 기능 명세

@@ -17,8 +17,13 @@ import {
 
 import { SetlistDrawer } from "@/components/setlists/setlist-drawer";
 import { SetlistNewModal } from "@/components/setlists/setlist-new-modal";
-import { addSetlist } from "@/app/gigs/[id]/setlists/actions";
+import { addSetlist, deleteSetlist } from "@/app/gigs/[id]/setlists/actions";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import {
+	LeaveConfirmDialog,
+	useUnsavedChangesWarning,
+} from "@/components/ui/leave-confirm-dialog";
 
 const DEADLINE_COLUMN = "meeting_date";
 const DEFAULT_REQUIRED_PARTS = defaultRequiredParts();
@@ -84,6 +89,8 @@ export function SetlistPanel() {
 	const [isPending, startTransition] = useTransition();
 	const [songs, setSongs] = useState<Setlist[]>([]);
 	const [selectedSong, setSelectedSong] = useState<Setlist | null>(null); // 서랍에 표시할 곡
+	const [currentUser, setCurrentUser] = useState<{ id: string } | null>(null);
+	const [isAdmin, setIsAdmin] = useState(false);
 	const [gigInfo, setGigInfo] = useState<{
 		title: string;
 		meetingDate: string;
@@ -98,7 +105,7 @@ export function SetlistPanel() {
 		async function init() {
 			setIsLoading(true);
 			try {
-				const [gigRes, setlistRes] = await Promise.all([
+				const [gigRes, setlistRes, authUserRes] = await Promise.all([
 					supabase
 						.from("gigs")
 						.select(`title, ${DEADLINE_COLUMN}`)
@@ -109,6 +116,7 @@ export function SetlistPanel() {
 						.select(
 							`*,
                 created_by:performers (
+									user_id,
 									part,
 									...users (
 										name,
@@ -119,7 +127,18 @@ export function SetlistPanel() {
 						)
 						.eq("gig_id", gigId)
 						.order("created_at", { ascending: false }),
+					supabase.auth.getUser(),
 				]);
+
+				if (authUserRes.data.user) {
+					setCurrentUser(authUserRes.data.user);
+					const { data: adminRow } = await supabase
+						.from("admins")
+						.select("id")
+						.eq("id", authUserRes.data.user.id)
+						.maybeSingle();
+					setIsAdmin(Boolean(adminRow));
+				}
 
 				if (gigRes.data) {
 					const mDate = gigRes.data[DEADLINE_COLUMN] || "";
@@ -129,7 +148,6 @@ export function SetlistPanel() {
 					});
 					setTimeLeft(getRemainingTime(mDate));
 				}
-				console.log(setlistRes.data);
 				if (setlistRes.data) setSongs(setlistRes.data.map(parseSetlist));
 			} finally {
 				setIsLoading(false);
@@ -137,6 +155,19 @@ export function SetlistPanel() {
 		}
 		init();
 	}, [gigId, supabase]);
+
+	const handleDeleteSong = async (songId: number) => {
+		try {
+			await deleteSetlist(gigId, songId);
+			setSongs((prev) => prev.filter((s) => s.id !== songId));
+			setSelectedSong(null);
+			toast.success("곡이 성공적으로 삭제되었습니다.");
+		} catch (error: any) {
+			console.error("곡 삭제 실패:", error);
+			toast.error(error.message || "곡 삭제 중 오류가 발생했습니다.");
+		}
+	};
+
 
 	useEffect(() => {
 		if (!gigInfo?.meetingDate) return;
@@ -161,13 +192,38 @@ export function SetlistPanel() {
 		});
 	};
 
+	const isModalDirty = Boolean(
+		form.title.trim() ||
+		form.artist?.trim() ||
+		form.description?.trim() ||
+		form.links.some((l) => l.url.trim() || l.note?.trim())
+	);
+
+	const {
+		showLeaveModal,
+		cancelLeave,
+		confirmLeave,
+		triggerConfirm,
+		markSubmitting,
+	} = useUnsavedChangesWarning({
+		isDirty: isModalDirty,
+	});
+
+	const closeDialog = () => {
+		triggerConfirm(() => {
+			dialogRef.current?.close();
+			resetForm();
+		});
+	};
+
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
 		startTransition(async () => {
 			try {
 				await addSetlist(gigId, form);
-
-				closeDialog();
+				markSubmitting();
+				dialogRef.current?.close();
+				resetForm();
 				window.location.reload();
 			} catch (e) {
 				alert("저장에 실패했습니다: " + (e as Error).message);
@@ -186,7 +242,6 @@ export function SetlistPanel() {
 		resetForm();
 		dialogRef.current?.showModal();
 	};
-	const closeDialog = () => dialogRef.current?.close();
 
 	return (
 		<div className="relative flex flex-col gap-8 w-full max-w-5xl mx-auto px-4 pb-20">
@@ -285,6 +340,9 @@ export function SetlistPanel() {
 
 			<SetlistDrawer
 				song={selectedSong}
+				currentUserId={currentUser?.id}
+				isAdmin={isAdmin}
+				onDelete={handleDeleteSong}
 				onClose={() => setSelectedSong(null)}
 			/>
 
@@ -295,6 +353,17 @@ export function SetlistPanel() {
 					onClick={() => setSelectedSong(null)}
 				/>
 			)}
+
+			{/* 곡 등록 이탈 확인 다이얼로그 */}
+			<LeaveConfirmDialog
+				isOpen={showLeaveModal}
+				onClose={cancelLeave}
+				onConfirm={confirmLeave}
+				title="곡 추천 작성을 취소하시겠습니까?"
+				description="작성 중인 곡 정보가 저장되지 않았습니다. 창을 닫거나 페이지를 벗어나면 입력 내용이 모두 사라집니다."
+				confirmText="나가기 (저장 안 함)"
+				cancelText="계속 작성하기"
+			/>
 		</div>
 	);
 }

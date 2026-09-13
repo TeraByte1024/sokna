@@ -109,23 +109,45 @@ erDiagram
 | :--- | :--- | :--- | :--- | :--- |
 | `id` | `int8` (Identity) | NO | 자동증가 | 공연 고유 식별자 |
 | `title` | `text` | YES | null | 공연 명칭 (예: 2026 봄 정기공연) |
+| `subtitle` | `text` | YES | null | 공연 부제목 (예: SOKNA LIVE CONCERT, 메인 제목 아래 표시되는 테마/슬로건) |
 | `perform_date` | `timestamptz` | NO | - | 공연 일시 |
-| `meeting_date` | `timestamptz` | YES | null | 곡 선정 및 준비 총회 일시 |
+| `meeting_date` | `timestamptz` | YES | null | 곡 선정 및 준비 총회(선곡회의) 일시 |
+| `location` | `text` | YES | null | 공연 장소 (예: 한양대학교 학생회관 콘서트홀) |
+| `poster_url` | `text` | YES | null | 공연 공식 포스터 이미지 공개 URL (Supabase Storage: gigs/posters) |
+| `is_public` | `bool` | NO | `true` | 공연 공개 여부 (`true`: 전체 공개, `false`: 비공개/관리자 및 링크 보유자 전용) |
 | `created_at` | `timestamptz` | NO | `now()` | 생성 일시 |
 
-### 2.4 `performers` (공연 참여자 매핑)
-공연(`gigs`)에 참가하는 회원(`users`)과 해당 공연에서의 담당 파트를 지정하는 매핑 테이블입니다.
+### 2.4 `gig_rsvps` (공연 참가 신청/수요 조사)
+동아리 회원이 참가 신청 링크(`/gigs/:id/join`)를 통해 제출한 공연 참가 여부 및 희망 파트 응답입니다.
+
+| 컬럼명 | 데이터 타입 | Nullable | 기본값 | 설명 및 관계 |
+| :--- | :--- | :--- | :--- | :--- |
+| `id` | `int8` (Identity) | NO | 자동증가 | 참가 신청 고유 식별자 |
+| `gig_id` | `int8` | NO | - | FK → `gigs(id)` (ON DELETE CASCADE) |
+| `user_id` | `uuid` | NO | - | FK → `users(id)` (ON DELETE CASCADE) |
+| `status` | `text` | NO | - | 참여 상태 (`'going'`, `'not_going'`, `'undecided'`) |
+| `part` | `text` | YES | null | 참여 시 희망 세션 파트 (예: 보컬, 베이스 등) |
+| `note` | `text` | YES | null | 전달 사항 및 특이사항 메모 |
+| `created_at` | `timestamptz` | NO | `now()` | 등록 일시 |
+| `updated_at` | `timestamptz` | NO | `now()` | 수정 일시 |
+
+> **Unique 제약조건**: `UNIQUE(gig_id, user_id)` (공연별 회원당 1개의 RSVP 레코드 유지)
+
+### 2.5 `performers` (공연 참여자 매핑)
+공연(`gigs`)에 참가하는 회원(`users`)과 해당 공연에서의 담당 파트를 지정하는 매핑 테이블입니다. (가입 회원이 없는 미연동 더미 공연자도 보존 지원)
 
 | 컬럼명 | 데이터 타입 | Nullable | 기본값 | 설명 및 관계 |
 | :--- | :--- | :--- | :--- | :--- |
 | `id` | `int8` (Identity) | NO | 자동증가 | 참여자 매핑 고유 식별자 |
 | `gig_id` | `int8` | NO | - | FK → `gigs(id)` (ON DELETE CASCADE) |
-| `user_id` | `uuid` | NO | - | FK → `users(id)` |
-| `part` | `text` | NO | - | 해당 공연에서의 배정 파트 |
+| `user_id` | `uuid` | YES | null | FK → `users(id)` (미연동 더미 공연자는 null) |
+| `name` | `text` | YES | null | 공연자 이름 (미연동 더미 공연자 저장 및 표기용) |
+| `part` | `text` | NO | `'세션'` | 해당 공연에서의 배정 파트(다중 파트는 콤마 구분) |
+| `photo_url` | `text` | YES | null | 공연별 세션 프로필 사진 URL (Supabase Storage: gigs/performers) |
 | `created_at` | `timestamptz` | NO | `now()` | 생성 일시 |
 
-### 2.5 `setlists` (셋리스트 및 곡 정보)
-각 공연에 등록된 연주 곡 및 요구 세션, 악보 정보입니다.
+### 2.6 `setlists` (셋리스트 및 곡 정보)
+각 공연에 등록된 연주 곡 및 가변 세션, 악보 정보입니다.
 
 | 컬럼명 | 데이터 타입 | Nullable | 기본값 | 설명 및 관계 |
 | :--- | :--- | :--- | :--- | :--- |
@@ -134,14 +156,26 @@ erDiagram
 | `title` | `text` | YES | null | 곡 제목 |
 | `artist` | `text` | YES | null | 원곡 아티스트 |
 | `required_parts`| `text[]` | YES | null | 필요 세션 파트 목록 (예: `['보컬', '기타', '베이스']`) |
+| `session_members` | `text` | YES | null | 가변 세션 슬롯 JSON 문자열 (`[ { "sessionName": string, "members": string[] } ]`) 또는 레거시 포맷 |
+| `order_num` | `int4` | NO | `0` | 셋리스트 연주 순서 (1, 2, 3...) |
 | `sheet_exists` | `bool` | YES | `false` | 악보 보유 여부 |
 | `description` | `text` | YES | null | 곡 관련 추가 설명 및 요청사항 |
 | `links` | `jsonb` | YES | `[]` | 참고 링크 목록 (`[{ url: string, note?: string }]`) |
-| `created_by` | `int8` | YES | null | FK → `performers(id)` (곡 신청 세션원) |
 | `created_at` | `timestamptz` | NO | `now()` | 등록 일시 |
 | `updated_at` | `timestamptz` | NO | `now()` | 수정 일시 |
 
-### 2.6 `profiles` (기기 및 푸시 토큰)
+> **RLS 정책 (Row Level Security)**:
+> - `SELECT`: 모든 사용자(비로그인 포함) 조회 허용 (`USING (true)`)
+> - `INSERT`: 관리자(`is_admin()`) 또는 해당 공연 참여자(`performers.gig_id = gig_id AND user_id = auth.uid()`, 참여자는 선곡회의 후보곡 `order_num = 0`만 등록 가능)
+> - `UPDATE`:
+>   - **공연 정보 셋리스트 (`order_num > 0`)**: **관리자(`is_admin()`)만 수정 가능** (곡 등록자 권한 없음)
+>   - **선곡회의 후보곡 (`order_num = 0` 또는 null)**: 관리자 또는 해당 곡 등록자(`created_by = performers.id AND user_id = auth.uid()`) 수정 가능
+> - `DELETE`:
+>   - **공연 정보 셋리스트 (`order_num > 0`)**: **관리자(`is_admin()`)만 삭제 가능** (곡 등록자 권한 없음)
+>   - **선곡회의 후보곡 (`order_num = 0` 또는 null)**: 관리자 또는 해당 곡 등록자(`created_by = performers.id AND user_id = auth.uid()`) 삭제 가능
+
+
+### 2.7 `profiles` (기기 및 푸시 토큰)
 사용자별 기기 정보 및 Firebase FCM 토큰을 저장합니다.
 
 | 컬럼명 | 데이터 타입 | Nullable | 기본값 | 설명 |

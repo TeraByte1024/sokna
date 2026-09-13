@@ -39,10 +39,14 @@
   - `created_by` 컬럼에는 유저의 `performers.id`가 저장됨.
   - 등록 완료 후 `revalidatePath('/gigs/${gigId}/setlists')`로 갱신.
 
-### 2.3 곡 삭제 (`deleteSetlist`)
-- **권한**:
-  - 본인이 등록한 곡이거나 관리자일 경우 삭제 가능.
-  - Server Action `deleteSetlist(gigId, id)` 호출.
+### 2.3 곡 삭제 및 수정 권한 분리 (`deleteSetlist` & RLS)
+- **선곡회의 후보곡 (`order_num = 0` 또는 null)**:
+  - 본인이 등록한 곡(`created_by`)이거나 관리자일 경우 삭제 및 수정 가능.
+  - 슬라이드 오버 서랍(`SetlistDrawer`)에서 `[추천곡 삭제하기]` 버튼 노출.
+- **공연 정보 확정 셋리스트 (`order_num > 0`)**:
+  - **오직 관리자(Admin)만 삭제 및 수정 가능** (곡 등록자 권한 없음).
+  - 일반 부원(등록자 본인 포함)은 공연 정보에 편입된 셋리스트를 임의로 수정하거나 삭제할 수 없습니다.
+  - Server Action `deleteSetlist(gigId, id)` 및 DB RLS 정책 양쪽에서 이중으로 차단.
 
 ---
 

@@ -30,7 +30,12 @@ import {
   ShieldMinus,
   Crown,
   Pencil,
+  X,
 } from "lucide-react";
+import {
+  LeaveConfirmDialog,
+  useUnsavedChangesWarning,
+} from "@/components/ui/leave-confirm-dialog";
 
 interface Props {
   initialAdmins: AdminRecord[];
@@ -105,6 +110,33 @@ export function AdminMembersClient({
     }
   };
 
+  // 회원 정보 수정 dirty 상태 판별
+  const currentPart =
+    editSelectedPreset === "직접 입력" ? editCustomPart.trim() : (editSelectedPreset || "");
+  const originalPart = editingMember?.part?.trim() || "";
+  const isEditDirty = Boolean(
+    editingMember &&
+    (
+      editName.trim() !== editingMember.name.trim() ||
+      editGeneration.trim() !== (editingMember.generation ? String(editingMember.generation) : "") ||
+      currentPart !== originalPart
+    )
+  );
+
+  const {
+    showLeaveModal,
+    cancelLeave,
+    confirmLeave,
+    triggerConfirm,
+    markSubmitting,
+  } = useUnsavedChangesWarning({
+    isDirty: isEditDirty,
+  });
+
+  const handleCloseEditModal = () => {
+    triggerConfirm(() => setEditingMember(null));
+  };
+
   /** 회원 정보 수정 저장 실행 */
   const handleSaveEdit = () => {
     if (!editingMember) return;
@@ -137,6 +169,7 @@ export function AdminMembersClient({
       );
       setProcessingId(null);
       if (res.ok) {
+        markSubmitting();
         showAlert("success", `${trimmedName} 님의 회원 정보를 수정했습니다.`);
         setApprovedMembers((prev) =>
           prev.map((m) =>
@@ -694,8 +727,14 @@ export function AdminMembersClient({
 
       {/* 6. 회원 정보 수정 모달 (관리자용) */}
       {editingMember && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="w-full max-w-lg rounded-xl border border-border/70 bg-card p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-150">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150"
+          onClick={handleCloseEditModal}
+        >
+          <div
+            className="w-full max-w-lg rounded-xl border border-border/70 bg-card p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between pb-3 border-b border-border/50">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
@@ -706,6 +745,13 @@ export function AdminMembersClient({
                   <p className="text-xs text-muted-foreground">관리자 권한으로 부원의 실명, 기수, 세션 정보를 수정합니다.</p>
                 </div>
               </div>
+              <button
+                type="button"
+                onClick={handleCloseEditModal}
+                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
 
             <div className="space-y-4 text-sm">
@@ -825,7 +871,7 @@ export function AdminMembersClient({
                 variant="outline"
                 size="sm"
                 disabled={isPendingTransition}
-                onClick={() => setEditingMember(null)}
+                onClick={handleCloseEditModal}
               >
                 취소
               </Button>
@@ -841,6 +887,17 @@ export function AdminMembersClient({
           </div>
         </div>
       )}
+
+      {/* 이탈 확인 모달 */}
+      <LeaveConfirmDialog
+        isOpen={showLeaveModal}
+        onClose={cancelLeave}
+        onConfirm={confirmLeave}
+        title="수정을 중단하시겠습니까?"
+        description="작성 중인 회원 정보가 저장되지 않았습니다. 창을 닫거나 페이지를 벗어나면 변경사항이 사라집니다."
+        confirmText="나가기 (저장 안 함)"
+        cancelText="계속 수정하기"
+      />
     </div>
   );
 }

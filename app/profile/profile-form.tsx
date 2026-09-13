@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/card";
 import { updateMyProfileAction } from "./actions";
 import { toast } from "@/components/ui/sonner";
+import { LeaveConfirmDialog, useUnsavedChangesWarning } from "@/components/ui/leave-confirm-dialog";
 import {
   User,
   Mail,
@@ -82,6 +83,21 @@ export function ProfileForm({ user, isAdmin }: ProfileFormProps) {
     text: string;
   } | null>(null);
 
+  const currentPart = selectedPreset === "직접 입력" ? customPart.trim() : selectedPreset;
+
+  const isDirty =
+    name.trim() !== (user.name || "") ||
+    generation.trim() !== (user.generation ? String(user.generation) : "") ||
+    currentPart !== initialPart ||
+    marketingOptIn !== (user.marketing_opt_in ?? false);
+
+  const {
+    showLeaveModal,
+    cancelLeave,
+    confirmLeave,
+    markSubmitting,
+  } = useUnsavedChangesWarning({ isDirty });
+
   const handlePresetSelect = (preset: string) => {
     if (selectedPreset === preset) {
       // 이미 선택된 항목 재클릭 시 선택 해제
@@ -137,6 +153,7 @@ export function ProfileForm({ user, isAdmin }: ProfileFormProps) {
       );
 
       if (res.ok) {
+        markSubmitting();
         toast.success(res.message || "회원 정보가 성공적으로 수정되었습니다.");
         setMessage({
           type: "success",
@@ -432,6 +449,14 @@ export function ProfileForm({ user, isAdmin }: ProfileFormProps) {
           </form>
         </CardContent>
       </Card>
+
+      <LeaveConfirmDialog
+        isOpen={showLeaveModal}
+        title="페이지를 벗어나시겠습니까?"
+        description="회원 정보 수정 중 변경된 내용이 저장되지 않았습니다. 지금 페이지를 벗어나면 변경사항이 모두 사라집니다."
+        onClose={cancelLeave}
+        onConfirm={confirmLeave}
+      />
     </div>
   );
 }

@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { LeaveConfirmDialog, useUnsavedChangesWarning } from "@/components/ui/leave-confirm-dialog";
 import {
   Card,
   CardContent,
@@ -42,6 +43,24 @@ export function CompleteProfileForm({ initialName = "", email = "" }: Props) {
   const [agreeMarketing, setAgreeMarketing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  const isDirty = useMemo(() => {
+    return Boolean(
+      (name.trim() && name.trim() !== initialName) ||
+      generation.trim() ||
+      selectedPreset !== "보컬" ||
+      customPart.trim() ||
+      agreeTerms ||
+      agreeMarketing
+    );
+  }, [name, initialName, generation, selectedPreset, customPart, agreeTerms, agreeMarketing]);
+
+  const {
+    showLeaveModal,
+    cancelLeave,
+    confirmLeave,
+    markSubmitting,
+  } = useUnsavedChangesWarning({ isDirty });
 
   const handlePresetSelect = (preset: string) => {
     setSelectedPreset(preset);
@@ -91,6 +110,7 @@ export function CompleteProfileForm({ initialName = "", email = "" }: Props) {
     );
 
     if (res.ok) {
+      markSubmitting();
       router.push("/auth/sign-up-success");
     } else {
       setError(res.error || "프로필 저장 중 오류가 발생했습니다.");
@@ -99,7 +119,8 @@ export function CompleteProfileForm({ initialName = "", email = "" }: Props) {
   };
 
   return (
-    <Card className="border-border/60 shadow-lg">
+    <>
+      <Card className="border-border/60 shadow-lg">
       <CardHeader className="space-y-1">
         <div className="flex items-center gap-2 text-primary font-semibold text-sm mb-1">
           <Sparkles className="w-4 h-4" />
@@ -236,5 +257,14 @@ export function CompleteProfileForm({ initialName = "", email = "" }: Props) {
         </form>
       </CardContent>
     </Card>
+
+    <LeaveConfirmDialog
+      isOpen={showLeaveModal}
+      title="페이지를 벗어나시겠습니까?"
+      description="입력 중인 부원 정보가 저장되지 않았습니다. 지금 페이지를 벗어나면 작성 내용이 모두 사라집니다."
+      onClose={cancelLeave}
+      onConfirm={confirmLeave}
+    />
+    </>
   );
 }

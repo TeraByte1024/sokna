@@ -36,6 +36,30 @@
 
 ### 2.3 공연 상세 및 셋리스트 진입 (`/gigs/[id]`)
 - 특정 공연을 선택하면 해당 공연의 세부 정보 및 셋리스트(`app/gigs/[id]/setlists`) 페이지로 이동합니다.
+- 관리자에게는 상단 액션 바에 `공연 수정`(`/gigs/[id]/edit`) 및 `참가 신청 링크 복사` 버튼이 노출됩니다.
+
+### 2.4 공연 정보 수정 (`/gigs/[id]/edit`)
+- **접근 권한**: 관리자 전용 (`getIsAdmin()` 검증 후 비인가자 리다이렉트).
+- **수정 가능 항목**:
+  - 공연 제목 (`title`, 필수)
+  - 공연 일시 (`perform_date`, 필수)
+  - 선곡 회의 일시 (`meeting_date`, 선택)
+  - 공연 장소 (`location`, 선택)
+  - 공식 포스터 이미지 (`poster_url`, 업로드/교체/삭제)
+  - 공개 여부 설정 (`is_public`: 공개 / 비공개)
+  - 참여 공연자 명단 (`performers`):
+    - 세션원 추가 및 삭제
+    - 개별 세션원의 담당 파트 수정
+    - 공연별 세션 프로필 사진 업로드 및 수정
+- **처리 절차 (`updateGig` Server Action)**:
+  1. `getIsAdmin()` 검증.
+  2. `gigs` 테이블의 기본 정보(`title`, `perform_date`, `meeting_date`, `location`, `poster_url`, `is_public`) update.
+  3. 참여자(Performers) 지능형 동기화 (Diff/Upsert):
+     - 기존 `performers` 목록과 새 목록 비교.
+     - 유지되는 참여자는 파트/프로필 사진 변경사항만 update하여 고유 `performers.id` 보존 (`setlists.created_by` FK 무결성 유지).
+     - 제외된 참여자는 연관된 `setlists.created_by`를 null 처리 후 안전 delete.
+     - 새로 추가된 참여자는 insert.
+  4. `revalidatePath` 호출로 `/gigs`, `/gigs/[id]`, `/gigs/[id]/edit` 캐시 갱신.
 
 ---
 

@@ -1,7 +1,9 @@
+import { Suspense } from "react";
 import { SiteLayout } from "@/components/site-layout";
 import { AnniversaryInner } from "./anniversary-inner";
 import { ANNIVERSARY_CONFIG } from "@/lib/anniversary";
 import type { Metadata } from "next";
+
 
 export const metadata: Metadata = {
   title: ANNIVERSARY_CONFIG.metadata.title,
@@ -11,7 +13,9 @@ export const metadata: Metadata = {
 export default function AnniversaryPage() {
   return (
     <SiteLayout>
-      <AnniversaryInner />
+      <Suspense fallback={null}>
+        <AnniversaryInner />
+      </Suspense>
     </SiteLayout>
   );
 }

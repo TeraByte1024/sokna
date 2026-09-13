@@ -11,22 +11,30 @@ const Toaster = ({ ...props }: ToasterProps) => {
   return (
     <Sonner
       theme={theme as ToasterProps["theme"]}
-      className="toaster group"
+      className="toaster group font-sans"
       toastOptions={{
         classNames: {
           toast:
-            "group toast group-[.toaster]:bg-card group-[.toaster]:text-foreground group-[.toaster]:border-border/80 group-[.toaster]:shadow-xl group-[.toaster]:rounded-xl group-[.toaster]:p-4 text-sm font-medium",
-          description: "group-[.toast]:text-muted-foreground text-xs",
+            "group toast group-[.toaster]:bg-card group-[.toaster]:text-foreground group-[.toaster]:border-border/80 group-[.toaster]:shadow-2xl group-[.toaster]:rounded-2xl group-[.toaster]:p-3.5 group-[.toaster]:gap-3 text-[13px] font-medium tracking-tight antialiased",
+          title: "font-bold text-xs text-foreground tracking-tight leading-snug",
+          description: "group-[.toast]:text-muted-foreground text-[11px] leading-relaxed tracking-tight",
           actionButton:
-            "group-[.toast]:bg-primary group-[.toast]:text-primary-foreground text-xs font-semibold",
+            "group-[.toast]:bg-primary group-[.toast]:text-primary-foreground text-xs font-semibold rounded-lg px-2.5 py-1",
           cancelButton:
-            "group-[.toast]:bg-muted group-[.toast]:text-muted-foreground text-xs",
+            "group-[.toast]:bg-muted group-[.toast]:text-muted-foreground text-xs rounded-lg px-2.5 py-1",
+          icon: "group-[.toast]:text-primary shrink-0",
+        },
+        style: {
+          fontFamily:
+            '"Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, "Noto Sans KR", sans-serif',
+          letterSpacing: "-0.02em",
+          wordBreak: "keep-all",
         },
       }}
       position="top-right"
       richColors
       closeButton={false}
-      duration={4000}
+      duration={3500}
       {...props}
     />
   );

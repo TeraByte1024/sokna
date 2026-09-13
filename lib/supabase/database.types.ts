@@ -60,26 +60,86 @@ export type Database = {
         }
         Relationships: []
       }
+      gig_rsvps: {
+        Row: {
+          created_at: string
+          gig_id: number
+          id: number
+          note: string | null
+          part: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          gig_id: number
+          id?: never
+          note?: string | null
+          part?: string | null
+          status: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          gig_id?: number
+          id?: never
+          note?: string | null
+          part?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gig_rsvps_gig_id_fkey"
+            columns: ["gig_id"]
+            isOneToOne: false
+            referencedRelation: "gigs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gig_rsvps_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gigs: {
         Row: {
           created_at: string
           id: number
+          is_public: boolean
+          location: string | null
           meeting_date: string | null
           perform_date: string
+          poster_url: string | null
+          subtitle: string | null
           title: string | null
         }
         Insert: {
           created_at?: string
           id?: number
+          is_public?: boolean
+          location?: string | null
           meeting_date?: string | null
           perform_date: string
+          poster_url?: string | null
+          subtitle?: string | null
           title?: string | null
         }
         Update: {
           created_at?: string
           id?: number
+          is_public?: boolean
+          location?: string | null
           meeting_date?: string | null
           perform_date?: string
+          poster_url?: string | null
+          subtitle?: string | null
           title?: string | null
         }
         Relationships: []
@@ -124,22 +184,28 @@ export type Database = {
           created_at: string
           gig_id: number
           id: number
+          name: string | null
           part: string
-          user_id: string
+          photo_url: string | null
+          user_id: string | null
         }
         Insert: {
           created_at?: string
           gig_id: number
           id?: number
+          name?: string | null
           part: string
-          user_id: string
+          photo_url?: string | null
+          user_id?: string | null
         }
         Update: {
           created_at?: string
           gig_id?: number
           id?: number
+          name?: string | null
           part?: string
-          user_id?: string
+          photo_url?: string | null
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -226,7 +292,9 @@ export type Database = {
           gig_id: number
           id: number
           links: Json | null
+          order_num: number
           required_parts: string[] | null
+          session_members: string | null
           sheet_exists: boolean | null
           title: string | null
           updated_at: string
@@ -239,7 +307,9 @@ export type Database = {
           gig_id: number
           id?: number
           links?: Json | null
+          order_num?: number
           required_parts?: string[] | null
+          session_members?: string | null
           sheet_exists?: boolean | null
           title?: string | null
           updated_at?: string
@@ -252,7 +322,9 @@ export type Database = {
           gig_id?: number
           id?: number
           links?: Json | null
+          order_num?: number
           required_parts?: string[] | null
+          session_members?: string | null
           sheet_exists?: boolean | null
           title?: string | null
           updated_at?: string

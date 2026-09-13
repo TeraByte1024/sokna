@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { getIsAdmin } from "@/lib/auth-admin";
 import type { SetlistFormValues } from "@/lib/setlist";
 
 export async function addSetlist(gigId: string, payload: SetlistFormValues) {
@@ -50,15 +51,58 @@ export async function addSetlist(gigId: string, payload: SetlistFormValues) {
 
 /**
  * 곡 삭제 액션
+ * - 공연 정보에 확정된 곡(order_num > 0): 오직 관리자만 삭제 가능 (곡 등록자 권한 없음)
+ * - 선곡회의 후보곡(order_num = 0 또는 null): 관리자 또는 해당 곡 등록자만 삭제 가능
  */
 export async function deleteSetlist(gigId: string, id: number) {
 	const supabase = await createClient();
 
-	// RLS 정책이 잘 설정되어 있다면,
-	// 본인의 created_by(performer.id)가 아닌 경우 DB 레벨에서 삭제가 거부됩니다.
-	const { error } = await supabase.from("setlists").delete().eq("id", id);
+	const {
+		data: { user },
+	} = await supabase.auth.getUser();
+	if (!user) throw new Error("인증된 사용자가 아닙니다.");
 
-	if (error) throw error;
+	const isAdmin = await getIsAdmin();
+
+	// 대상 곡 정보 확인
+	const { data: song, error: fetchErr } = await supabase
+		.from("setlists")
+		.select("id, order_num, created_by")
+		.eq("id", id)
+		.single();
+
+	if (fetchErr || !song) {
+		throw new Error("곡 정보를 찾을 수 없습니다.");
+	}
+
+	// 1. 공연 정보에 확정된 곡(order_num > 0)인 경우: 관리자만 삭제 가능
+	if ((song.order_num ?? 0) > 0) {
+		if (!isAdmin) {
+			throw new Error("공연 정보에 등록된 셋리스트는 관리자만 삭제할 수 있습니다.");
+		}
+	} else {
+		// 2. 선곡회의 후보곡(order_num = 0)인 경우: 관리자 또는 본인 등록 곡만 삭제 가능
+		if (!isAdmin) {
+			const { data: performer } = await supabase
+				.from("performers")
+				.select("id")
+				.eq("id", song.created_by ?? 0)
+				.eq("user_id", user.id)
+				.maybeSingle();
+
+			if (!performer) {
+				throw new Error("본인이 등록한 곡만 삭제할 수 있습니다.");
+			}
+		}
+	}
+
+	const { error } = await supabase.from("setlists").delete().eq("id", id);
+	if (error) {
+		console.error("Setlist delete error:", error);
+		throw new Error("곡 삭제 중 오류가 발생했습니다: " + error.message);
+	}
 
 	revalidatePath(`/gigs/${gigId}/setlists`);
+	revalidatePath(`/gigs/${gigId}`);
 }
+

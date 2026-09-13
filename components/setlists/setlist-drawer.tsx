@@ -10,14 +10,20 @@ import {
 	CalendarDays,
 	History,
 	ExternalLink,
+	Trash2,
+	Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 
 interface SetlistDrawerProps {
 	song: Setlist | null;
+	currentUserId?: string | null;
+	isAdmin?: boolean;
+	onDelete?: (songId: number) => Promise<void>;
 	onClose: () => void;
 }
+
 
 interface UserInfo {
 	generation: number;
@@ -29,9 +35,46 @@ const formatExternalLink = (url: string) => {
 	return url.startsWith("http") ? url : `https://${url}`;
 };
 
-export function SetlistDrawer({ song, onClose }: SetlistDrawerProps) {
+export function SetlistDrawer({
+	song,
+	currentUserId,
+	isAdmin = false,
+	onDelete,
+	onClose,
+}: SetlistDrawerProps) {
 	const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
+	const [isDeleting, setIsDeleting] = useState(false);
 	const supabase = createClient();
+
+	// 곡 등록자 여부 확인
+	const isCreator = Boolean(
+		currentUserId && song?.createdBy?.userId && song.createdBy.userId === currentUserId,
+	);
+	// 공연 정보 셋리스트 여부 (orderNum > 0)
+	const isGigSetlist = Boolean(song && song.orderNum > 0);
+
+	// 권한 분리:
+	// - 공연 정보 확정 곡(orderNum > 0): 오직 관리자만 삭제 가능 (곡 등록자 권한 없음)
+	// - 선곡회의 후보곡(orderNum = 0): 관리자 또는 해당 곡 등록자 삭제 가능
+	const canDelete = Boolean(
+		onDelete && (isAdmin || (!isGigSetlist && isCreator)),
+	);
+
+	const handleDelete = async () => {
+		if (!song || !onDelete) return;
+		const confirmMsg = isGigSetlist
+			? "공연 정보에 확정된 곡을 삭제하시겠습니까?"
+			: "선곡회의 추천곡을 삭제하시겠습니까?";
+		if (!window.confirm(confirmMsg)) return;
+
+		try {
+			setIsDeleting(true);
+			await onDelete(song.id);
+		} finally {
+			setIsDeleting(false);
+		}
+	};
+
 
 	// ✅ 중복 파트 카운트 및 유니크 파트 추출 로직 추가
 	const { uniqueParts, partCounts } = useMemo(() => {
@@ -182,7 +225,29 @@ export function SetlistDrawer({ song, onClose }: SetlistDrawerProps) {
 						</div>
 
 						{/* footer */}
-						<div className="p-6 border-t bg-muted/20 space-y-1">
+						<div className="p-6 border-t bg-muted/20 space-y-4">
+							{canDelete && (
+								<Button
+									variant="destructive"
+									size="sm"
+									className="w-full font-bold shadow-sm"
+									onClick={handleDelete}
+									disabled={isDeleting}
+								>
+									{isDeleting ? (
+										<>
+											<Loader2 className="size-4 mr-2 animate-spin" />
+											삭제하는 중...
+										</>
+									) : (
+										<>
+											<Trash2 className="size-4 mr-2" />
+											{isGigSetlist ? "공연 셋리스트에서 삭제 (관리자)" : "추천곡 삭제하기"}
+										</>
+									)}
+								</Button>
+							)}
+
 							<div className="flex items-center justify-center gap-4 text-[10px] text-muted-foreground font-medium">
 								<span className="flex items-center gap-1">
 									<CalendarDays className="size-3" /> 최초 등록:{" "}

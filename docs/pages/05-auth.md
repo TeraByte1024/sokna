@@ -50,6 +50,8 @@
 2. **제출 및 처리**:
    - Supabase Auth를 통해 계정을 생성하고, `public.users` 테이블에 이름, 기수, 파트 정보를 등록합니다.
    - 이메일 확인이 필요한 경우 `/auth/sign-up-success` 화면으로 안내합니다.
+3. **작성 중 이탈 방지**:
+   - 가입 정보를 입력 중인 상태(`isFormDirty`)에서 로그인 페이지 링크 클릭, 다른 페이지 이동, 새로고침 시 `LeaveConfirmDialog` 경고 팝업이 노출됩니다.
 
 ### 3.2 로그인 (`/auth/login`)
 1. 이메일과 비밀번호를 입력하고 `[로그인]` 클릭.
@@ -59,6 +61,11 @@
 ### 3.3 비밀번호 재설정 (`/auth/forgot-password` -> `/auth/update-password`)
 1. `/auth/forgot-password`에서 가입한 이메일을 입력하면 비밀번호 변경 링크가 이메일로 발송됩니다.
 2. 링크 클릭 시 `/auth/update-password`로 이동하여 새 비밀번호를 입력하고 즉시 갱신합니다.
+3. 새 비밀번호 입력 중 페이지 이탈 시 `LeaveConfirmDialog`가 표시됩니다.
+
+### 3.4 소셜 로그인 신규 부원 정보 등록 (`/auth/complete-profile`)
+1. 구글 간편가입 후 필수 정보(기수, 세션 파트, 약관 동의)가 누락된 경우 자동 안내되는 폼입니다.
+2. 부원 정보 입력 중 페이지를 벗어날 때 `LeaveConfirmDialog` 경고 팝업이 표시됩니다.
 
 ---
 

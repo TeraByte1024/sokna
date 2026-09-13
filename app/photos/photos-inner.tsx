@@ -23,6 +23,10 @@ import {
   deletePhotoAction,
 } from "./actions";
 import type { PhotoItem } from "./page";
+import {
+  LeaveConfirmDialog,
+  useUnsavedChangesWarning,
+} from "@/components/ui/leave-confirm-dialog";
 
 interface PhotosInnerProps {
   initialPhotos: PhotoItem[];
@@ -46,6 +50,35 @@ export function PhotosInner({ initialPhotos, isAdmin }: PhotosInnerProps) {
   const [formCaption, setFormCaption] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // 사진 등록/수정 모달 dirty 상태 판별
+  const isPhotoFormDirty = Boolean(
+    isManageModalOpen &&
+      (manageMode === "add"
+        ? formUrl.trim() !== "" || formTitle.trim() !== "" || formCaption.trim() !== ""
+        : selectedPhoto
+        ? formUrl.trim() !== selectedPhoto.url.trim() ||
+          formTitle.trim() !== selectedPhoto.title.trim() ||
+          formCaption.trim() !== (selectedPhoto.caption || "").trim()
+        : false)
+  );
+
+  const {
+    showLeaveModal,
+    cancelLeave,
+    confirmLeave,
+    triggerConfirm,
+    markSubmitting,
+  } = useUnsavedChangesWarning({
+    isDirty: isPhotoFormDirty,
+  });
+
+  const handleCloseManageModal = () => {
+    triggerConfirm(() => {
+      setIsManageModalOpen(false);
+      setSelectedPhoto(null);
+    });
+  };
 
   useEffect(() => {
     setPhotos(initialPhotos);
@@ -122,6 +155,7 @@ export function PhotosInner({ initialPhotos, isAdmin }: PhotosInnerProps) {
 
     setIsSubmitting(false);
     if (res.ok) {
+      markSubmitting();
       setIsManageModalOpen(false);
       setSelectedPhoto(null);
     } else {
@@ -333,7 +367,7 @@ export function PhotosInner({ initialPhotos, isAdmin }: PhotosInnerProps) {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                onClick={() => setIsManageModalOpen(false)}
+                onClick={handleCloseManageModal}
                 className="absolute inset-0 bg-black/60 backdrop-blur-sm"
               />
 
@@ -345,7 +379,8 @@ export function PhotosInner({ initialPhotos, isAdmin }: PhotosInnerProps) {
                 className="relative w-full max-w-md bg-background border border-border p-6 rounded-2xl shadow-2xl z-10 space-y-6"
               >
                 <button
-                  onClick={() => setIsManageModalOpen(false)}
+                  type="button"
+                  onClick={handleCloseManageModal}
                   className="absolute right-4 top-4 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 text-muted-foreground transition-colors"
                 >
                   <X className="size-4" />
@@ -422,7 +457,7 @@ export function PhotosInner({ initialPhotos, isAdmin }: PhotosInnerProps) {
                     <Button
                       type="button"
                       variant="outline"
-                      onClick={() => setIsManageModalOpen(false)}
+                      onClick={handleCloseManageModal}
                       disabled={isSubmitting}
                       className="flex-1"
                     >
@@ -435,6 +470,17 @@ export function PhotosInner({ initialPhotos, isAdmin }: PhotosInnerProps) {
           )}
         </AnimatePresence>
       )}
+
+      {/* 이탈 확인 모달 */}
+      <LeaveConfirmDialog
+        isOpen={showLeaveModal}
+        onClose={cancelLeave}
+        onConfirm={confirmLeave}
+        title="작성을 중단하시겠습니까?"
+        description="입력 중인 사진 정보가 저장되지 않았습니다. 지금 창을 닫거나 페이지를 벗어나면 변경사항이 사라집니다."
+        confirmText="나가기 (저장 안 함)"
+        cancelText="계속 작성하기"
+      />
     </div>
   );
 }

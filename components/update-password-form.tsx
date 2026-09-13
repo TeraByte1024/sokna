@@ -14,6 +14,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import {
+  LeaveConfirmDialog,
+  useUnsavedChangesWarning,
+} from "@/components/ui/leave-confirm-dialog";
 
 export function UpdatePasswordForm({
   className,
@@ -24,6 +28,17 @@ export function UpdatePasswordForm({
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
 
+  const isFormDirty = password.length > 0;
+
+  const {
+    showLeaveModal,
+    cancelLeave,
+    confirmLeave,
+    markSubmitting,
+  } = useUnsavedChangesWarning({
+    isDirty: isFormDirty,
+  });
+
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     const supabase = createClient();
@@ -33,6 +48,7 @@ export function UpdatePasswordForm({
     try {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
+      markSubmitting();
       // Update this route to redirect to an authenticated route. The user already has an active session.
       router.push("/");
     } catch (error: unknown) {
@@ -73,6 +89,16 @@ export function UpdatePasswordForm({
           </form>
         </CardContent>
       </Card>
+
+      <LeaveConfirmDialog
+        isOpen={showLeaveModal}
+        onClose={cancelLeave}
+        onConfirm={confirmLeave}
+        title="비밀번호 변경을 취소하시겠습니까?"
+        description="입력 중인 새 비밀번호가 저장되지 않았습니다. 지금 페이지를 벗어나면 입력 내용이 모두 사라집니다."
+        confirmText="나가기"
+        cancelText="계속 작성하기"
+      />
     </div>
   );
 }

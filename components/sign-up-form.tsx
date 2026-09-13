@@ -17,6 +17,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { GoogleSignInButton } from "@/components/google-sign-in-button";
+import {
+  LeaveConfirmDialog,
+  useUnsavedChangesWarning,
+} from "@/components/ui/leave-confirm-dialog";
 
 const SESSION_PRESETS = [
   "보컬",
@@ -47,6 +51,24 @@ export function SignUpForm({
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
+
+  const isFormDirty = Boolean(
+    email.trim() ||
+    password ||
+    repeatPassword ||
+    name.trim() ||
+    generation.trim() ||
+    customPart.trim()
+  );
+
+  const {
+    showLeaveModal,
+    cancelLeave,
+    confirmLeave,
+    markSubmitting,
+  } = useUnsavedChangesWarning({
+    isDirty: isFormDirty,
+  });
 
   const handlePresetSelect = (preset: string) => {
     setSelectedPreset(preset);
@@ -118,6 +140,7 @@ export function SignUpForm({
 
       if (signUpError) throw signUpError;
       
+      markSubmitting();
       router.push("/auth/sign-up-success");
     } catch (err: unknown) {
       setError(
@@ -335,6 +358,16 @@ export function SignUpForm({
           </form>
         </CardContent>
       </Card>
+
+      <LeaveConfirmDialog
+        isOpen={showLeaveModal}
+        onClose={cancelLeave}
+        onConfirm={confirmLeave}
+        title="회원가입을 중단하시겠습니까?"
+        description="작성 중인 가입 정보가 저장되지 않았습니다. 지금 페이지를 벗어나면 입력 내용이 모두 사라집니다."
+        confirmText="나가기"
+        cancelText="계속 작성하기"
+      />
     </div>
   );
 }
