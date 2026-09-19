@@ -5,9 +5,12 @@ import React, {
 	useEffect,
 	useCallback,
 	useState,
+	useMemo,
 } from "react";
 import { parseTimestampsAndRanges, type ParsedTimestampItem } from "@/lib/nomination";
 import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
+import { Clock, Play } from "lucide-react";
 
 interface RichTimestampTextareaProps {
 	value: string;
@@ -260,49 +263,83 @@ export function RichTimestampTextarea({
 		[handleInput, tokenizeCurrentText],
 	);
 
+	const parsedItems = useMemo(() => {
+		if (!value) return [];
+		return parseTimestampsAndRanges(value);
+	}, [value]);
+
 	return (
-		<div
-			className={cn(
-				"relative flex h-[76px] w-full rounded-md border border-input bg-background px-3 py-2 text-xs shadow-2xs transition-colors overflow-hidden resize-none",
-				"focus-within:border-primary focus-within:ring-1 focus-within:ring-ring",
-				disabled && "cursor-not-allowed opacity-50",
-				className,
-			)}
-			onClick={() => {
-				if (editorRef.current && document.activeElement !== editorRef.current) {
-					editorRef.current.focus();
-				}
-			}}
-		>
-			{/* 빈 텍스트일 때 플레이스홀더 */}
-			{isEmpty && (
-				<div className="absolute top-2 left-3 right-3 text-muted-foreground pointer-events-none select-none text-xs leading-relaxed line-clamp-2">
-					{placeholder}
+		<div className="flex flex-col gap-1.5 w-full">
+			<div
+				className={cn(
+					"relative flex min-h-[130px] w-full rounded-md border border-input bg-background px-3 py-2 text-xs shadow-2xs transition-colors overflow-hidden",
+					"focus-within:border-primary focus-within:ring-1 focus-within:ring-ring",
+					disabled && "cursor-not-allowed opacity-50",
+					className,
+				)}
+				onClick={() => {
+					if (editorRef.current && document.activeElement !== editorRef.current) {
+						editorRef.current.focus();
+					}
+				}}
+			>
+				{/* 빈 텍스트일 때 플레이스홀더 */}
+				{isEmpty && (
+					<div className="absolute top-2 left-3 right-3 text-muted-foreground pointer-events-none select-none text-xs leading-relaxed line-clamp-3">
+						{placeholder}
+					</div>
+				)}
+
+				{/* contentEditable 입력창 */}
+				<div
+					ref={editorRef}
+					contentEditable={!disabled}
+					suppressContentEditableWarning
+					onInput={handleInput}
+					onKeyDown={handleKeyDown}
+					onBlur={() => {
+						tokenizeCurrentText();
+						handleInput();
+					}}
+					onCompositionStart={() => {
+						isComposingRef.current = true;
+					}}
+					onCompositionEnd={() => {
+						isComposingRef.current = false;
+						handleInput();
+					}}
+					className="w-full h-full min-h-[114px] overflow-y-auto outline-none text-xs leading-relaxed whitespace-pre-wrap break-words text-foreground font-normal [scrollbar-width:thin]"
+					role="textbox"
+					aria-multiline="true"
+				/>
+			</div>
+
+			{/* 인식된 타임스탬프 원클릭 테스트 점프 배지 */}
+			{parsedItems.length > 0 && (
+				<div className="flex flex-wrap items-center gap-1.5 px-0.5">
+					<span className="text-[10px] text-muted-foreground font-medium flex items-center gap-1">
+						<Clock className="size-2.5" />
+						인식된 구간 ({parsedItems.length}):
+					</span>
+					{parsedItems.map((item, idx) => (
+						<Badge
+							key={idx}
+							variant="outline"
+							onClick={() => onSeek?.(item.startSeconds)}
+							className="h-5 px-1.5 rounded-md text-[10px] font-mono font-semibold gap-1 bg-primary/5 border-primary/20 text-primary hover:bg-primary/15 transition-colors cursor-pointer select-none"
+							title="영상 해당 시점으로 이동"
+						>
+							<Play className="size-2 fill-current" />
+							<span>{item.raw}</span>
+							{item.label && (
+								<span className="font-normal text-muted-foreground font-sans truncate max-w-[90px]">
+									{item.label}
+								</span>
+							)}
+						</Badge>
+					))}
 				</div>
 			)}
-
-			{/* contentEditable 입력창 */}
-			<div
-				ref={editorRef}
-				contentEditable={!disabled}
-				suppressContentEditableWarning
-				onInput={handleInput}
-				onKeyDown={handleKeyDown}
-				onBlur={() => {
-					tokenizeCurrentText();
-					handleInput();
-				}}
-				onCompositionStart={() => {
-					isComposingRef.current = true;
-				}}
-				onCompositionEnd={() => {
-					isComposingRef.current = false;
-					handleInput();
-				}}
-				className="w-full h-full overflow-y-auto outline-none text-xs leading-relaxed whitespace-pre-wrap break-words text-foreground font-normal resize-none [scrollbar-width:thin]"
-				role="textbox"
-				aria-multiline="true"
-			/>
 		</div>
 	);
 }

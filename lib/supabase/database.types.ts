@@ -267,6 +267,7 @@ export type Database = {
           recommended_vocals: Json | null
           required_parts: string[] | null
           sheet_exists: boolean | null
+          sheet_note: string | null
           title: string
           updated_at: string
         }
@@ -281,6 +282,7 @@ export type Database = {
           recommended_vocals?: Json | null
           required_parts?: string[] | null
           sheet_exists?: boolean | null
+          sheet_note?: string | null
           title: string
           updated_at?: string
         }
@@ -295,6 +297,7 @@ export type Database = {
           recommended_vocals?: Json | null
           required_parts?: string[] | null
           sheet_exists?: boolean | null
+          sheet_note?: string | null
           title?: string
           updated_at?: string
         }

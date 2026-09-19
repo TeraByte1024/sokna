@@ -27,6 +27,7 @@ export async function addNomination(gigId: string, payload: NominationFormValues
 
 	// 2. 해당 공연(gig_id)에 대한 유저의 Performer 권한 조회 또는 관리자 권한 확인
 	const numericGigId = Number(gigId);
+	let activePerformerId: number | null = null;
 	const { data: performer } = await supabase
 		.from("performers")
 		.select("id")
@@ -34,8 +35,33 @@ export async function addNomination(gigId: string, payload: NominationFormValues
 		.eq("user_id", user.id)
 		.maybeSingle();
 
+	if (performer) {
+		activePerformerId = performer.id;
+	} else {
+		// user_id가 미연동된 performer인 경우 유저 프로필 이름으로 fallback 매칭
+		const { data: userProfile } = await supabase
+			.from("users")
+			.select("name")
+			.eq("id", user.id)
+			.maybeSingle();
+
+		const profileName = userProfile?.name || user.user_metadata?.name;
+		if (profileName) {
+			const { data: namePerformer } = await supabase
+				.from("performers")
+				.select("id")
+				.eq("gig_id", numericGigId)
+				.eq("name", profileName)
+				.maybeSingle();
+
+			if (namePerformer) {
+				activePerformerId = namePerformer.id;
+			}
+		}
+	}
+
 	const isAdmin = await getIsAdmin();
-	if (!isAdmin && !performer) {
+	if (!isAdmin && !activePerformerId) {
 		throw new Error("이 공연의 참여자로 등록되지 않았습니다.");
 	}
 
@@ -48,10 +74,11 @@ export async function addNomination(gigId: string, payload: NominationFormValues
 			artist: payload.artist || null,
 			required_parts: payload.requiredParts,
 			sheet_exists: payload.sheetExists,
+			sheet_note: payload.sheetNote || "",
 			description: payload.description || "",
 			links: (payload.links ?? []) as unknown as import("@/lib/supabase/database.types").Json,
 			recommended_vocals: (payload.recommendedVocals ?? []) as unknown as import("@/lib/supabase/database.types").Json,
-			created_by: performer?.id ?? null,
+			created_by: activePerformerId,
 		})
 		.select("id")
 		.single();
@@ -107,14 +134,32 @@ export async function deleteNomination(gigId: string, id: number) {
 
 	// 본인 등록 여부 검증 (관리자가 아닌 경우)
 	if (!isAdmin) {
-		const { data: performer } = await supabase
-			.from("performers")
-			.select("id")
-			.eq("id", song.created_by ?? 0)
-			.eq("user_id", user.id)
-			.maybeSingle();
+		let isOwner = false;
+		if (song.created_by) {
+			const { data: performer } = await supabase
+				.from("performers")
+				.select("id, name, user_id")
+				.eq("id", song.created_by)
+				.maybeSingle();
 
-		if (!performer) {
+			if (performer) {
+				if (performer.user_id === user.id) {
+					isOwner = true;
+				} else {
+					const { data: userProfile } = await supabase
+						.from("users")
+						.select("name")
+						.eq("id", user.id)
+						.maybeSingle();
+					const profileName = userProfile?.name || user.user_metadata?.name;
+					if (profileName && performer.name === profileName) {
+						isOwner = true;
+					}
+				}
+			}
+		}
+
+		if (!isOwner) {
 			throw new Error("본인이 등록한 곡만 삭제할 수 있습니다.");
 		}
 	}
@@ -163,14 +208,32 @@ export async function updateNomination(
 
 	// 본인 등록 여부 검증 (관리자가 아닌 경우)
 	if (!isAdmin) {
-		const { data: performer } = await supabase
-			.from("performers")
-			.select("id")
-			.eq("id", song.created_by ?? 0)
-			.eq("user_id", user.id)
-			.maybeSingle();
+		let isOwner = false;
+		if (song.created_by) {
+			const { data: performer } = await supabase
+				.from("performers")
+				.select("id, name, user_id")
+				.eq("id", song.created_by)
+				.maybeSingle();
 
-		if (!performer) {
+			if (performer) {
+				if (performer.user_id === user.id) {
+					isOwner = true;
+				} else {
+					const { data: userProfile } = await supabase
+						.from("users")
+						.select("name")
+						.eq("id", user.id)
+						.maybeSingle();
+					const profileName = userProfile?.name || user.user_metadata?.name;
+					if (profileName && performer.name === profileName) {
+						isOwner = true;
+					}
+				}
+			}
+		}
+
+		if (!isOwner) {
 			throw new Error("본인이 등록한 곡만 수정할 수 있습니다.");
 		}
 	}
@@ -182,6 +245,7 @@ export async function updateNomination(
 			artist: payload.artist || null,
 			required_parts: payload.requiredParts,
 			sheet_exists: payload.sheetExists,
+			sheet_note: payload.sheetNote || "",
 			description: payload.description || "",
 			links: (payload.links ?? []) as unknown as import("@/lib/supabase/database.types").Json,
 			recommended_vocals: (payload.recommendedVocals ?? []) as unknown as import("@/lib/supabase/database.types").Json,

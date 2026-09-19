@@ -9,10 +9,12 @@ import {
 	extractYouTubeTimestamp,
 	parseTimestampToSeconds,
 	formatSecondsToTime,
+	stripLeadingZeroTime,
 	sortSessionParts,
 	parseTimestampsAndRanges,
 	type RecommendedVocal,
 	type NominationResponseStatus,
+	type NominationTimestamp,
 } from "@/lib/nomination";
 import {
 	X,
@@ -54,7 +56,7 @@ interface NominationDrawerProps {
 }
 
 interface UserInfo {
-	generation: number;
+	generation: number | null;
 	name: string;
 }
 
@@ -64,6 +66,7 @@ type MediaItem =
 		url: string;
 		note?: string;
 		timestamp?: string;
+		timestamps?: NominationTimestamp[];
 		videoId: string;
 		originalIndex: number;
 	}
@@ -72,6 +75,7 @@ type MediaItem =
 		url: string;
 		note?: string;
 		timestamp?: string;
+		timestamps?: NominationTimestamp[];
 		domain: string;
 		originalIndex: number;
 	};
@@ -256,6 +260,7 @@ export function NominationDrawer({
 					url: rawUrl,
 					note: link.note,
 					timestamp: link.timestamp,
+					timestamps: link.timestamps,
 					videoId,
 					originalIndex: idx,
 				});
@@ -266,6 +271,7 @@ export function NominationDrawer({
 					url: rawUrl,
 					note: link.note,
 					timestamp: link.timestamp,
+					timestamps: link.timestamps,
 					domain,
 					originalIndex: idx,
 				});
@@ -477,6 +483,21 @@ export function NominationDrawer({
 		if (!currentMedia) return [];
 		const items: { label: string; seconds: number; timestamp: string }[] = [];
 
+		// 0. links의 timestamps 목록이 있다면 우선 추가
+		if (currentMedia.timestamps && Array.isArray(currentMedia.timestamps)) {
+			currentMedia.timestamps.forEach((ts) => {
+				const firstPart = ts.time.split("~")[0].trim();
+				const sec = parseTimestampToSeconds(firstPart);
+				if (sec !== null && !items.some((it) => it.seconds === sec)) {
+					items.push({
+						label: ts.label,
+						seconds: sec,
+						timestamp: ts.time,
+					});
+				}
+			});
+		}
+
 		// 1. note 내의 여러 타임스탬프들 파싱
 		if (currentMedia.note) {
 			const parsed = extractTimestampsFromText(currentMedia.note);
@@ -492,7 +513,7 @@ export function NominationDrawer({
 			const sec = parseTimestampToSeconds(currentMedia.timestamp);
 			if (sec !== null && !items.some((it) => it.seconds === sec)) {
 				items.push({
-					label: "지정 구간",
+					label: "",
 					seconds: sec,
 					timestamp: currentMedia.timestamp,
 				});
@@ -530,7 +551,10 @@ export function NominationDrawer({
 	};
 
 	useEffect(() => {
-		if (!song?.createdBy) return;
+		if (!song?.createdBy) {
+			setUserInfo(null);
+			return;
+		}
 
 		if (typeof song.createdBy === "object") {
 			setUserInfo(song.createdBy);
@@ -540,12 +564,18 @@ export function NominationDrawer({
 		async function fetchUser() {
 			const { data, error } = await supabase
 				.from("performers")
-				.select(`users ( generation, name )`)
+				.select(`name, users ( generation, name )`)
 				.eq("id", song?.createdBy)
 				.single();
 
-			if (!error && data?.users) {
-				setUserInfo(data.users as unknown as UserInfo);
+			if (!error && data) {
+				const userObj = data.users as unknown as { generation?: number | null; name?: string } | null;
+				setUserInfo({
+					name: userObj?.name || (data as any).name || "동아리 부원",
+					generation: userObj?.generation ?? null,
+				});
+			} else {
+				setUserInfo(null);
 			}
 		}
 		fetchUser();
@@ -626,9 +656,17 @@ export function NominationDrawer({
 										<User className="size-3.5 text-primary" />
 										<span>작성자:</span>
 										<span className="font-bold text-foreground">
-											{userInfo
-												? `${userInfo.generation}기 ${userInfo.name}`
-												: "동아리 부원"}
+											{(() => {
+												const author =
+													userInfo ||
+													(song?.createdBy && typeof song.createdBy === "object"
+														? song.createdBy
+														: null);
+												if (!author) return "동아리 부원";
+												return author.generation
+													? `${author.generation}기 ${author.name}`
+													: author.name;
+											})()}
 										</span>
 									</div>
 									<div className="flex items-center gap-2 text-[11px]">
@@ -717,31 +755,41 @@ export function NominationDrawer({
 
 									{/* 구간 바로가기 버튼 목록 */}
 									{currentMediaTimestamps.length > 0 && (
-										<div className="flex items-center gap-1.5 overflow-x-auto py-0.5 [scrollbar-width:none]">
-											{currentMediaTimestamps.map((ts, idx) => (
-												<button
-													key={idx}
-													type="button"
-													onClick={() =>
-														handleTimestampSeek(ts.seconds, currentMedia.url)
-													}
-													className={cn(
-														"inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all shrink-0 cursor-pointer shadow-2xs",
-														activeSeekTime === ts.seconds
-															? "bg-primary text-primary-foreground border-primary font-bold shadow-xs"
-															: "bg-card border-border/80 text-foreground hover:bg-primary/10 hover:border-primary/40",
-													)}
-													title={`${ts.timestamp} (${ts.label || "이동"})`}
-												>
-													<Play className="size-2.5 fill-current" />
-													<span className="font-semibold tabular-nums">{ts.timestamp}</span>
-													{ts.label && (
-														<span className="opacity-80 text-[11px] truncate max-w-[140px]">
-															{ts.label}
-														</span>
-													)}
-												</button>
-											))}
+										<div className="flex flex-wrap items-center gap-1.5 py-0.5">
+											{currentMediaTimestamps.map((ts, idx) => {
+												const displayTime = stripLeadingZeroTime(ts.timestamp);
+												const hasLabel = Boolean(
+													ts.label &&
+														ts.label.trim() &&
+														ts.label.trim() !== "주요 구간" &&
+														ts.label.trim() !== "지정 구간" &&
+														ts.label.trim() !== "시작 지점",
+												);
+												return (
+													<button
+														key={idx}
+														type="button"
+														onClick={() =>
+															handleTimestampSeek(ts.seconds, currentMedia.url)
+														}
+														className={cn(
+															"inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer shadow-2xs text-left max-w-full break-words",
+															activeSeekTime === ts.seconds
+																? "bg-primary text-primary-foreground border-primary font-bold shadow-xs"
+																: "bg-card border-border/80 text-foreground hover:bg-primary/10 hover:border-primary/40",
+														)}
+														title={`${displayTime}${hasLabel ? ` (${ts.label})` : ""}`}
+													>
+														<Play className="size-2.5 fill-current shrink-0" />
+														<span className="font-semibold tabular-nums shrink-0">{displayTime}</span>
+														{hasLabel && (
+															<span className="opacity-90 text-[11px] font-normal break-words whitespace-normal">
+																{ts.label}
+															</span>
+														)}
+													</button>
+												);
+											})}
 										</div>
 									)}
 
@@ -775,8 +823,8 @@ export function NominationDrawer({
 								</div>
 							)}
 
-							{/* 4. 악보 ('악보 있어요' / '악보 없어요') */}
-							<div className="flex items-center gap-2 text-xs">
+							{/* 4. 악보 ('악보 있어요' / '악보 없어요' 및 악보 메모) */}
+							<div className="flex flex-wrap items-center gap-2 text-xs">
 								<span className="font-medium text-muted-foreground shrink-0 flex items-center gap-1">
 									<FileText className="size-3.5 text-primary" />
 									악보:
@@ -791,6 +839,11 @@ export function NominationDrawer({
 								>
 									{song.sheetExists ? "악보 있어요" : "악보 없어요"}
 								</Badge>
+								{song.sheetNote && (
+									<span className="text-muted-foreground text-xs bg-muted/40 px-2 py-0.5 rounded-md border border-border/60 font-medium">
+										{song.sheetNote}
+									</span>
+								)}
 							</div>
 
 							{/* 5. 세션 (충족 시 초록색, 부족 확정 시 빨간색, 인라인 응답 현황 통합) */}

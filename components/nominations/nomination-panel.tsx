@@ -9,7 +9,7 @@ import {
 	useMemo,
 } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import {
 	Plus,
 	Loader2,
@@ -42,7 +42,6 @@ import {
 	type RecommendedVocal,
 	type NominationResponseStatus,
 	parseNomination,
-	NominationFormValues,
 	getYouTubeVideoId,
 	getYouTubeThumbnailUrl,
 	isMaleVocalPart,
@@ -52,20 +51,11 @@ import {
 	sortSessionParts,
 } from "@/lib/nomination";
 import { NominationDrawer } from "@/components/nominations/nomination-drawer";
-import { NominationNewModal } from "@/components/nominations/nomination-new-modal";
-import { NominationEditModal } from "@/components/nominations/nomination-edit-modal";
 import {
-	addNomination,
-	deleteNomination,
-	updateNomination,
 	updateNominationViewAction,
 } from "@/app/gigs/[id]/nominations/actions";
 import { toast } from "sonner";
 import { cn, getDDay } from "@/lib/utils";
-import {
-	LeaveConfirmDialog,
-	useUnsavedChangesWarning,
-} from "@/components/ui/leave-confirm-dialog";
 
 const DEADLINE_COLUMN = "meeting_date";
 const DEFAULT_REQUIRED_PARTS = ["보컬(남)", "기타", "베이스", "드럼", "건반"];
@@ -74,15 +64,6 @@ const SESSION_FILTER_PARTS = [
 	"보컬(여)",
 	"건반",
 ];
-const DEFAULT_FORM_STATE: NominationFormValues = {
-	title: "",
-	artist: "",
-	requiredParts: [...DEFAULT_REQUIRED_PARTS],
-	recommendedVocals: [],
-	sheetExists: false,
-	description: "",
-	links: [],
-};
 
 /**
  * 마감 기한까지 남은 시간을 계산 (회의 1일 전 마감)
@@ -127,15 +108,12 @@ interface NominationPanelProps {
 
 export function NominationPanel({ initialIsAdmin = false }: NominationPanelProps) {
 	const params = useParams();
+	const router = useRouter();
 	const gigId = params.id as string;
-	const dialogRef = useRef<HTMLDialogElement>(null);
 	const supabase = createClient();
 
-	const [isPending, startTransition] = useTransition();
-	const [isEditPending, startEditTransition] = useTransition();
 	const [songs, setSongs] = useState<Nomination[]>([]);
 	const [selectedSong, setSelectedSong] = useState<Nomination | null>(null);
-	const [editingSong, setEditingSong] = useState<Nomination | null>(null);
 	const [currentUser, setCurrentUser] = useState<{ id: string } | null>(null);
 	const [currentPerformer, setCurrentPerformer] = useState<{ id: number; part: string; name?: string | null } | null>(null);
 	const [performers, setPerformers] = useState<RecommendedVocal[]>([]);
@@ -161,9 +139,6 @@ export function NominationPanel({ initialIsAdmin = false }: NominationPanelProps
 	const [isFilterOpen, setIsFilterOpen] = useState<boolean>(false);
 	const [onlyChangedFilter, setOnlyChangedFilter] = useState<boolean>(false);
 
-	const [form, setForm] = useState(DEFAULT_FORM_STATE);
-	const [newPart, setNewPart] = useState("");
-
 	useEffect(() => {
 		async function init() {
 			setIsLoading(true);
@@ -180,9 +155,11 @@ export function NominationPanel({ initialIsAdmin = false }: NominationPanelProps
 						.select(
 							`*,
                 created_by:performers (
+									id,
 									user_id,
+									name,
 									part,
-									...users (
+									users (
 										name,
 										generation
 									)
@@ -265,7 +242,26 @@ export function NominationPanel({ initialIsAdmin = false }: NominationPanelProps
 							.maybeSingle(),
 					]);
 					setIsAdmin((prev) => prev || Boolean(adminRow));
-					if (perfRow) setCurrentPerformer(perfRow);
+					let activePerformer = perfRow;
+					if (!activePerformer) {
+						// user_id가 미연동된 performer인 경우 유저 프로필 이름으로 fallback 매칭
+						const { data: userProfile } = await supabase
+							.from("users")
+							.select("name")
+							.eq("id", uid)
+							.maybeSingle();
+						const profileName = userProfile?.name || authUserRes.data.user.user_metadata?.name;
+						if (profileName) {
+							const { data: nameMatchPerf } = await supabase
+								.from("performers")
+								.select("id, part, name")
+								.eq("gig_id", isNaN(numericGigId) ? gigId : numericGigId)
+								.eq("name", profileName)
+								.maybeSingle();
+							if (nameMatchPerf) activePerformer = nameMatchPerf;
+						}
+					}
+					if (activePerformer) setCurrentPerformer(activePerformer);
 
 					// 마지막 조회 시점 로드 (DB 우선, fallback: localStorage)
 					let previousTimestamp = viewRow?.last_viewed_at ?? null;
@@ -345,57 +341,6 @@ export function NominationPanel({ initialIsAdmin = false }: NominationPanelProps
 		toast.success("모든 곡의 변경 사항을 확인 완료 처리했습니다.");
 	};
 
-	const handleDeleteSong = async (songId: number) => {
-		try {
-			await deleteNomination(gigId, songId);
-			setSongs((prev) => prev.filter((s) => s.id !== songId));
-			setSelectedSong(null);
-			setEditingSong(null);
-			toast.success("곡이 성공적으로 삭제되었습니다.");
-		} catch (error: unknown) {
-			console.error("곡 삭제 실패:", error);
-			const message = error instanceof Error ? error.message : "곡 삭제 중 오류가 발생했습니다.";
-			toast.error(message);
-		}
-	};
-
-	const handleUpdateSong = async (
-		songId: number,
-		formValues: NominationFormValues,
-	) => {
-		startEditTransition(async () => {
-			try {
-				await updateNomination(gigId, songId, formValues);
-				// 로컬 상태 동기화
-				const updatedFields = {
-					title: formValues.title,
-					artist: formValues.artist,
-					requiredParts: formValues.requiredParts,
-					recommendedVocals: formValues.recommendedVocals,
-					sheetExists: formValues.sheetExists,
-					description: formValues.description,
-					links: formValues.links,
-					updatedAt: new Date().toISOString(),
-				};
-
-				setSongs((prev) =>
-					prev.map((s) => (s.id === songId ? { ...s, ...updatedFields } : s)),
-				);
-
-				if (selectedSong?.id === songId) {
-					setSelectedSong((prev) => (prev ? { ...prev, ...updatedFields } : null));
-				}
-
-				setEditingSong(null);
-				toast.success("곡 정보가 성공적으로 수정되었습니다.");
-			} catch (error: unknown) {
-				console.error("곡 수정 실패:", error);
-				const message = error instanceof Error ? error.message : "곡 수정 중 오류가 발생했습니다.";
-				toast.error(message);
-			}
-		});
-	};
-
 	useEffect(() => {
 		if (!gigInfo?.meetingDate) return;
 		const timer = setInterval(
@@ -404,77 +349,6 @@ export function NominationPanel({ initialIsAdmin = false }: NominationPanelProps
 		);
 		return () => clearInterval(timer);
 	}, [gigInfo?.meetingDate]);
-
-	const resetForm = useCallback(() => {
-		setForm(DEFAULT_FORM_STATE);
-		setNewPart("");
-	}, []);
-
-	const updateRef = (
-		idx: number,
-		field: "url" | "note" | "timestamp",
-		val: string,
-	) => {
-		setForm((prev) => {
-			const nextLinks = [...prev.links];
-			const existing = nextLinks[idx] || { url: "", note: "", timestamp: "" };
-			const updated = { ...existing, [field]: val };
-			// URL에 타임스탬프 파라미터가 있고 구간 필드가 비어있다면 자동 입력
-			if (field === "url" && !updated.timestamp) {
-				const sec = extractYouTubeTimestamp(val);
-				if (sec !== null) {
-					updated.timestamp = formatSecondsToTime(sec);
-				}
-			}
-			nextLinks[idx] = updated;
-			return { ...prev, links: nextLinks };
-		});
-	};
-
-	const isModalDirty = Boolean(
-		form.title.trim() ||
-			form.artist?.trim() ||
-			form.description?.trim() ||
-			form.links.some((l) => l.url.trim() || l.note?.trim()),
-	);
-
-	const {
-		showLeaveModal,
-		cancelLeave,
-		confirmLeave,
-		triggerConfirm,
-		markSubmitting,
-	} = useUnsavedChangesWarning({
-		isDirty: isModalDirty,
-	});
-
-	const closeDialog = () => {
-		triggerConfirm(() => {
-			dialogRef.current?.close();
-			resetForm();
-		});
-	};
-
-	const handleSubmit = async (e: React.FormEvent) => {
-		e.preventDefault();
-		startTransition(async () => {
-			try {
-				await addNomination(gigId, form);
-				markSubmitting();
-				dialogRef.current?.close();
-				resetForm();
-				toast.success("후보곡이 등록되었습니다!");
-				window.location.reload();
-			} catch (e) {
-				toast.error("저장에 실패했습니다: " + (e as Error).message);
-			}
-		});
-	};
-
-	const openDialog = () => {
-		resetForm();
-		dialogRef.current?.showModal();
-	};
 
 	// 필터링 및 정렬된 곡 목록 (항상 등록순 - 처음 등록한 것이 위로 오도록 정렬)
 	const filteredSongs = useMemo(() => {
@@ -650,24 +524,25 @@ export function NominationPanel({ initialIsAdmin = false }: NominationPanelProps
 							</div>
 						</div>
 
-						<Button
-							onClick={openDialog}
-							size="lg"
-							disabled={!isAdmin && (timeLeft.isOver || !currentPerformer)}
-							className="font-bold shadow-sm hover:shadow-md transition-all h-11 px-6 text-sm"
-							title={
-								isAdmin && timeLeft.isOver
-									? "선곡회의가 마감되었으나 관리자 권한으로 후보곡을 추천할 수 있습니다."
-									: !isAdmin && timeLeft.isOver
-										? "선곡회의 접수가 마감되었습니다."
-										: !isAdmin && !currentPerformer
-											? "공연 참여자만 후보곡을 추천할 수 있습니다."
-											: undefined
-							}
-						>
-							<Plus className="size-4 mr-1.5" />
-							후보곡 추천하기
-						</Button>
+						<Link href={`/gigs/${gigId}/nominations/new`}>
+							<Button
+								size="lg"
+								disabled={!isAdmin && (timeLeft.isOver || !currentPerformer)}
+								className="font-bold shadow-sm hover:shadow-md transition-all h-11 px-6 text-sm"
+								title={
+									isAdmin && timeLeft.isOver
+										? "선곡회의가 마감되었으나 관리자 권한으로 후보곡을 추천할 수 있습니다."
+										: !isAdmin && timeLeft.isOver
+											? "선곡회의 접수가 마감되었습니다."
+											: !isAdmin && !currentPerformer
+												? "공연 참여자만 후보곡을 추천할 수 있습니다."
+												: undefined
+								}
+							>
+								<Plus className="size-4 mr-1.5" />
+								후보곡 추천하기
+							</Button>
+						</Link>
 					</div>
 				</div>
 			</div>
@@ -978,22 +853,23 @@ export function NominationPanel({ initialIsAdmin = false }: NominationPanelProps
 									추천해보세요!
 								</p>
 							</div>
-							<Button
-								onClick={openDialog}
-								disabled={!isAdmin && (timeLeft.isOver || !currentPerformer)}
-								className="mt-2 text-xs font-bold"
-								title={
-									isAdmin && timeLeft.isOver
-										? "선곡회의가 마감되었으나 관리자 권한으로 후보곡을 추천할 수 있습니다."
-										: !isAdmin && timeLeft.isOver
-											? "선곡회의 접수가 마감되었습니다."
-											: !isAdmin && !currentPerformer
-												? "공연 참여자만 후보곡을 추천할 수 있습니다."
-												: undefined
-								}
-							>
-								<Plus className="size-4 mr-1" /> 첫 번째 곡 추천하기
-							</Button>
+							<Link href={`/gigs/${gigId}/nominations/new`}>
+								<Button
+									disabled={!isAdmin && (timeLeft.isOver || !currentPerformer)}
+									className="mt-2 text-xs font-bold"
+									title={
+										isAdmin && timeLeft.isOver
+											? "선곡회의가 마감되었으나 관리자 권한으로 후보곡을 추천할 수 있습니다."
+											: !isAdmin && timeLeft.isOver
+												? "선곡회의 접수가 마감되었습니다."
+												: !isAdmin && !currentPerformer
+													? "공연 참여자만 후보곡을 추천할 수 있습니다."
+													: undefined
+									}
+								>
+									<Plus className="size-4 mr-1" /> 첫 번째 곡 추천하기
+								</Button>
+							</Link>
 						</div>
 					) : (
 						/* 검색 결과 없음 */
@@ -1050,32 +926,7 @@ export function NominationPanel({ initialIsAdmin = false }: NominationPanelProps
 				)}
 			</section>
 
-			{/* 6. 곡 등록 모달 */}
-			<NominationNewModal
-				ref={dialogRef}
-				form={form}
-				setForm={setForm}
-				parts={form.requiredParts}
-				setParts={(newParts) =>
-					setForm((prev) => ({
-						...prev,
-						requiredParts:
-							typeof newParts === "function"
-								? newParts(prev.requiredParts)
-								: newParts,
-					}))
-				}
-				refs={form.links}
-				updateRef={updateRef}
-				performers={performers}
-				newPart={newPart}
-				setNewPart={setNewPart}
-				isPending={isPending}
-				onSubmit={handleSubmit}
-				onClose={closeDialog}
-			/>
-
-			{/* 7. 상세 슬라이드 오버 서랍 */}
+			{/* 6. 상세 슬라이드 오버 서랍 */}
 			<NominationDrawer
 				song={selectedSong}
 				currentUserId={currentUser?.id}
@@ -1084,11 +935,16 @@ export function NominationPanel({ initialIsAdmin = false }: NominationPanelProps
 					selectedSong &&
 						(isAdmin ||
 							(currentUser &&
-								selectedSong.createdBy?.userId === currentUser.id)),
+								selectedSong.createdBy?.userId === currentUser.id) ||
+							(currentPerformer &&
+								selectedSong.createdBy?.performerId === currentPerformer.id)),
 				)}
 				canRespond={Boolean(currentPerformer || isAdmin)}
 				performers={performers}
-				onEdit={(song) => setEditingSong(song)}
+				onEdit={(song) => {
+					setSelectedSong(null);
+					router.push(`/gigs/${gigId}/nominations/${song.id}/edit`);
+				}}
 				onClose={() => setSelectedSong(null)}
 				onSongUpdated={(updatedSong) => {
 					setSelectedSong(updatedSong);
@@ -1096,34 +952,6 @@ export function NominationPanel({ initialIsAdmin = false }: NominationPanelProps
 						prev.map((s) => (s.id === updatedSong.id ? updatedSong : s)),
 					);
 				}}
-			/>
-
-			{/* 8. 곡 정보 수정 및 삭제 모달 */}
-			<NominationEditModal
-				song={editingSong}
-				isOpen={Boolean(editingSong)}
-				isPending={isEditPending}
-				canDelete={Boolean(
-					editingSong &&
-						(isAdmin ||
-							(currentUser &&
-								editingSong.createdBy?.userId === currentUser.id)),
-				)}
-				performers={performers}
-				onClose={() => setEditingSong(null)}
-				onSubmit={handleUpdateSong}
-				onDelete={handleDeleteSong}
-			/>
-
-			{/* 곡 등록 중 이탈 방지 경고 팝업 */}
-			<LeaveConfirmDialog
-				isOpen={showLeaveModal}
-				onClose={cancelLeave}
-				onConfirm={confirmLeave}
-				title="곡 추천 작성을 취소하시겠습니까?"
-				description="작성 중인 곡 정보가 저장되지 않았습니다. 창을 닫거나 페이지를 벗어나면 입력 내용이 모두 사라집니다."
-				confirmText="나가기 (저장 안 함)"
-				cancelText="계속 작성하기"
 			/>
 		</div>
 	);
@@ -1139,7 +967,7 @@ function NominationCard({
 	currentUserId,
 }: {
 	song: Nomination & {
-		createdBy?: { name: string; part: string; generation: number } | null;
+		createdBy?: { name: string; part: string; generation: number | null } | null;
 	};
 	index: number;
 	highlightState?: "new" | "updated" | null;
@@ -1220,8 +1048,8 @@ function NominationCard({
 			)}
 
 			<CardContent className="p-4 sm:p-5 flex flex-col sm:flex-row items-stretch sm:items-center gap-4 pl-5 sm:pl-6">
-				{/* 썸네일 아트워크 영역 (play 아이콘 없이 썸네일 그대로 표시) */}
-				<div className="relative shrink-0 w-full sm:w-28 sm:h-20 h-32 rounded-xl overflow-hidden bg-muted/60 border border-border/60 flex items-center justify-center">
+				{/* 썸네일 아트워크 영역 (유튜브 16:9 기본 비율 적용) */}
+				<div className="relative shrink-0 w-full sm:w-36 aspect-video rounded-xl overflow-hidden bg-muted/60 border border-border/60 flex items-center justify-center">
 					{thumbnailUrl ? (
 						<img
 							src={thumbnailUrl}
@@ -1345,11 +1173,13 @@ function NominationCard({
 				{/* 우측 메타: 추천자 정보 및 상세 화살표 */}
 				<div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-2 shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0 border-border/60">
 					<div className="text-[11px] font-medium text-muted-foreground bg-muted/40 px-2.5 py-1 rounded-lg border border-border/60">
-						{song.createdBy ? (
+						{song.createdBy && song.createdBy.name ? (
 							<>
-								<span className="text-muted-foreground mr-1">
-									{song.createdBy.generation}기
-								</span>
+								{song.createdBy.generation ? (
+									<span className="text-muted-foreground mr-1">
+										{song.createdBy.generation}기
+									</span>
+								) : null}
 								<span className="font-bold text-foreground">
 									{song.createdBy.name}
 								</span>

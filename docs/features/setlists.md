@@ -13,18 +13,23 @@
   - 비로그인 사용자는 로그인 페이지로 자동 리다이렉트되며, 비참여 부원은 "공연 참여자 전용 화면" 안내 뷰를 표시하여 정보 노출을 차단합니다.
 - **조회 조건**:
   - `nominations` 테이블에서 `gig_id == [id]`에 해당하는 모든 후보곡을 **항상 등록순(처음 등록한 것이 위로 오도록 오름차순)**으로 조회 및 정렬 표시.
-  - 곡 등록자(`created_by` -> `performers` -> `users`) 정보를 조인하여 기수, 파트, 작성자 이름 표시.
+  - 곡 등록자(`created_by` -> `performers` -> `users`) 정보를 조인하여 기수, 파트, 작성자 이름 표시. 기수 정보가 확인되지 않거나 미연동된 공연자(스프레드시트 등록 등)의 경우 0기 대신 **이름만 단독 표시**하며, 공연 참여자 정보 조회 시 `user_id` 미연동 상태라도 사용자 프로필 이름 기반으로 fallback 매칭 지원.
 - **주요 UI 요소**:
-  - `SetlistPanel`: 히어로 배너, D-Day & 마감 카운트다운 타이머, 실시간 검색 및 3대 확장 필터(세션, 응답, 악보) 토글 바, 곡 카드 그리드 (항상 등록순 정렬).
-  - `PartChip`: 필요 악기 세션 파트 뱃지 (flat 스타일, `보컬(남)`/`보컬(여)` 표준화, **보컬 -> 코러스 -> 기타 -> 베이스 -> 드럼 -> 건반 -> 이외** 일관된 순서로 자동 정렬). 곡 카드 목록에서는 불필요한 영상/링크 수 뱃지 제거, 썸네일 play 아이콘 제거(원본 썸네일 노출), 어필 텍스트의 쌍따옴표 및 이탤릭 서식 제거.
-  - `SetlistDrawer`: 곡 기본 정보(타이틀, 아티스트, 추천자, 등록/수정 일시) -> **영상**(YouTube 동영상 임베드, 탭, 구간 우선 타임스탬프 퀵 칩, Full 설명) -> **어필**(작성자 설명) -> **악보**(악보 보유 상태 뱃지) -> **세션**(일관 정렬, **세션 버튼 클릭 시 해당 세션 참여자 응답 목록 팝업 `SessionResponsesDialog` 연동**) -> **나의 응답**(내 응답 상태 뱃지 및 가능 여부 응답 모달 버튼) 순서로 최적화 배치. (기존 드로어 내 '추천 보컬' 섹션은 제거되고, 세션 참여자 응답 목록 팝업 내 해당 보컬에게 '추천 보컬' 뱃지로 통합 표시). 서랍 열림 시 **배경(body) 스크롤 고정(`overflow: hidden` 및 스크롤바 너비 보정)** 및 `overscroll-contain`, ESC 키 닫기를 적용하여 이중 스크롤바 및 배경 스크롤 누수를 방지. 권한자(직접 등록한 부원/관리자)에게 헤더 [수정] 버튼 제공.
-  - `SetlistNewModal` & `SetlistEditModal`: 곡 기본 정보, **악보 상태 세그먼트(`악보`: `악보 있어요` / `악보 없어요`)**, `세션` 파트 칩 추가 및 고정 정렬(보컬 > 코러스 > 기타 > 베이스 > 드럼 > 건반 > 이외), 세션 안내 텍스트 및 모바일 툴팁(`CircleHelp`), 선택된 세션 우측 상단 `총 n명` 카운트, `+ 직접 입력` 아이콘 분리, **`추천 보컬`**(보컬 부원 상단 우선 정렬, 다중 지정), **참고 링크**(영상 설명 입력 필드 내부에 타임스탬프가 인라인 버튼 뱃지로 렌더링되는 `RichTimestampTextarea` 적용, 백스페이스 및 `×` 클릭 시 구간 일괄 삭제 지원, 실시간 영상 미리보기 플레이어 및 클릭 시 재생 위치 이동), 어필 작성/수정. (수정 모달 하단 좌측에 `[추천곡 삭제하기]` 배치, 모달 활성 시 배경 스크롤 고정 및 ESC 지원).
+  - `SetlistPanel` (`NominationPanel`): 히어로 배너, D-Day & 마감 카운트다운 타이머, 실시간 검색 및 3대 확장 필터(세션, 응답, 악보) 토글 바, 곡 카드 그리드 (항상 등록순 정렬).
+  - `PartChip`: 필요 악기 세션 파트 뱃지 (flat 스타일, `보컬(남)`/`보컬(여)` 표준화, **보컬 -> 코러스 -> 기타 -> 베이스 -> 드럼 -> 건반 -> 이외** 일관된 순서로 자동 정렬). 곡 카드 목록에서는 불필요한 영상/링크 수 뱃지 제거, 썸네일 play 아이콘 제거 및 **유튜브 표준 16:9 비율(`aspect-video`, 데스크톱 `sm:w-36 aspect-video`)을 적용하여 썸네일 좌우 잘림 방지**, 어필 텍스트의 쌍따옴표 및 이탤릭 서식 제거.
+  - `SetlistDrawer` (`NominationDrawer`): 곡 기본 정보(타이틀, 아티스트, 추천자, 등록/수정 일시) -> **영상**(YouTube 동영상 임베드, 탭, 구간 우선 타임스탬프 퀵 칩, Full 설명) -> **어필**(작성자 설명) -> **악보**(악보 보유 상태 뱃지) -> **세션**(일관 정렬, **세션 버튼 클릭 시 해당 세션 참여자 응답 목록 팝업 `SessionResponsesDialog` 연동**) -> **나의 응답**(내 응답 상태 뱃지 및 가능 여부 응답 모달 버튼) 순서로 최적화 배치. (기존 드로어 내 '추천 보컬' 섹션은 제거되고, 세션 참여자 응답 목록 팝업 내 해당 보컬에게 '추천 보컬' 뱃지로 통합 표시). 서랍 열림 시 **배경(body) 스크롤 고정(`overflow: hidden` 및 스크롤바 너비 보정)** 및 `overscroll-contain`, ESC 키 닫기를 적용하여 이중 스크롤바 및 배경 스크롤 누수를 방지. 권한자(직접 등록한 부원/관리자)에게 헤더 [수정] 버튼 제공 (클릭 시 `/gigs/[id]/nominations/[songId]/edit` 전용 페이지로 이동).
+  - `NominationForm` (후보곡 등록/수정 전용 페이지 폼): 인풋 필드에서 Enter 입력 시 실수로 폼이 제출되지 않도록 방지, 곡 기본 정보, **악보 상태 세그먼트(`악보`: `악보 있어요` / `악보 없어요`) 및 악보 메모(`sheetNote`, 넉넉한 폭과 내용 초과 시 멀티라인 지원 Textarea)** 필드, **`필요 세션`**(신규 등록 시 기본값: **기타 1, 베이스 1, 드럼 1**, 추가 칩 및 고정 정렬: 보컬 > 코러스 > 기타 > 베이스 > 드럼 > 건반 > 이외), 세션 안내 텍스트 및 모바일 툴팁(`CircleHelp`), 선택된 세션 우측 상단 `총 n명` 카운트, `+ 직접 입력` 인라인 텍스트 필드, **`추천 보컬`**(컴팩트 칩 및 `+ 추가` 버튼 클릭 시 검색 인풋 전환 & 플로팅 드롭다운 팝업), **참고 링크**(유튜브 영상 레이아웃 순서: **1. 링크 URL → 2. 영상 미리보기 → 3. 타임스탬프 독립 목록/추가 → 4. 순수 설명 에디터**, **`[⏱️ 현재 시점 설명 추가]` 실시간 IFrame 재생 시간 캡처 및 일시정지**, 비유튜브 링크는 타임스탬프 숨김), 어필 작성/수정, 작성 중 이탈 방지 경고 팝업. (수정 페이지 하단 좌측에 `[🗑️ 추천곡 삭제하기]` 배치).
 
-### 2.2 곡 등록 (`SetlistNewModal` & `addSetlist`)
+### 2.2 곡 등록 및 수정 (`NominationForm`, `addSetlist`, `updateSetlist`)
+- **등록 및 수정 페이지 라우트**:
+  - 신규 등록: `/gigs/[id]/nominations/new`
+  - 정보 수정: `/gigs/[id]/nominations/[songId]/edit`
 - **등록 자격 (보안 검사)**:
   - 로그인된 유저가 해당 공연(`gig_id`)의 `performers` 테이블에 등록되어 있어야 함 (`user_id` & `gig_id`) 또는 관리자 권한(`is_admin()`).
   - 일반 참여자는 접수 마감 시각(`meeting_date` 24시간 전) 전까지만 등록할 수 있으나, **관리자(Admin)는 접수 마감 이후에도 상시 등록 가능**.
   - 참여자나 관리자가 아닐 경우 `"이 공연의 참여자로 등록되지 않았습니다."` 에러 반환.
+- **수정 자격 (보안 검사)**:
+  - 후보곡 작성자 본인(`created_by`) 또는 관리자(`is_admin()`)만 수정 및 삭제 가능. 비인가 사용자 접근 시 차단 카드 렌더링.
 - **입력 데이터 구조**:
   ```ts
   export interface SetlistFormValues {
@@ -38,19 +43,39 @@
       part?: string;
     }[];
     sheetExists: boolean;   // 악보 보유 여부
-    description: string;    // 메모 및 특이사항
+    sheetNote?: string;     // 악보 관련 추가 메모 (키 정보, 보유 파트, 링크 등)
+    description: string;    // 메모 및 특이사항 (기본 높이 5줄 이상)
     links: {                // 참고 URL 목록 (jsonb)
       url: string;
-      note?: string;
-      timestamp?: string;
+      note?: string;        // 순수 링크 설명 (기본 높이 5줄 이상)
+      timestamp?: string;   // 호환용 시작 시각
+      timestamps?: {        // 독립 타임스탬프 목록
+        id?: string;
+        time: string;       // 포맷: '1:23', '0:45', '1:23 ~ 2:45' (선행 0 strip)
+        label: string;      // 구간 설명 (미입력 시 빈 문자열로 저장되며 UI에서 단독 표시)
+      }[];
     }[];
   }
   ```
+- **후보곡 폼 섹션 배치 순서**:
+  - `1. 곡 기본 정보` (제목, 아티스트, 악보 보유 여부 및 메모)
+  - `2. 필요 세션` (세션별 필요 인원 및 추천 보컬 선택)
+  - `3. 어필 및 제안 메모` (추천 이유, 편곡 방향, 키 조절 등)
+  - `4. 참고 링크` (유튜브 영상 링크, 미리보기, 타임스탬프, 설명)
+- **수정 페이지 및 입력 UX 규칙**:
+  - **타임스탬프 구간+설명 동시 입력 자동 파싱**: `TimestampBuilder`에서 `01:23 기타 솔로`, `02:5~02:15 기쏠`, `1:20 ~ 2:10 브릿지`와 같이 시간(초 단위 1자리 `02:5`도 `2:05`로 자동 보정)과 설명을 한 번에 입력하면 정규식을 통해 시간(선행 0 제거)과 설명을 자동으로 분리 파싱하며, 별도 2단계 확인 없이 엔터 한 번으로 즉시 타임스탬프가 추가됩니다.
+  - **빠른 라벨 프리셋 제거**: 번거로운 고정 프리셋 버튼(+인트로, +벌스 등)을 제거하여 인터페이스를 단순화하고 사용자의 자유로운 직접 입력을 극대화.
+  - **추천 보컬 선택기 키보드 지원 및 간소화**: 드롭다운 상단의 불필요한 헤더(`공연 참여자 목록 | n명`)를 제거하고, 위/아래 방향키(`↑`, `↓`)로 참여자 항목 포커스 이동 및 `Enter` 키로 즉시 선택/토글할 수 있도록 키보드 네비게이션을 전면 지원.
+  - **영상 미리보기 즉시 렌더링**: 수정 페이지 진입 시 등록된 YouTube 영상을 대기/지연 없이 즉시 렌더링하며, 불필요한 자동재생(`autoplay=1`)으로 인한 브라우저 차단/정지 현상을 방지. 타임스탬프 칩 클릭 시에만 `postMessage` 기반으로 부드럽게 점프 및 재생.
+  - **타임스탬프 시간 표기 0 strip**: `01:23` -> `1:23`, `00:45` -> `0:45`, `00:00` -> `0:00`, `01:23 ~ 02:45` -> `1:23 ~ 2:45`와 같이 분/시간 단위 선행 0을 제거하여 간결하고 읽기 쉽게 표시.
+  - **타임스탬프 버튼 줄바꿈(Wrap) 및 전체 표시**: 타임스탬프 설명이 길어지거나 여러 개가 등록되더라도 말줄임표(`truncate`)로 잘리지 않고, `flex-wrap` 및 `break-words`를 통해 block 단위로 자연스럽게 줄바꿈되어 모든 타임스탬프와 설명 내용이 온전히 표시됩니다. (등록 폼 및 상세 드로어 공통 적용)
+  - **타임스탬프 단독 표기**: 설명이 없거나 '주요 구간', '지정 구간' 등의 기본 플레이스홀더인 경우 라벨을 강제로 노출하지 않고 `[▶ 1:23]` 타임스탬프만 단독 표시.
 - **데이터베이스 반영**:
-  - `nominations` 테이블에 insert.
+  - `nominations` 테이블에 insert / update.
   - `created_by` 컬럼에는 유저의 `performers.id`가 저장됨.
+  - `sheet_note` 컬럼에 악보 메모 저장.
   - `recommended_vocals` 컬럼(jsonb)에 추천 보컬 목록 저장.
-  - 등록 완료 후 `revalidatePath('/gigs/${gigId}/nominations')`로 갱신.
+  - 등록 및 수정 완료 후 `revalidatePath('/gigs/${gigId}/nominations')`로 갱신.
 
 ### 2.3 곡 삭제 및 수정 권한 분리 (`deleteSetlist`, `updateSetlist` & RLS)
 - **선곡회의 후보곡 (`nominations`)**:
@@ -101,11 +126,16 @@
 ---
 
 ## 3. 관련 파일 링크
-- 선곡회의 페이지: [app/gigs/[id]/nominations/page.tsx](file:///d:/dev/sokna/app/gigs/[id]/nominations/page.tsx)
+- 선곡회의 목록 페이지: [app/gigs/[id]/nominations/page.tsx](file:///d:/dev/sokna/app/gigs/[id]/nominations/page.tsx)
+- 후보곡 신규 등록 전용 페이지: [app/gigs/[id]/nominations/new/page.tsx](file:///d:/dev/sokna/app/gigs/[id]/nominations/new/page.tsx)
+- 후보곡 정보 수정 전용 페이지: [app/gigs/[id]/nominations/[songId]/edit/page.tsx](file:///d:/dev/sokna/app/gigs/[id]/nominations/[songId]/edit/page.tsx)
+- 후보곡 통합 폼 컴포넌트: [components/nominations/nomination-form.tsx](file:///d:/dev/sokna/components/nominations/nomination-form.tsx)
+- 인라인 타임스탬프 빌더 컴포넌트: [components/nominations/timestamp-builder.tsx](file:///d:/dev/sokna/components/nominations/timestamp-builder.tsx)
+- 리치 타임스탬프 텍스트에어리어: [components/nominations/rich-timestamp-textarea.tsx](file:///d:/dev/sokna/components/nominations/rich-timestamp-textarea.tsx)
+- 링크 미리보기 및 시점 캡처 아이템: [components/nominations/link-preview-item.tsx](file:///d:/dev/sokna/components/nominations/link-preview-item.tsx)
 - 선곡회의 서버 액션: [app/gigs/[id]/nominations/actions.ts](file:///d:/dev/sokna/app/gigs/[id]/nominations/actions.ts)
 - 선곡회의 데이터 모델: [lib/nomination.ts](file:///d:/dev/sokna/lib/nomination.ts) (호환용: [lib/setlist.ts](file:///d:/dev/sokna/lib/setlist.ts))
 - 선곡회의 메인 패널: [components/nominations/nomination-panel.tsx](file:///d:/dev/sokna/components/nominations/nomination-panel.tsx)
-- 선곡회의 등록 모달: [components/nominations/nomination-new-modal.tsx](file:///d:/dev/sokna/components/nominations/nomination-new-modal.tsx)
 - 선곡회의 상세 드로어: [components/nominations/nomination-drawer.tsx](file:///d:/dev/sokna/components/nominations/nomination-drawer.tsx)
 - 선곡회의 세션 응답 섹션: [components/nominations/nomination-response-section.tsx](file:///d:/dev/sokna/components/nominations/nomination-response-section.tsx)
 - 선곡회의 외부 링크 배너 카드: [components/nominations/external-link-card.tsx](file:///d:/dev/sokna/components/nominations/external-link-card.tsx)

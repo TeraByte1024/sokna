@@ -192,8 +192,9 @@ erDiagram
 | `required_parts`| `text[]` | YES | `'{}'` | 필요 세션 파트 목록 (예: `['보컬(남)', '기타', '베이스']`) |
 | `recommended_vocals` | `jsonb` | YES | `'[]'` | 선곡 회의 후보곡 추천 보컬 목록 (`[{ id: number, name: string, generation?: number, part?: string }]`) |
 | `sheet_exists` | `bool` | YES | `false` | 악보 보유 여부 |
+| `sheet_note` | `text` | YES | `''` | 악보 관련 추가 메모 (보유 파트, 키 정보, 악보 링크 등) |
 | `description` | `text` | YES | `''` | 추천 사유 및 어필 메모 |
-| `links` | `jsonb` | YES | `'[]'` | 참고 링크 목록 (`[{ url: string, note?: string, timestamp?: string }]`) |
+| `links` | `jsonb` | YES | `'[]'` | 참고 링크 목록 (`[{ url: string, note?: string, timestamp?: string, timestamps?: [{ id?: string, time: string, label: string }] }]`) |
 | `created_by` | `int8` | YES | null | FK → `performers(id)` (ON DELETE SET NULL) |
 | `created_at` | `timestamptz` | NO | `now()` | 등록 일시 |
 | `updated_at` | `timestamptz` | NO | `now()` | 수정 일시 |

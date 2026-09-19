@@ -1,7 +1,14 @@
+export interface NominationTimestamp {
+  id?: string;
+  time: string;
+  label: string;
+}
+
 export interface NominationLink {
   url: string;
   note?: string;
   timestamp?: string;
+  timestamps?: NominationTimestamp[];
 }
 
 export interface RecommendedVocal {
@@ -38,6 +45,7 @@ export interface Nomination {
   requiredParts: string[];
   recommendedVocals: RecommendedVocal[];
   sheetExists: boolean;
+  sheetNote?: string;
   description: string;
   updatedAt: string;
   createdAt: string;
@@ -45,8 +53,9 @@ export interface Nomination {
   createdBy: {
     name: string;
     part: string;
-    generation: number;
+    generation: number | null;
     userId?: string | null;
+    performerId?: number | null;
   } | null;
   links: NominationLink[];
   responses?: NominationResponse[];
@@ -55,7 +64,9 @@ export interface Nomination {
 export type NominationFormValues = Pick<
   Nomination,
   "title" | "artist" | "requiredParts" | "recommendedVocals" | "sheetExists" | "description" | "links"
->;
+> & {
+  sheetNote?: string;
+};
 
 // 하위 호환성을 위한 Setlist 별칭
 export type Setlist = Nomination;
@@ -66,11 +77,36 @@ export function parseNomination(row: any): Nomination {
   // links (Json | null) 안전하게 파싱
   const rawRefs = row.links as unknown as NominationLink[] | null;
   const safeLinks: NominationLink[] = Array.isArray(rawRefs)
-    ? rawRefs.map((link) => ({
-        url: link.url || "",
-        note: link.note || "",
-        timestamp: link.timestamp || "",
-      }))
+    ? rawRefs.map((link: any) => {
+        if (typeof link === "string") {
+          return {
+            url: link.trim(),
+            note: "",
+            timestamp: "",
+            timestamps: [],
+          };
+        }
+        // timestamps 안전 파싱
+        const rawTimestamps = link?.timestamps;
+        const safeTimestamps: NominationTimestamp[] = Array.isArray(rawTimestamps)
+          ? rawTimestamps
+              .map((t: any) => ({
+                id: t.id ? String(t.id) : undefined,
+                time: String(t.time || "").trim(),
+                label: String(t.label || "").trim(),
+              }))
+              .filter((t) => t.time.length > 0)
+          : link?.timestamp
+            ? [{ time: String(link.timestamp).trim(), label: "" }]
+            : [];
+
+        return {
+          url: (link?.url || "").trim(),
+          note: link?.note || "",
+          timestamp: link?.timestamp || "",
+          timestamps: safeTimestamps,
+        };
+      })
     : [];
 
   // recommended_vocals (Json | null) 안전하게 파싱
@@ -88,10 +124,16 @@ export function parseNomination(row: any): Nomination {
   const createdBy = row.created_by_performer || row.created_by;
   const safeCreatedBy = createdBy && typeof createdBy === "object"
     ? {
-        name: createdBy.name || "익명",
+        name: createdBy.users?.name || createdBy.name || "익명",
         part: createdBy.part || "미지정",
-        generation: createdBy.generation || 0,
+        generation:
+          createdBy.users?.generation !== undefined && createdBy.users?.generation !== null
+            ? Number(createdBy.users.generation)
+            : createdBy.generation
+              ? Number(createdBy.generation)
+              : null,
         userId: createdBy.user_id || null,
+        performerId: Number(createdBy.id || (typeof row.created_by === "number" ? row.created_by : null)) || null,
       }
     : null;
 
@@ -125,6 +167,7 @@ export function parseNomination(row: any): Nomination {
     requiredParts: row.required_parts ?? [],
     recommendedVocals: safeVocals,
     sheetExists: row.sheet_exists ?? false,
+    sheetNote: row.sheet_note || "",
     description: row.description ?? "",
     createdAt: row.created_at,
     updatedAt: row.updated_at ?? row.created_at,
@@ -240,7 +283,7 @@ export function isPerformerMatchingSessionPart(
  */
 export function parseTimestampToSeconds(text: string): number | null {
   if (!text) return null;
-  const match = text.match(/(?:(?:(\d{1,2}):)?(\d{1,2}):(\d{2}))/);
+  const match = text.match(/(?:(?:(\d{1,2}):)?(\d{1,2}):(\d{1,2}))/);
   if (!match) return null;
   const hours = match[1] ? parseInt(match[1], 10) : 0;
   const minutes = parseInt(match[2], 10);
@@ -280,12 +323,43 @@ export function partCounts(parts: string[]): Record<string, number> {
 }
 
 /**
+ * 타임스탬프 표기에서 선행 0을 제거(strip)하여 자연스럽게 포맷팅
+ * 예: "01:23" -> "1:23", "00:45" -> "0:45", "00:00" -> "0:00", "01:23 ~ 02:45" -> "1:23 ~ 2:45"
+ *     "01:05:20" -> "1:05:20", "00:05:20" -> "5:20"
+ */
+export function stripLeadingZeroTime(timeStr: string): string {
+  if (!timeStr) return "";
+  return timeStr
+    .split("~")
+    .map((part) => {
+      const trimmed = part.trim();
+      const colons = trimmed.split(":");
+      if (colons.length === 3) {
+        const h = parseInt(colons[0], 10);
+        const m = parseInt(colons[1], 10);
+        const s = colons[2].padStart(2, "0");
+        if (h > 0) {
+          return `${h}:${m.toString().padStart(2, "0")}:${s}`;
+        }
+        return `${isNaN(m) ? "0" : m}:${s}`;
+      } else if (colons.length === 2) {
+        const m = parseInt(colons[0], 10);
+        const s = colons[1].padStart(2, "0");
+        return `${isNaN(m) ? "0" : m}:${s}`;
+      }
+      return trimmed;
+    })
+    .join(" ~ ");
+}
+
+/**
  * 유튜브 URL에서 11자리 비디오 ID 추출
  */
 export function getYouTubeVideoId(url?: string | null): string | null {
   if (!url) return null;
-  const match = url.match(
-    /(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/))([\w-]{11})/i,
+  const trimmed = url.trim();
+  const match = trimmed.match(
+    /(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?.*v=|shorts\/|live\/))([\w-]{11})/i,
   );
   return match ? match[1] : null;
 }
@@ -384,7 +458,7 @@ export function parseTimestampsAndRanges(text?: string | null): ParsedTimestampI
   const occupiedRanges: { start: number; end: number }[] = [];
 
   // 1. 구간(Range) 패턴 우선 매칭
-  const rangeRegex = /(?:(?:(\d{1,2}):)?(\d{1,2}):(\d{2}))\s*(?:~|-|–|to)\s*(?:(?:(\d{1,2}):)?(\d{1,2}):(\d{2}))/gi;
+  const rangeRegex = /(?:(?:(\d{1,2}):)?(\d{1,2}):(\d{1,2}))\s*(?:~|-|–|to)\s*(?:(?:(\d{1,2}):)?(\d{1,2}):(\d{1,2}))/gi;
   let match: RegExpExecArray | null;
 
   while ((match = rangeRegex.exec(text)) !== null) {
@@ -412,7 +486,7 @@ export function parseTimestampsAndRanges(text?: string | null): ParsedTimestampI
   }
 
   // 2. 단일 타임스탬프 패턴 매칭 (이미 구간에 포함된 범위는 건너뜀)
-  const singleRegex = /(?:(?:(\d{1,2}):)?(\d{1,2}):(\d{2}))/g;
+  const singleRegex = /(?:(?:(\d{1,2}):)?(\d{1,2}):(\d{1,2}))/g;
   while ((match = singleRegex.exec(text)) !== null) {
     const raw = match[0];
     const startIndex = match.index;

@@ -40,7 +40,7 @@
 | +---------------------------------------------------------------+ |
 +-------------------------------------------------------------------+
 
-[ 클릭 시 열리는 슬라이드 오버 서랍 (SetlistDrawer) ]
+[ 클릭 시 열리는 슬라이드 오버 서랍 (NominationDrawer) ]
 +-------------------------------------------------------+
 | 🎵 곡 상세 정보                         [✏️ 수정] [X] |
 |-------------------------------------------------------|
@@ -70,22 +70,33 @@
 |   가능 여부: [🟢 가능]             [✏️ 가능 여부 응답]  |
 +-------------------------------------------------------+
 
-[ 수정 버튼 클릭 시 열리는 수정 모달 (SetlistEditModal) ]
-+-------------------------------------------------------+
-| ✏️ 추천곡 정보 수정                                [X] |
-|-------------------------------------------------------|
-| 곡 제목 * / 아티스트 *                                |
-| 악보 보유 여부 (O / X)                                |
-| 세션 * (안내 텍스트 / 모바일 ? 툴팁, 우측 상단 총 n명) |
-|   [+ 보컬(남)] ... [+ 직접 입력]                      |
-|   선택된 세션: [보컬(남) 1 ✕] [기타 1 ✕] (고정 정렬)   |
-| 🎤 추천 보컬 (보컬 멤버 우선 정렬, 다중 지정)          |
-| 참고 링크 (실시간 영상 미리보기, 구간 우선 뱃지 렌더링)|
-|   [+ 참고 링크 추가하기 (하단 와이드 버튼)]           |
-| 어필 (메모)                                           |
-|-------------------------------------------------------|
-| [ 🗑️ 추천곡 삭제하기 ]                 [취소] [수정 완료] |
-+-------------------------------------------------------+
+[ 후보곡 등록 및 수정 전용 페이지 (`/nominations/new`, `/nominations/[songId]/edit`) ]
++-------------------------------------------------------------------+
+| [← 선곡 회의 목록으로 돌아가기]                                    |
+| 🎵 후보곡 추천하기 / ✏️ 추천곡 정보 수정                           |
+| [D-Day 마감 카운트다운 배너]                                      |
+|-------------------------------------------------------------------|
+| 곡 제목 * / 아티스트 *                                            |
+| 악보 보유 여부 (악보 있어요 / 악보 없어요 세그먼트)               |
+| 악보 메모 (보유 파트, 키 정보, 악보 링크 등 선택 입력 필드)       |
+| 세션 * (총 N명 선택됨 카운트, 모바일 ? 툴팁 안내)                 |
+|   [+ 보컬(남)] ... [+ 직접 입력 (인라인 확장 필드)]              |
+|   선택된 세션: [보컬(남) 1 ✕] [기타 2 ✕] (표준 카테고리 정렬)    |
+| 🎤 추천 보컬: [24기 김철수 ✕] [+ 추가] (클릭 시 검색 텍스트 필드   |
+|   전환 및 공연 참여자 목록 플로팅 팝업 드롭다운 표시)              |
+| 🔗 참고 링크 (여러 개 등록 가능):                                 |
+|   1. 참고 링크 URL 입력창 (붙여넣기, 삭제)                         |
+|   2. 영상 미리보기 (YouTube 16:9 반응형 플레이어, 새 탭 열기)     |
+|   3. 타임스탬프 (유튜브 영상 전용, 비유튜브 숨김):                |
+|      - [⏱️ 현재 시점 설명 추가] (재생 중 클릭 시 일시정지 + 캡처)  |
+|      - [⏱️ URL 시각({mm:ss})] (URL 쿼리 t= 감지 시 즉시 채움)     |
+|      - [▶ 01:23] [인트로] [✕] (별도 타임스탬프 목록으로 독립 관리)  |
+|      - [+ 타임스탬프 추가] 빌더 위젯 (시간 및 라벨 입력)          |
+|   4. 설명 (순수 설명/메모 에디터, 기본 5줄 이상, min-h-[130px])   |
+| 💬 어필 (추천 사유 및 메모, 기본 5줄 이상, min-h-[130px])          |
+|-------------------------------------------------------------------|
+| [ 🗑️ 추천곡 삭제하기 ] (수정 시 본인/관리자)        [취소] [등록/수정] |
++-------------------------------------------------------------------+
 ```
 
 ---
@@ -97,28 +108,40 @@
 - 마감 전: 남은 일/시간/분이 실시간으로 갱신되며 `[+ 후보곡 추천하기]` 버튼 활성화.
 - 마감 후: `"접수가 마감되었습니다"` 안내로 전환되며 일반 참여자는 `[+ 후보곡 추천하기]` 버튼이 비활성화됨. **관리자(Admin)에게는 마감 이후에도 버튼이 비활성화되지 않고 상시 추천 가능**.
 
-### 3.2 곡 추천 모달 (`SetlistNewModal`)
-1. `[+ 곡 추천하기]` 클릭 시 모달 다이얼로그 표시.
+### 3.2 후보곡 등록 전용 페이지 (`/gigs/[id]/nominations/new`)
+1. 선곡 회의 목록 또는 빈 상태에서 `[+ 후보곡 추천하기]` 클릭 시 모달이 아닌 **독립 전용 페이지(`/gigs/[id]/nominations/new`)**로 이동합니다.
 2. 곡 제목, 아티스트 입력.
-3. **세션 파트 구성**: 보컬(남), 보컬(여), 기타, 베이스, 드럼, 건반 등의 칩을 클릭하여 토글 및 인원수 조절.
-4. **추천 보컬 지정 (`RecommendedVocalSelector`)**: 공연 참여자(`performers`) 목록 중 검색하여 어울리는 보컬 부원을 다중 선택/지정.
-5. 악보 보유 여부 체크박스 지정.
-6. 유튜브 또는 음원 참고 URL 및 링크 설명/타임스탬프 추가 (여러 개 등록 가능).
-7. 어필(추천 사유 및 특이사항) 작성 후 `[후보곡 등록하기]` 클릭.
+3. **악보 보유 여부 및 악보 메모**:
+   - '악보 있어요' / '악보 없어요' 세그먼트 버튼 선택.
+   - 바로 아래 악보 메모 입력 필드(Textarea, 넓은 폭)에 키 정보, 보유 파트, 악보 링크 등을 멀티라인으로 자유롭게 입력 가능.
+4. **필요 세션 구성**:
+   - 신규 등록 시 기본값으로 **기타 (1), 베이스 (1), 드럼 (1)**이 기본 선택되어 제공됨.
+   - 보컬(남), 보컬(여), 기타, 베이스, 드럼, 건반 등 카테고리 칩 클릭으로 수량 증감.
+   - `+ 직접 입력` 클릭 시 인라인 텍스트 필드로 확장되어 커스텀 세션 추가 가능.
+   - 인풋 필드에서 Enter 입력 시 자동 폼 제출이 방지되어 편안한 텍스트 입력 지원.
+5. **추천 보컬 지정 (`RecommendedVocalSelector`)**:
+   - 컴팩트 모드: 선택된 보컬 칩들과 `[+ 추가]` 버튼만 깔끔하게 노출.
+   - `[+ 추가]` 클릭 시 검색 인풋으로 전환되며 하단에 공연 참여자 검색 결과 플로팅 팝업이 표시되어 원하는 멤버를 손쉽게 추가.
+6. **참고 링크 및 타임스탬프**:
+   - 유튜브 영상 등록 시 레이아웃 순서: **1. 참고 링크 URL → 2. 영상 미리보기 → 3. 타임스탬프 목록/추가 → 4. 설명(메모)**.
+   - **타임스탬프 독립 목록 관리**: 타임스탬프는 본문 텍스트에 섞지 않고 각 링크 하위에 독립된 목록(`timestamps: { time, label }[]`)으로 관리되며, 클릭 시 해당 구간으로 즉시 영상이 점프합니다.
+   - **영상 재생 중 실시간 캡처 (`[⏱️ 현재 시점 설명 추가]`)**: 유튜브 영상 재생 도중 원하는 구간에서 버튼을 클릭하면 영상이 자동 일시정지(`pauseVideo()`)되고 현재 재생 초가 정확히 캡처되어 타임스탬프 추가 모드로 진입합니다.
+   - **비유튜브 링크 예외 처리**: 구글 드라이브, 음원 스트리밍 등 일반 링크는 타임스탬프 기능이 표시되지 않고 외부 링크 카드와 설명 필드만 표시됩니다.
+   - **설명/어필 기본 높이 5줄 이상**: 참고 링크 설명 및 곡 추천 어필 텍스트 영역의 기본 높이가 **5줄 이상(`min-h-[130px]`)**으로 넉넉하게 제공됩니다.
+7. **작성 중 이탈 방지 (`useUnsavedChangesWarning`)**:
+   - 양식 수정 중 [취소], [← 뒤로가기], 브라우저 닫기/새로고침 시 저장되지 않은 변경사항 경고 팝업이 표시됩니다.
 8. **권한 검증**: 서버 액션(`addSetlist`)에서 현재 로그인 사용자가 해당 공연의 `performers`에 등록되어 있는지 검증 후 저장.
-9. **작성 중 이탈 방지 (`LeaveConfirmDialog`)**:
-   - 곡 정보 입력 중 닫기(X), ESC 키, 배경 클릭, 또는 페이지 이동 시 경고 팝업 표시.
 
-### 3.3 곡 상세 드로어 (`SetlistDrawer`) & 곡 수정/삭제 (`SetlistEditModal`)
+### 3.3 곡 상세 드로어 (`NominationDrawer`) & 곡 수정 전용 페이지 (`/gigs/[id]/nominations/[songId]/edit`)
 1. 곡 카드를 클릭하면 화면 우측에서 슬라이드 오버 형태로 상세 서랍이 열리고 배경에 블러 딤 처리가 적용됩니다. 서랍이 열려 있는 동안 배경 `body` 스크롤이 고정(`overflow: hidden` 및 스크롤바 너비 보정)되어 이중 스크롤바 노출 및 배경 스크롤 누수가 방지되며, `Escape` 키로 서랍을 닫을 수 있습니다.
 2. 정보 배치 순서:
    - **기본 정보 카드**: 타이틀, 아티스트, 추천자, 등록/수정 일시.
    - **미디어 섹션 (유튜브 영상 임베드 & 외부 링크 배너)**:
      - 복수 링크 등록 시 상단 탭(`[▶ 영상 1]`, `[🔗 구글 드라이브]` 등)으로 통합 전환.
-     - 유튜브 영상은 16:9 반응형 플레이어, 일반 링크(구글 드라이브, 음원 스트리밍, 악보 등)는 서비스 파비콘·뱃지·원클릭 새 탭 열기·복사 기능이 포함된 리치 배너 카드로 렌더링.
-     - 하단 구간 점프 칩 및 전체 메모 설명 지원.
-   - **어필 섹션**: 작성자의 추천 사유 및 특이사항(본문 내 타임스탬프 클릭 지원).
-   - **악보 상태**: `'악보 있어요'` / `'악보 없어요'` 뱃지 형태로 명확하게 노출.
+     - 유튜브 영상은 16:9 반응형 플레이어, 일반 링크는 서비스 파비콘·뱃지·원클릭 새 탭 열기·복사 기능이 포함된 리치 배너 카드로 렌더링.
+     - 링크별 등록된 타임스탬프 점프 칩 및 순수 설명 메모 지원.
+   - **어필 섹션**: 작성자의 추천 사유 및 특이사항.
+   - **악보 상태**: `'악보 있어요'` / `'악보 없어요'` 뱃지 및 작성된 악보 메모 노출.
    - **세션 섹션**:
      - 필요한 악기 파트별 칩 및 요구 인원수 표시.
      - **충족 여부 색상 표시**: 가능 인원 >= 요구 인원인 경우 초록색(`emerald`), 가능+미응답 인원 < 요구 인원인 경우 빨간색(`rose`), 그 외 미결정 상태는 기본 중립색.
@@ -127,8 +150,8 @@
      - 복잡한 전체 통계를 제거하고 `가능 여부: {가능/불가능/미응답 뱃지} [가능 여부 응답 버튼]` 한 줄 카드 레이아웃으로 간소화.
 3. **수정 및 삭제**:
    - 후보곡 등록자 본인 또는 관리자일 경우 드로어 헤더에 `[수정]` 버튼이 표시됩니다.
-   - `[수정]` 버튼 클릭 시 `SetlistEditModal`이 열려 곡 정보, 세션 파트, **추천 보컬**, 영상 링크/설명, 어필을 편집할 수 있습니다.
-   - `SetlistEditModal` 하단 좌측에 `[추천곡 삭제하기]` 버튼이 배치되어 있어 안전한 확인 절차 후 곡을 삭제할 수 있습니다. (상세 드로어에서는 삭제 버튼과 중복 일시가 제거되어 오직 정보 열람에 집중).
+   - `[수정]` 버튼 클릭 시 **전용 수정 페이지(`/gigs/[id]/nominations/[songId]/edit`)**로 이동하여 여유로운 화면에서 곡 정보, 세션 파트, 추천 보컬, 영상 링크 및 타임스탬프, 어필을 편집할 수 있습니다.
+   - 수정 페이지 하단 좌측에 `[🗑️ 추천곡 삭제하기]` 버튼이 배치되어 있어 안전한 확인 절차 후 곡을 삭제할 수 있습니다. 본인이 아니거나 비인가 사용자의 접근 시 차단 카드를 표시합니다.
 
 ---
 
@@ -144,13 +167,18 @@
 ---
 
 ## 5. 관련 소스 코드 파일
-- 페이지 라우트: [app/gigs/[id]/nominations/page.tsx](file:///d:/dev/sokna/app/gigs/[id]/nominations/page.tsx)
+- 선곡 회의 목록 페이지: [app/gigs/[id]/nominations/page.tsx](file:///d:/dev/sokna/app/gigs/[id]/nominations/page.tsx)
+- 후보곡 신규 등록 전용 페이지: [app/gigs/[id]/nominations/new/page.tsx](file:///d:/dev/sokna/app/gigs/[id]/nominations/new/page.tsx)
+- 후보곡 정보 수정 전용 페이지: [app/gigs/[id]/nominations/[songId]/edit/page.tsx](file:///d:/dev/sokna/app/gigs/[id]/nominations/[songId]/edit/page.tsx)
 - 기존 리다이렉트 라우트: [app/gigs/[id]/setlists/page.tsx](file:///d:/dev/sokna/app/gigs/[id]/setlists/page.tsx)
-- 선곡 패널 컴포넌트: [components/setlists/setlist-panel.tsx](file:///d:/dev/sokna/components/setlists/setlist-panel.tsx)
-- 곡 등록 모달: [components/setlists/setlist-new-modal.tsx](file:///d:/dev/sokna/components/setlists/setlist-new-modal.tsx)
-- 곡 상세 드로어: [components/setlists/setlist-drawer.tsx](file:///d:/dev/sokna/components/setlists/setlist-drawer.tsx)
-- 세션 응답 및 메모 컴포넌트: [components/setlists/nomination-response-section.tsx](file:///d:/dev/sokna/components/setlists/nomination-response-section.tsx)
-- 곡 수정 및 삭제 모달: [components/setlists/setlist-edit-modal.tsx](file:///d:/dev/sokna/components/setlists/setlist-edit-modal.tsx)
-- 파트 칩 컴포넌트: [components/setlists/part-chip.tsx](file:///d:/dev/sokna/components/setlists/part-chip.tsx)
+- 후보곡 통합 폼 컴포넌트: [components/nominations/nomination-form.tsx](file:///d:/dev/sokna/components/nominations/nomination-form.tsx)
+- 인라인 타임스탬프 빌더 컴포넌트: [components/nominations/timestamp-builder.tsx](file:///d:/dev/sokna/components/nominations/timestamp-builder.tsx)
+- 리치 타임스탬프 텍스트에어리어: [components/nominations/rich-timestamp-textarea.tsx](file:///d:/dev/sokna/components/nominations/rich-timestamp-textarea.tsx)
+- 링크 미리보기 및 시점 캡처 아이템: [components/nominations/link-preview-item.tsx](file:///d:/dev/sokna/components/nominations/link-preview-item.tsx)
+- 선곡 패널 컴포넌트: [components/nominations/nomination-panel.tsx](file:///d:/dev/sokna/components/nominations/nomination-panel.tsx)
+- 곡 상세 드로어: [components/nominations/nomination-drawer.tsx](file:///d:/dev/sokna/components/nominations/nomination-drawer.tsx)
+- 세션 응답 및 메모 컴포넌트: [components/nominations/nomination-response-section.tsx](file:///d:/dev/sokna/components/nominations/nomination-response-section.tsx)
+- 파트 칩 컴포넌트: [components/nominations/part-chip.tsx](file:///d:/dev/sokna/components/nominations/part-chip.tsx)
 - 선곡회의 서버 액션: [app/gigs/[id]/nominations/actions.ts](file:///d:/dev/sokna/app/gigs/[id]/nominations/actions.ts)
-- 셋리스트 데이터 모델 및 파서: [lib/setlist.ts](file:///d:/dev/sokna/lib/setlist.ts)
+- 선곡회의 데이터 모델: [lib/nomination.ts](file:///d:/dev/sokna/lib/nomination.ts) (호환: [lib/setlist.ts](file:///d:/dev/sokna/lib/setlist.ts))
+

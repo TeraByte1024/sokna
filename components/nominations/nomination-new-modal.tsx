@@ -36,8 +36,8 @@ interface NominationNewModalProps {
 	refs: NominationLink[];
 	updateRef: (
 		idx: number,
-		field: "url" | "note" | "timestamp",
-		val: string,
+		field: "url" | "note" | "timestamp" | "timestamps",
+		val: any,
 	) => void;
 	performers?: RecommendedVocal[];
 	isPending: boolean;
@@ -346,8 +346,8 @@ export const NominationNewModal = forwardRef<
 									setForm((p) => ({ ...p, description: e.target.value }))
 								}
 								placeholder="이 곡을 추천하는 이유나 편곡 방향, 키 조절 계획 등을 어필해주세요."
-								rows={3}
-								className="text-xs resize-none"
+								rows={5}
+								className="text-xs min-h-[130px] resize-none"
 							/>
 						</div>
 					</div>
