@@ -244,7 +244,21 @@ export function JoinInner({
       </Card>
 
       {/* 3. 참여 여부 선택 폼 */}
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form
+        onSubmit={handleSubmit}
+        className="space-y-6"
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            const target = e.target as HTMLElement | null;
+            if (target && target.tagName === "INPUT") {
+              const input = target as HTMLInputElement;
+              if (!["button", "submit", "reset"].includes(input.type)) {
+                e.preventDefault();
+              }
+            }
+          }
+        }}
+      >
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <Label className="text-sm font-bold text-foreground">
@@ -435,12 +449,10 @@ export function JoinInner({
           >
             {pending ? (
               <>
-                <Loader2 className="size-4 animate-spin mr-2" /> 제출 중…
+                <Loader2 className="size-4 animate-spin mr-2" /> 저장 중…
               </>
-            ) : existingRsvp ? (
-              "참가 신청 내역 수정하기"
             ) : (
-              "참가 여부 제출하기"
+              "저장"
             )}
           </Button>
         </div>

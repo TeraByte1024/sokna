@@ -14,6 +14,15 @@ function emptyToNull(s: FormDataEntryValue | null): string | null {
   return t === "" ? null : t;
 }
 
+/** 가격 문자열(정수 또는 콤마 포함)을 파싱하여 정수 또는 null로 변환하는 헬퍼 함수 */
+function parsePrice(val: FormDataEntryValue | null): number | null {
+  if (val == null) return null;
+  const s = String(val).replace(/[^\d]/g, "").trim();
+  if (!s) return null;
+  const num = parseInt(s, 10);
+  return isNaN(num) ? null : num;
+}
+
 export async function createGig(formData: FormData): Promise<GigActionResult> {
   const allowed = await getIsAdmin();
   if (!allowed) return { ok: false, error: "관리자만 접근 가능합니다." };
@@ -24,10 +33,16 @@ export async function createGig(formData: FormData): Promise<GigActionResult> {
   const subtitle = emptyToNull(formData.get("subtitle"));
   const perform_date = emptyToNull(formData.get("perform_date"));
   if (!perform_date) return { ok: false, error: "공연 일시는 필수입니다." };
+  const perform_time = emptyToNull(formData.get("perform_time"));
   const meeting_date = emptyToNull(formData.get("meeting_date"));
+  const meeting_time = emptyToNull(formData.get("meeting_time"));
   const location = emptyToNull(formData.get("location"));
+  const meeting_location = emptyToNull(formData.get("meeting_location"));
   const poster_url = emptyToNull(formData.get("poster_url"));
-  const is_public = formData.get("is_public") !== "false";
+  const is_public = formData.get("is_public") === "true";
+
+  const advance_ticket_price = parsePrice(formData.get("advance_ticket_price"));
+  const door_ticket_price = parsePrice(formData.get("door_ticket_price"));
 
   // 프론트엔드에서 전달된 참여자 JSON 파싱
   const rawPerformers = formData.get("performers") as string;
@@ -48,9 +63,14 @@ export async function createGig(formData: FormData): Promise<GigActionResult> {
     .insert({
       title,
       subtitle,
+      advance_ticket_price,
+      door_ticket_price,
       perform_date,
+      perform_time,
       meeting_date,
+      meeting_time,
       location,
+      meeting_location,
       poster_url,
       is_public,
     })
@@ -138,10 +158,15 @@ export async function updateGig(formData: FormData): Promise<GigActionResult> {
   const subtitle = emptyToNull(formData.get("subtitle"));
   const perform_date = emptyToNull(formData.get("perform_date"));
   if (!perform_date) return { ok: false, error: "공연 일시는 필수입니다." };
+  const perform_time = emptyToNull(formData.get("perform_time"));
   const meeting_date = emptyToNull(formData.get("meeting_date"));
+  const meeting_time = emptyToNull(formData.get("meeting_time"));
   const location = emptyToNull(formData.get("location"));
+  const meeting_location = emptyToNull(formData.get("meeting_location"));
   const poster_url = emptyToNull(formData.get("poster_url"));
-  const is_public = formData.get("is_public") !== "false";
+  const is_public = formData.get("is_public") === "true";
+  const advance_ticket_price = parsePrice(formData.get("advance_ticket_price"));
+  const door_ticket_price = parsePrice(formData.get("door_ticket_price"));
 
   // 프론트엔드에서 전달된 참여자 JSON 파싱
   const rawPerformers = formData.get("performers") as string;
@@ -161,9 +186,14 @@ export async function updateGig(formData: FormData): Promise<GigActionResult> {
     .update({
       title,
       subtitle,
+      advance_ticket_price,
+      door_ticket_price,
       perform_date,
+      perform_time,
       meeting_date,
+      meeting_time,
       location,
+      meeting_location,
       poster_url,
       is_public,
     })
@@ -258,7 +288,7 @@ export async function updateGig(formData: FormData): Promise<GigActionResult> {
     // C. 제외된 참여자 안전 삭제
     for (const ep of remainingExisting) {
       await supabase
-        .from("setlists")
+        .from("nominations")
         .update({ created_by: null })
         .eq("created_by", ep.id);
 
@@ -365,7 +395,7 @@ export async function updateGig(formData: FormData): Promise<GigActionResult> {
   revalidatePath("/gigs");
   revalidatePath(`/gigs/${gigId}`, "layout");
   revalidatePath(`/gigs/${gigId}`);
-  revalidatePath(`/gigs/${gigId}/setlists`);
+  revalidatePath(`/gigs/${gigId}/nominations`);
   revalidatePath(`/gigs/${gigId}/edit`);
   revalidatePath("/");
 
@@ -421,7 +451,7 @@ export async function submitGigRsvp(formData: FormData): Promise<{ ok: true } | 
 /** 공연자 프로필 사진 업데이트 (본인 또는 관리자 전용) */
 export async function updatePerformerPhoto(
   performerId: number,
-  photoUrl: string
+  photoUrl: string | null
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const supabase = await createClient();
   const {

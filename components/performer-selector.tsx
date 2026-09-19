@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useMemo } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -21,17 +21,19 @@ import {
   ChevronUp,
   Users,
   Trash2,
-  Camera,
   Loader2,
-  User,
   Check,
   AlertTriangle,
   Link2,
   Plus,
   X,
+  Filter,
+  ArrowUpDown,
 } from "lucide-react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import { PerformerMappingDialog } from "@/components/gigs/performer-mapping-dialog";
+import { SessionAssignmentDialog } from "@/components/gigs/session-assignment-dialog";
 
 export interface Performer {
   id?: string;
@@ -57,7 +59,7 @@ interface Props {
   onBulkAddPerformers?: (performers: Performer[]) => void;
   onMapPerformer?: (index: number, mappedUser: Performer, oldName: string) => void;
   onUpdatePart: (index: number, part: string) => void;
-  onUpdatePhoto: (index: number, photoUrl: string) => void;
+  onUpdatePhoto?: (index: number, photoUrl: string) => void;
 }
 
 const COMMON_PARTS = [
@@ -159,6 +161,9 @@ function PerformerPartDropdown({
   );
 }
 
+export type PerformerSortField = "name" | "generation" | "default";
+export type PerformerSortOrder = "asc" | "desc";
+
 export function PerformerSelector({
   search,
   setSearch,
@@ -170,21 +175,115 @@ export function PerformerSelector({
   onBulkAddPerformers,
   onMapPerformer,
   onUpdatePart,
-  onUpdatePhoto,
 }: Props) {
   const supabase = createClient();
   const [showPasteBox, setShowPasteBox] = useState(false);
   const [pasteText, setPasteText] = useState("");
   const [isApplyingBulk, setIsApplyingBulk] = useState(false);
-  const [uploadingIdx, setUploadingIdx] = useState<number | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [targetIdxForUpload, setTargetIdxForUpload] = useState<number | null>(null);
+
+  // 정렬 상태: 기본값은 "이름순 (이름 > 기수)"
+  const [sortField, setSortField] = useState<PerformerSortField>("name");
+  const [sortOrder, setSortOrder] = useState<PerformerSortOrder>("asc");
 
   // 수동 매핑 모달 대상 상태
   const [mappingTarget, setMappingTarget] = useState<{
     performer: Performer;
     index: number;
   } | null>(null);
+
+  // 세션 필터 및 세션 추가 모달 상태
+  const [selectedSessionFilter, setSelectedSessionFilter] = useState<string | null>(null);
+  const [isAddSessionDialogOpen, setIsAddSessionDialogOpen] = useState(false);
+
+  // 현재 공연에 등록된 전체 세션 목록
+  const gigSessions = useMemo(() => {
+    const set = new Set<string>();
+    selected.forEach((p) => {
+      (p.part || "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .forEach((s) => set.add(s));
+    });
+    return Array.from(set);
+  }, [selected]);
+
+  // 필터링 및 정렬된 공연자 목록 (원래 인덱스 보존)
+  const displayedPerformers = useMemo(() => {
+    let list = selected.map((p, idx) => ({ performer: p, originalIndex: idx }));
+
+    // 1. 세션 필터링
+    if (selectedSessionFilter) {
+      list = list.filter(({ performer }) => {
+        const parts = (performer.part || "")
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+        return parts.includes(selectedSessionFilter);
+      });
+    }
+
+    // 2. 정렬 적용
+    return list.slice().sort((a, b) => {
+      if (sortField === "name") {
+        // 1순위: 이름 (가나다순)
+        const cmp = a.performer.name.localeCompare(b.performer.name, "ko");
+        if (cmp !== 0) {
+          return sortOrder === "asc" ? cmp : -cmp;
+        }
+        // 2순위: 기수 (기본 이름 > 기수 정렬)
+        const genA = a.performer.generation ?? (sortOrder === "asc" ? 9999 : -1);
+        const genB = b.performer.generation ?? (sortOrder === "asc" ? 9999 : -1);
+        return sortOrder === "asc" ? genA - genB : genB - genA;
+      }
+
+      if (sortField === "generation") {
+        // 1순위: 기수
+        const genA = a.performer.generation ?? (sortOrder === "asc" ? 9999 : -1);
+        const genB = b.performer.generation ?? (sortOrder === "asc" ? 9999 : -1);
+        if (genA !== genB) {
+          return sortOrder === "asc" ? genA - genB : genB - genA;
+        }
+        // 2순위: 이름
+        const cmp = a.performer.name.localeCompare(b.performer.name, "ko");
+        return sortOrder === "asc" ? cmp : -cmp;
+      }
+
+      // "default": 등록 순서
+      return a.originalIndex - b.originalIndex;
+    });
+  }, [selected, selectedSessionFilter, sortField, sortOrder]);
+
+  const handleSortHeader = (field: PerformerSortField) => {
+    if (field === "default") {
+      setSortField("default");
+      setSortOrder("asc");
+      return;
+    }
+    if (sortField === field) {
+      setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortOrder("asc");
+    }
+  };
+
+  // 일괄 세션 할당 핸들러
+  const handleConfirmAssignSession = (sessionName: string, targetIndices: number[]) => {
+    const trimmed = sessionName.trim();
+    if (!trimmed || targetIndices.length === 0) return;
+
+    targetIndices.forEach((idx) => {
+      const p = selected[idx];
+      if (!p) return;
+      const currentParts = (p.part || "").split(",").map((s) => s.trim()).filter(Boolean);
+      if (!currentParts.includes(trimmed)) {
+        onUpdatePart(idx, [...currentParts, trimmed].join(", "));
+      }
+    });
+
+    toast.success(`'${trimmed}' 세션이 ${targetIndices.length}명의 공연자에게 추가 할당되었습니다.`);
+  };
 
   // 미연동 공연자 집계
   const unlinkedPerformers = selected
@@ -292,40 +391,6 @@ export function PerformerSelector({
     }
   };
 
-  // 프로필 사진 파일 업로드 핸들러
-  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || targetIdxForUpload === null) return;
-
-    setUploadingIdx(targetIdxForUpload);
-    try {
-      const fileExt = file.name.split(".").pop() || "jpg";
-      const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
-      const filePath = `performers/${fileName}`;
-
-      const { error } = await supabase.storage
-        .from("gigs")
-        .upload(filePath, file, { cacheControl: "3600", upsert: true });
-
-      if (error) throw error;
-
-      const { data } = supabase.storage.from("gigs").getPublicUrl(filePath);
-      onUpdatePhoto(targetIdxForUpload, data.publicUrl);
-    } catch (err) {
-      console.error("프로필 사진 업로드 실패:", err);
-      alert("프로필 사진 업로드에 실패했습니다.");
-    } finally {
-      setUploadingIdx(null);
-      setTargetIdxForUpload(null);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    }
-  };
-
-  const triggerUpload = (idx: number) => {
-    setTargetIdxForUpload(idx);
-    fileInputRef.current?.click();
-  };
-
   const handleOpenMapping = (performer: Performer, index: number) => {
     setMappingTarget({ performer, index });
   };
@@ -339,14 +404,6 @@ export function PerformerSelector({
 
   return (
     <div className="space-y-4 pt-1">
-      {/* 숨겨진 파일 인풋 */}
-      <input
-        type="file"
-        ref={fileInputRef}
-        onChange={handlePhotoUpload}
-        accept="image/*"
-        className="hidden"
-      />
 
       {/* 수동 매핑 모달 */}
       <PerformerMappingDialog
@@ -357,22 +414,13 @@ export function PerformerSelector({
         onConfirmMapping={handleConfirmMapping}
       />
 
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Users className="size-4 text-primary" />
-          <Label className="text-sm font-bold text-foreground">
-            공연자
-          </Label>
-        </div>
-        <div className="flex items-center gap-2">
-          {unlinkedCount > 0 && (
-            <span className="text-xs font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
-              미연동 {unlinkedCount}명
-            </span>
-          )}
-          <span className="text-xs text-muted-foreground">총 {selected.length}명</span>
-        </div>
-      </div>
+      {/* 세션 추가 및 인원 할당 모달 */}
+      <SessionAssignmentDialog
+        isOpen={isAddSessionDialogOpen}
+        onClose={() => setIsAddSessionDialogOpen(false)}
+        performers={selected}
+        onConfirmAssign={handleConfirmAssignSession}
+      />
 
       {/* 미연동 안내 요약 배너 */}
       {unlinkedCount > 0 && (
@@ -510,166 +558,323 @@ export function PerformerSelector({
       </div>
 
       {/* 3. 공연자 명단 테이블 (프로필 사진, 연동 상태, 세션 수정 및 매핑 기능 포함) */}
-      <div className="space-y-2">
+      <div className="space-y-2.5">
+        {selected.length > 0 && (
+          /* 세션 필터 칩 바 및 세션 추가 버튼 */
+          <div className="flex items-center gap-1.5 overflow-x-auto py-1 [scrollbar-width:none]">
+            <button
+              type="button"
+              onClick={() => setSelectedSessionFilter(null)}
+              className={cn(
+                "px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all shrink-0 cursor-pointer",
+                selectedSessionFilter === null
+                  ? "bg-primary text-primary-foreground border-primary shadow-xs"
+                  : "bg-muted/60 text-muted-foreground hover:text-foreground border-border/70 hover:bg-muted"
+              )}
+            >
+              전체 <span className="text-[11px] font-mono opacity-80">({selected.length})</span>
+            </button>
+            {gigSessions.map((session) => {
+              const count = selected.filter((p) =>
+                (p.part || "").split(",").map((s) => s.trim()).includes(session)
+              ).length;
+              const isActive = selectedSessionFilter === session;
+              return (
+                <button
+                  key={session}
+                  type="button"
+                  onClick={() => setSelectedSessionFilter(isActive ? null : session)}
+                  className={cn(
+                    "px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all shrink-0 cursor-pointer",
+                    isActive
+                      ? "bg-primary text-primary-foreground border-primary shadow-xs"
+                      : "bg-muted/60 text-muted-foreground hover:text-foreground border-border/70 hover:bg-muted"
+                  )}
+                >
+                  {session} <span className="text-[11px] font-mono opacity-80">({count})</span>
+                </button>
+              );
+            })}
+            <div className="ml-auto flex items-center gap-1.5 shrink-0">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs px-2.5 gap-1.5 font-medium border-border/80 text-muted-foreground hover:text-foreground shrink-0 cursor-pointer"
+                  >
+                    <ArrowUpDown className="size-3 text-primary" />
+                    <span>
+                      {sortField === "name" && (sortOrder === "asc" ? "이름순 (ㄱ-ㅎ)" : "이름순 (ㅎ-ㄱ)")}
+                      {sortField === "generation" && (sortOrder === "asc" ? "기수순 (오름차순)" : "기수순 (내림차순)")}
+                      {sortField === "default" && "등록순"}
+                    </span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-44 text-xs">
+                  <DropdownMenuLabel className="text-[11px] text-muted-foreground">
+                    공연자 정렬
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setSortField("name");
+                      setSortOrder("asc");
+                    }}
+                    className="flex items-center justify-between cursor-pointer py-1.5"
+                  >
+                    <span>이름순 (이름 &gt; 기수)</span>
+                    {sortField === "name" && sortOrder === "asc" && (
+                      <Check className="size-3.5 text-primary" />
+                    )}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setSortField("name");
+                      setSortOrder("desc");
+                    }}
+                    className="flex items-center justify-between cursor-pointer py-1.5"
+                  >
+                    <span>이름 역순 (ㅎ-ㄱ)</span>
+                    {sortField === "name" && sortOrder === "desc" && (
+                      <Check className="size-3.5 text-primary" />
+                    )}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setSortField("generation");
+                      setSortOrder("asc");
+                    }}
+                    className="flex items-center justify-between cursor-pointer py-1.5"
+                  >
+                    <span>기수순 (기수 &gt; 이름)</span>
+                    {sortField === "generation" && sortOrder === "asc" && (
+                      <Check className="size-3.5 text-primary" />
+                    )}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setSortField("generation");
+                      setSortOrder("desc");
+                    }}
+                    className="flex items-center justify-between cursor-pointer py-1.5"
+                  >
+                    <span>기수 역순 (높은 기수부터)</span>
+                    {sortField === "generation" && sortOrder === "desc" && (
+                      <Check className="size-3.5 text-primary" />
+                    )}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setSortField("default");
+                      setSortOrder("asc");
+                    }}
+                    className="flex items-center justify-between cursor-pointer py-1.5"
+                  >
+                    <span>등록순</span>
+                    {sortField === "default" && <Check className="size-3.5 text-primary" />}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <button
+                type="button"
+                onClick={() => setIsAddSessionDialogOpen(true)}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20 transition-all shrink-0 cursor-pointer shadow-2xs"
+                title="새 세션 추가 및 인원 할당"
+              >
+                <Plus className="size-3" />
+                <span>세션 추가</span>
+              </button>
+            </div>
+          </div>
+        )}
+
         {selected.length > 0 ? (
           <div className="overflow-hidden rounded-xl border border-border/70 bg-background shadow-xs">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
-                <thead className="bg-muted/50 text-muted-foreground border-b border-border/60 uppercase font-semibold">
+                <thead className="bg-muted/50 text-muted-foreground border-b border-border/60 uppercase font-semibold text-xs">
                   <tr>
-                    <th scope="col" className="px-3 py-2.5 w-10 text-center font-mono">#</th>
-                    <th scope="col" className="px-3 py-2.5 w-14 text-center">프로필</th>
-                    <th scope="col" className="px-3 py-2.5 min-w-[90px]">이름</th>
-                    <th scope="col" className="px-3 py-2.5 w-16 text-center">기수</th>
+                    <th
+                      scope="col"
+                      onClick={() => handleSortHeader("default")}
+                      className="px-3 py-2.5 w-10 text-center font-mono cursor-pointer hover:bg-muted/80 hover:text-foreground select-none transition-colors"
+                      title="등록순 정렬"
+                    >
+                      #
+                    </th>
+                    <th
+                      scope="col"
+                      onClick={() => handleSortHeader("name")}
+                      className="px-3 py-2.5 min-w-[90px] cursor-pointer hover:bg-muted/80 hover:text-foreground select-none transition-colors group"
+                      title="이름순 정렬 (클릭하여 오름/내림차순 전환)"
+                    >
+                      <div className="flex items-center gap-1">
+                        <span className={sortField === "name" ? "text-foreground font-bold" : ""}>
+                          이름
+                        </span>
+                        {sortField === "name" ? (
+                          sortOrder === "asc" ? (
+                            <ChevronUp className="size-3.5 text-primary" />
+                          ) : (
+                            <ChevronDown className="size-3.5 text-primary" />
+                          )
+                        ) : (
+                          <ArrowUpDown className="size-3 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
+                        )}
+                      </div>
+                    </th>
+                    <th
+                      scope="col"
+                      onClick={() => handleSortHeader("generation")}
+                      className="px-3 py-2.5 w-16 text-center cursor-pointer hover:bg-muted/80 hover:text-foreground select-none transition-colors group"
+                      title="기수순 정렬 (클릭하여 오름/내림차순 전환)"
+                    >
+                      <div className="flex items-center justify-center gap-1">
+                        <span className={sortField === "generation" ? "text-foreground font-bold" : ""}>
+                          기수
+                        </span>
+                        {sortField === "generation" ? (
+                          sortOrder === "asc" ? (
+                            <ChevronUp className="size-3.5 text-primary" />
+                          ) : (
+                            <ChevronDown className="size-3.5 text-primary" />
+                          )
+                        ) : (
+                          <ArrowUpDown className="size-3 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
+                        )}
+                      </div>
+                    </th>
                     <th scope="col" className="px-3 py-2.5 min-w-[150px]">세션 (파트)</th>
                     <th scope="col" className="px-3 py-2.5 w-16 text-center"></th>
                     <th scope="col" className="px-3 py-2.5 w-10 text-center"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/60">
-                  {selected.map((p, idx) => {
-                    const linked = isPerformerLinked(p);
-                    const parts = (p.part || "")
-                      .split(",")
-                      .map((s) => s.trim())
-                      .filter(Boolean);
+                  {displayedPerformers.length > 0 ? (
+                    displayedPerformers.map(({ performer: p, originalIndex: idx }, renderIdx) => {
+                      const linked = isPerformerLinked(p);
+                      const parts = (p.part || "")
+                        .split(",")
+                        .map((s) => s.trim())
+                        .filter(Boolean);
 
-                    return (
-                      <tr
-                        key={p.email || p.id || `${p.name}-${idx}`}
-                        className={`transition-colors ${
-                          linked ? "hover:bg-muted/20" : "bg-amber-500/5 hover:bg-amber-500/10"
-                        }`}
-                      >
-                        {/* 1. 번호 */}
-                        <td className="px-3 py-2 text-center font-mono text-muted-foreground">
-                          {idx + 1}
-                        </td>
+                      return (
+                        <tr
+                          key={p.email || p.id || `${p.name}-${idx}`}
+                          className={`transition-colors ${
+                            linked ? "hover:bg-muted/20" : "bg-amber-500/5 hover:bg-amber-500/10"
+                          }`}
+                        >
+                          {/* 1. 번호 */}
+                          <td className="px-3 py-2 text-center font-mono text-muted-foreground">
+                            {renderIdx + 1}
+                          </td>
 
-                        {/* 2. 프로필 사진 등록/수정 */}
-                        <td className="px-3 py-2 text-center">
-                          <div className="relative inline-block group">
-                            {p.photo_url ? (
-                              <img
-                                src={p.photo_url}
-                                alt={p.name}
-                                className="size-8.5 rounded-full object-cover border border-border"
-                              />
-                            ) : (
-                              <div className="size-8.5 rounded-full bg-muted flex items-center justify-center text-muted-foreground border border-border">
-                                <User className="size-4" />
-                              </div>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => triggerUpload(idx)}
-                              disabled={uploadingIdx === idx}
-                              className="absolute inset-0 rounded-full bg-black/50 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                              title="프로필 사진 등록/수정"
-                            >
-                              {uploadingIdx === idx ? (
-                                <Loader2 className="size-3.5 animate-spin" />
-                              ) : (
-                                <Camera className="size-3.5" />
-                              )}
-                            </button>
-                          </div>
-                        </td>
-
-                        {/* 3. 이름 */}
-                        <td className="px-3 py-2 font-semibold text-foreground">
-                          <span className={linked ? "" : "text-amber-800 dark:text-amber-200"}>
-                            {p.name}
-                          </span>
-                        </td>
-
-                        {/* 4. 기수 */}
-                        <td className="px-3 py-2 text-center">
-                          {p.generation ? (
-                            <span className="inline-flex items-center justify-center min-w-[38px] px-1.5 py-0.5 text-[11px] font-bold rounded-md bg-secondary text-secondary-foreground border border-border/50 font-mono">
-                              {p.generation}기
+                          {/* 2. 이름 */}
+                          <td className="px-3 py-2 font-semibold text-foreground">
+                            <span className={linked ? "" : "text-amber-800 dark:text-amber-200"}>
+                              {p.name}
                             </span>
-                          ) : (
-                            <span className="text-xs text-muted-foreground/40 font-mono">—</span>
-                          )}
-                        </td>
+                          </td>
 
-                        {/* 5. 세션 (다중 세션 뱃지: 추가 및 삭제 지원) */}
-                        <td className="px-3 py-2">
-                          <div className="flex flex-wrap items-center gap-1.5 min-w-[140px]">
-                            {parts.map((part) => (
-                              <span
-                                key={part}
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-primary/10 text-primary border border-primary/20"
-                              >
-                                <span>{part}</span>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const nextParts = parts.filter((pt) => pt !== part);
-                                    onUpdatePart(idx, nextParts.join(", "));
-                                  }}
-                                  className="text-primary/70 hover:text-destructive transition-colors ml-0.5"
-                                  title={`${part} 삭제`}
-                                >
-                                  <X className="size-2.5" />
-                                </button>
+                          {/* 3. 기수 */}
+                          <td className="px-3 py-2 text-center">
+                            {p.generation ? (
+                              <span className="inline-flex items-center justify-center min-w-[38px] px-1.5 py-0.5 text-[11px] font-bold rounded-md bg-secondary text-secondary-foreground border border-border/50 font-mono">
+                                {p.generation}기
                               </span>
-                            ))}
+                            ) : (
+                              <span className="text-xs text-muted-foreground/40 font-mono">—</span>
+                            )}
+                          </td>
 
-                            <PerformerPartDropdown
-                              currentParts={parts}
-                              onAddPart={(newPart) => {
-                                onUpdatePart(idx, [...parts, newPart].join(", "));
-                              }}
-                            />
-                          </div>
-                        </td>
+                          {/* 4. 세션 (다중 세션 뱃지: 추가 및 삭제 지원) */}
+                          <td className="px-3 py-2">
+                            <div className="flex flex-wrap items-center gap-1.5 min-w-[140px]">
+                              {parts.map((part) => (
+                                <span
+                                  key={part}
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-primary/10 text-primary border border-primary/20"
+                                >
+                                  <span>{part}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const nextParts = parts.filter((pt) => pt !== part);
+                                      onUpdatePart(idx, nextParts.join(", "));
+                                    }}
+                                    className="text-primary/70 hover:text-destructive transition-colors ml-0.5"
+                                    title={`${part} 삭제`}
+                                  >
+                                    <X className="size-2.5" />
+                                  </button>
+                                </span>
+                              ))}
 
-                        {/* 6. 수동 매핑 버튼 (미연동 툴팁 통합) */}
-                        <td className="px-3 py-2 text-center">
-                          {linked ? (
+                              <PerformerPartDropdown
+                                currentParts={parts}
+                                onAddPart={(newPart) => {
+                                  onUpdatePart(idx, [...parts, newPart].join(", "));
+                                }}
+                              />
+                            </div>
+                          </td>
+
+                          {/* 5. 수동 매핑 버튼 (미연동 툴팁 통합) */}
+                          <td className="px-3 py-2 text-center">
+                            {linked ? (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleOpenMapping(p, idx)}
+                                className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground gap-1"
+                                title="다른 부원 계정으로 매핑 변경"
+                              >
+                                <Link2 className="size-3" />
+                                <span className="text-[11px]">변경</span>
+                              </Button>
+                            ) : (
+                              <Button
+                                type="button"
+                                size="sm"
+                                onClick={() => handleOpenMapping(p, idx)}
+                                className="h-7 px-2.5 text-xs font-bold bg-amber-500/15 hover:bg-amber-500/25 text-amber-700 dark:text-amber-300 border border-amber-500/40 gap-1 shadow-none"
+                                title="가입된 회원과 연동되지 않았습니다. 클릭하여 부원 계정과 매핑하세요."
+                              >
+                                <Link2 className="size-3.5 text-amber-600 dark:text-amber-400" />
+                                <span className="text-[11px]">연동</span>
+                              </Button>
+                            )}
+                          </td>
+
+                          {/* 6. 삭제 버튼 */}
+                          <td className="px-3 py-2 text-center">
                             <Button
                               type="button"
                               variant="ghost"
-                              size="sm"
-                              onClick={() => handleOpenMapping(p, idx)}
-                              className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground gap-1"
-                              title="다른 부원 계정으로 매핑 변경"
+                              size="icon"
+                              onClick={() => onRemove(p.email || p.name)}
+                              className="size-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors rounded-lg"
+                              aria-label={`${p.name} 삭제`}
                             >
-                              <Link2 className="size-3" />
-                              <span className="text-[11px]">변경</span>
+                              <Trash2 className="size-3.5" />
                             </Button>
-                          ) : (
-                            <Button
-                              type="button"
-                              size="sm"
-                              onClick={() => handleOpenMapping(p, idx)}
-                              className="h-7 px-2.5 text-xs font-bold bg-amber-500/15 hover:bg-amber-500/25 text-amber-700 dark:text-amber-300 border border-amber-500/40 gap-1 shadow-none"
-                              title="가입된 회원과 연동되지 않았습니다. 클릭하여 부원 계정과 매핑하세요."
-                            >
-                              <Link2 className="size-3.5 text-amber-600 dark:text-amber-400" />
-                              <span className="text-[11px]">연동</span>
-                            </Button>
-                          )}
-                        </td>
-
-                        {/* 7. 삭제 버튼 */}
-                        <td className="px-3 py-2 text-center">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => onRemove(p.email!)}
-                            className="size-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors rounded-lg"
-                            aria-label={`${p.name} 삭제`}
-                          >
-                            <Trash2 className="size-3.5" />
-                          </Button>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan={6} className="py-8 text-center text-muted-foreground text-xs">
+                        '{selectedSessionFilter}' 세션에 배정된 공연자가 없습니다.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>

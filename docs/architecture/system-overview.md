@@ -75,5 +75,5 @@ c:\dev\sokna\
 - **관리자 권한 인가 (`lib/auth-admin.ts`)**: `getIsAdmin()`을 통해 현재 인증된 유저의 이메일이 `admins` 테이블에 존재하는지 확인합니다. React `cache`를 적용하여 단일 HTTP 요청 주기 내에서 중복 DB 쿼리를 방지합니다.
 
 ### 4.2 데이터 변경 및 캐싱 전략 (Mutations & Caching)
-- 데이터 변경은 Next.js **Server Actions**(`app/gigs/actions.ts`, `app/gigs/[id]/setlists/actions.ts`)를 통해 수행됩니다.
+- 데이터 변경은 Next.js **Server Actions**(`app/gigs/actions.ts`, `app/gigs/[id]/nominations/actions.ts`)를 통해 수행됩니다.
 - 변경 완료 후 `revalidatePath('/path')`를 호출하여 Next.js 서버 캐시를 무효화하고 최신 데이터를 클라이언트에 전달합니다.

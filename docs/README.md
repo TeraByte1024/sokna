@@ -31,7 +31,7 @@ docs/
 │   ├── 01-landing.md              # 메인 랜딩 페이지 (/) 명세
 │   ├── 02-gigs.md                 # 공연 목록 페이지 (/gigs) 명세
 │   ├── 03-gig-create.md           # 공연 등록 페이지 (/gigs/new) [관리자] 명세
-│   ├── 04-setlists.md             # 선곡 회의 및 셋리스트 (/gigs/[id]/setlists) 명세
+│   ├── 04-setlists.md             # 선곡 회의 및 후보곡 (/gigs/[id]/nominations) 명세
 │   ├── 05-auth.md                 # 인증 및 계정 (/auth/*) 명세
 │   ├── 06-40th-anniversary.md     # 40주년 기념 공연 페이지 (/40th-anniversary) 명세
 │   ├── 07-history.md              # 동아리 역사 소개 페이지 (/history) 명세
@@ -66,7 +66,7 @@ docs/
 | **01** | [메인 랜딩](./pages/01-landing.md) | `/` | 동아리 소개, 스크롤 패럴랙스, 콘서트 티켓형 예매 CTA |
 | **02** | [공연 목록](./pages/02-gigs.md) | `/gigs` | 예정/지난 공연 그리드, D-Day 배지, 관리자 등록 버튼 |
 | **03** | [공연 등록](./pages/03-gig-create.md) | `/gigs/new` | **관리자 전용**: 일정 입력, 참여자 검색/파트 배정 |
-| **04** | [선곡 회의 / 셋리스트](./pages/04-setlists.md) | `/gigs/[id]/setlists` | 마감 카운트다운, 곡 등록 모달, 곡 상세 드로어, 악보/링크 |
+| **04** | [선곡 회의 / 셋리스트](./pages/04-setlists.md) | `/gigs/[id]/nominations` | 마감 카운트다운, 곡 등록 모달, 곡 상세 드로어, 악보/링크 |
 | **05** | [인증 및 계정](./pages/05-auth.md) | `/auth/*` | 로그인, 회원가입(기수/파트), 비밀번호 재설정 |
 | **06** | [40주년 기념 공연](./pages/06-40th-anniversary.md) | `/40th-anniversary` | D-Day 카운트다운, 타임테이블, 오시는 길, 사진 아카이브, 참석 설문(RSVP) |
 | **07** | [동아리 역사](./pages/07-history.md) | `/history` | 1986년 창립부터 현재까지 연혁 타임라인 및 마일스톤 |
@@ -87,6 +87,8 @@ docs/
 | **Feature** | [gigs.md](./features/gigs.md) | 공연 생성, 목록/상세 조회, 참여 세션(Performer) 매핑 |
 | **Feature** | [setlists.md](./features/setlists.md) | 곡 등록/삭제, 필수 파트 선택, 악보 유무, 참고 링크 관리 |
 | **Feature** | [push-notifications.md](./features/push-notifications.md) | Firebase Cloud Messaging(FCM) 토큰 관리 및 푸시 수신 |
+| **Feature** | [setlist-notifications-and-highlights.md](./features/setlist-notifications-and-highlights.md) | **선곡회의 곡 수정 하이라이팅 및 새 곡 15분 지연 알림 큐** |
+| **Feature** | [spreadsheet-bulk-import.md](./features/spreadsheet-bulk-import.md) | **엑셀 공연자 및 셋리스트 표 일괄 불러오기(덮어쓰기) 및 스마트 Conflict 해결** |
 | **Architecture** | [system-overview.md](./architecture/system-overview.md) | Next.js 15, Supabase SSR, Tailwind CSS 등 시스템 전체 구조 |
 | **Architecture** | [database-schema.md](./architecture/database-schema.md) | Supabase DB 스키마, 테이블 상세, ERD, 제약조건 |
 | **Maintenance** | [environment-setup.md](./maintenance/environment-setup.md) | `.env.local` 환경 변수 설정 및 로컬 서버 구동 |

@@ -132,7 +132,21 @@ export function CompleteProfileForm({ initialName = "", email = "" }: Props) {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+        <form
+          onSubmit={handleSubmit}
+          className="flex flex-col gap-5"
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              const target = e.target as HTMLElement | null;
+              if (target && target.tagName === "INPUT") {
+                const input = target as HTMLInputElement;
+                if (!["button", "submit", "reset"].includes(input.type)) {
+                  e.preventDefault();
+                }
+              }
+            }
+          }}
+        >
           {email && (
             <div className="rounded-lg bg-muted/40 p-3 text-xs border border-border/40 text-muted-foreground">
               <span className="font-semibold text-foreground">연동 계정:</span> {email}

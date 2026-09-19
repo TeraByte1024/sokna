@@ -191,16 +191,9 @@ function GigGrid({
 							{/* 2. 공연 텍스트 정보 (순수 공연 정보만 표시) */}
 							<div className="space-y-1.5 px-1">
 								<div>
-									<div className="flex items-center gap-2 min-w-0">
-										{isPast && (
-											<Badge variant="secondary" className="shrink-0 text-xs font-medium px-2 py-0.5">
-												종료
-											</Badge>
-										)}
-										<h3 className="text-lg sm:text-xl font-bold text-foreground leading-snug group-hover:text-primary transition-colors truncate">
-											{gig.title || "제목 없음"}
-										</h3>
-									</div>
+									<h3 className="text-lg sm:text-xl font-bold text-foreground leading-snug group-hover:text-primary transition-colors truncate">
+										{gig.title || "제목 없음"}
+									</h3>
 									{gig.subtitle && (
 										<p className="text-xs text-muted-foreground font-medium truncate mt-0.5">
 											{gig.subtitle}
@@ -210,6 +203,11 @@ function GigGrid({
 
 								{/* 공연 일자 */}
 								<div className="flex items-center gap-2 text-sm text-muted-foreground pt-0.5">
+									{isPast && (
+										<Badge variant="secondary" className="shrink-0 text-xs font-medium px-2 py-0.5">
+											종료
+										</Badge>
+									)}
 									<Calendar className="size-4 shrink-0 text-muted-foreground/80" />
 									<span className="truncate">
 										{formatDate(gig.perform_date)}

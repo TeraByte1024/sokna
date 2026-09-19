@@ -16,7 +16,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   if (isNaN(numericId)) {
     return {
-      title: "공연 정보 수정",
+      title: "공연 수정하기",
     };
   }
 
@@ -28,7 +28,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     .maybeSingle();
 
   return {
-    title: gig?.title ? `${gig.title} 수정 | 소리로 크는 나무` : "공연 수정 | 소리로 크는 나무",
+    title: gig?.title ? `${gig.title} 수정 | 소리로 크는 나무` : "공연 수정하기 | 소리로 크는 나무",
     description: "공연 정보 및 세션 명단 수정",
   };
 }

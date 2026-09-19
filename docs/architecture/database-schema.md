@@ -25,15 +25,21 @@ erDiagram
         timestamp created_at
     }
     gigs ||--o{ performers : "공연 세션 구성"
-    gigs ||--o{ setlists : "포함된 곡"
+    gigs ||--o{ setlists : "확정 셋리스트"
+    gigs ||--o{ nominations : "선곡회의 후보곡"
     gigs {
         int8 id PK
         string title
-        timestamp perform_date
-        timestamp meeting_date
+        string subtitle
+        int4 advance_ticket_price
+        int4 door_ticket_price
+        date perform_date
+        string perform_time
+        date meeting_date
+        string meeting_time
         timestamp created_at
     }
-    performers ||--o{ setlists : "곡 신청(created_by)"
+    performers ||--o{ nominations : "후보곡 추천(created_by)"
     performers {
         int8 id PK
         int8 gig_id FK
@@ -46,11 +52,34 @@ erDiagram
         int8 gig_id FK
         string title
         string artist
+        string session_members
+        int4 order_num
+        timestamp created_at
+        timestamp updated_at
+    }
+    nominations ||--o{ nomination_responses : "세션 참여 응답"
+    users ||--o{ nomination_responses : "응답자"
+    nominations {
+        int8 id PK
+        int8 gig_id FK
+        string title
+        string artist
         text_array required_parts
+        jsonb recommended_vocals
         boolean sheet_exists
         string description
         jsonb links
         int8 created_by FK
+        timestamp created_at
+        timestamp updated_at
+    }
+    nomination_responses {
+        int8 id PK
+        int8 nomination_id FK
+        uuid user_id FK
+        string session_part
+        string status
+        string comment
         timestamp created_at
         timestamp updated_at
     }
@@ -110,9 +139,14 @@ erDiagram
 | `id` | `int8` (Identity) | NO | 자동증가 | 공연 고유 식별자 |
 | `title` | `text` | YES | null | 공연 명칭 (예: 2026 봄 정기공연) |
 | `subtitle` | `text` | YES | null | 공연 부제목 (예: SOKNA LIVE CONCERT, 메인 제목 아래 표시되는 테마/슬로건) |
-| `perform_date` | `timestamptz` | NO | - | 공연 일시 |
-| `meeting_date` | `timestamptz` | YES | null | 곡 선정 및 준비 총회(선곡회의) 일시 |
+| `advance_ticket_price` | `int4` | YES | null | 사전예매 티켓 가격 (KRW, 정수) |
+| `door_ticket_price` | `int4` | YES | null | 현장예매 티켓 가격 (KRW, 정수) |
+| `perform_date` | `date` | NO | - | 공연 일자 (YYYY-MM-DD) |
+| `perform_time` | `text` | YES | null | 공연 시작 시각 (24시간제 HH:mm, 예: 19:00) |
+| `meeting_date` | `date` | YES | null | 곡 선정 및 준비 총회(선곡회의) 일자 (YYYY-MM-DD) |
+| `meeting_time` | `text` | YES | null | 선곡회의 시작 시각 (24시간제 HH:mm, 예: 14:00) |
 | `location` | `text` | YES | null | 공연 장소 (예: 한양대학교 학생회관 콘서트홀) |
+| `meeting_location` | `text` | YES | null | 선곡회의 장소 (예: 동아리방, 학생회관 301호 등) |
 | `poster_url` | `text` | YES | null | 공연 공식 포스터 이미지 공개 URL (Supabase Storage: gigs/posters) |
 | `is_public` | `bool` | NO | `true` | 공연 공개 여부 (`true`: 전체 공개, `false`: 비공개/관리자 및 링크 보유자 전용) |
 | `created_at` | `timestamptz` | NO | `now()` | 생성 일시 |
@@ -146,8 +180,32 @@ erDiagram
 | `photo_url` | `text` | YES | null | 공연별 세션 프로필 사진 URL (Supabase Storage: gigs/performers) |
 | `created_at` | `timestamptz` | NO | `now()` | 생성 일시 |
 
-### 2.6 `setlists` (셋리스트 및 곡 정보)
-각 공연에 등록된 연주 곡 및 가변 세션, 악보 정보입니다.
+### 2.6 `nominations` (선곡회의 후보곡 및 추천곡)
+선곡 회의에서 참여 세션원들이 추천하고 조율하는 후보곡 목록입니다.
+
+| 컬럼명 | 데이터 타입 | Nullable | 기본값 | 설명 및 관계 |
+| :--- | :--- | :--- | :--- | :--- |
+| `id` | `int8` (Identity) | NO | 자동증가 | 후보곡 고유 식별자 |
+| `gig_id` | `int8` | NO | - | FK → `gigs(id)` (ON DELETE CASCADE) |
+| `title` | `text` | NO | - | 곡 제목 |
+| `artist` | `text` | YES | null | 원곡 아티스트 |
+| `required_parts`| `text[]` | YES | `'{}'` | 필요 세션 파트 목록 (예: `['보컬(남)', '기타', '베이스']`) |
+| `recommended_vocals` | `jsonb` | YES | `'[]'` | 선곡 회의 후보곡 추천 보컬 목록 (`[{ id: number, name: string, generation?: number, part?: string }]`) |
+| `sheet_exists` | `bool` | YES | `false` | 악보 보유 여부 |
+| `description` | `text` | YES | `''` | 추천 사유 및 어필 메모 |
+| `links` | `jsonb` | YES | `'[]'` | 참고 링크 목록 (`[{ url: string, note?: string, timestamp?: string }]`) |
+| `created_by` | `int8` | YES | null | FK → `performers(id)` (ON DELETE SET NULL) |
+| `created_at` | `timestamptz` | NO | `now()` | 등록 일시 |
+| `updated_at` | `timestamptz` | NO | `now()` | 수정 일시 |
+
+> **RLS 정책 (Row Level Security)**:
+> - `SELECT`: 모든 사용자 조회 허용 (`USING (true)`)
+> - `INSERT`: 해당 공연 참여자(`performers.gig_id = gig_id AND user_id = auth.uid()`) 또는 관리자(`is_admin()`)
+> - `UPDATE`: 해당 곡 등록자(`created_by = performers.id AND user_id = auth.uid()`) 또는 관리자(`is_admin()`)
+> - `DELETE`: 해당 곡 등록자(`created_by = performers.id AND user_id = auth.uid()`) 또는 관리자(`is_admin()`)
+
+### 2.7 `setlists` (공연 확정 셋리스트)
+공연 정보 페이지에 표시되는 최종 확정 연주 곡 및 세션 명단, 연주 순서입니다. (관리자만 등록/수정/삭제 가능)
 
 | 컬럼명 | 데이터 타입 | Nullable | 기본값 | 설명 및 관계 |
 | :--- | :--- | :--- | :--- | :--- |
@@ -155,24 +213,56 @@ erDiagram
 | `gig_id` | `int8` | NO | - | FK → `gigs(id)` |
 | `title` | `text` | YES | null | 곡 제목 |
 | `artist` | `text` | YES | null | 원곡 아티스트 |
-| `required_parts`| `text[]` | YES | null | 필요 세션 파트 목록 (예: `['보컬', '기타', '베이스']`) |
-| `session_members` | `text` | YES | null | 가변 세션 슬롯 JSON 문자열 (`[ { "sessionName": string, "members": string[] } ]`) 또는 레거시 포맷 |
 | `order_num` | `int4` | NO | `0` | 셋리스트 연주 순서 (1, 2, 3...) |
-| `sheet_exists` | `bool` | YES | `false` | 악보 보유 여부 |
-| `description` | `text` | YES | null | 곡 관련 추가 설명 및 요청사항 |
-| `links` | `jsonb` | YES | `[]` | 참고 링크 목록 (`[{ url: string, note?: string }]`) |
+| `session_members` | `text` | YES | null | 가변 세션 슬롯 JSON 문자열 |
 | `created_at` | `timestamptz` | NO | `now()` | 등록 일시 |
 | `updated_at` | `timestamptz` | NO | `now()` | 수정 일시 |
 
-> **RLS 정책 (Row Level Security)**:
-> - `SELECT`: 모든 사용자(비로그인 포함) 조회 허용 (`USING (true)`)
-> - `INSERT`: 관리자(`is_admin()`) 또는 해당 공연 참여자(`performers.gig_id = gig_id AND user_id = auth.uid()`, 참여자는 선곡회의 후보곡 `order_num = 0`만 등록 가능)
-> - `UPDATE`:
->   - **공연 정보 셋리스트 (`order_num > 0`)**: **관리자(`is_admin()`)만 수정 가능** (곡 등록자 권한 없음)
->   - **선곡회의 후보곡 (`order_num = 0` 또는 null)**: 관리자 또는 해당 곡 등록자(`created_by = performers.id AND user_id = auth.uid()`) 수정 가능
-> - `DELETE`:
->   - **공연 정보 셋리스트 (`order_num > 0`)**: **관리자(`is_admin()`)만 삭제 가능** (곡 등록자 권한 없음)
->   - **선곡회의 후보곡 (`order_num = 0` 또는 null)**: 관리자 또는 해당 곡 등록자(`created_by = performers.id AND user_id = auth.uid()`) 삭제 가능
+### 2.8 `setlist_views` (선곡회의 확인 시점 기록)
+사용자별 각 공연 선곡회의 마지막 확인 시점을 기록하여 변경 사항 하이라이팅의 기준점으로 활용합니다.
+
+| 컬럼명 | 데이터 타입 | Nullable | 기본값 | 설명 및 관계 |
+| :--- | :--- | :--- | :--- | :--- |
+| `user_id` | `uuid` | NO | - | FK → `users(id)` (ON DELETE CASCADE) |
+| `gig_id` | `int8` | NO | - | FK → `gigs(id)` (ON DELETE CASCADE) |
+| `last_viewed_at` | `timestamptz` | NO | `now()` | 마지막 확인 일시 |
+
+> **기본키**: `PRIMARY KEY (user_id, gig_id)`  
+> **RLS**: 본인(`auth.uid() = user_id`)만 조회/등록/수정 가능
+
+### 2.9 `gig_notification_queue` (새 곡 지연 알림 대기열)
+새 곡 등록 시 일정 시간(15분 디바운스 버퍼) 동안 추가 등록되는 곡들을 모아서 일괄 알림을 발송하기 위한 스케줄 대기열입니다.
+
+| 컬럼명 | 데이터 타입 | Nullable | 기본값 | 설명 및 관계 |
+| :--- | :--- | :--- | :--- | :--- |
+| `id` | `int8` (Identity) | NO | 자동증가 | 대기열 고유 식별자 |
+| `gig_id` | `int8` | NO | - | FK → `gigs(id)` (ON DELETE CASCADE) |
+| `triggered_by` | `uuid` | YES | null | FK → `users(id)` (등록자 제외용) |
+| `song_ids` | `int8[]` | NO | `'{}'` | 누적 등록된 후보곡 ID 배열 |
+| `scheduled_at` | `timestamptz` | NO | - | 알림 발송 예정 일시 (디바운스 연장) |
+| `status` | `text` | NO | `'pending'` | 상태 (`'pending'`, `'processing'`, `'sent'`, `'cancelled'`) |
+| `created_at` | `timestamptz` | NO | `now()` | 큐 생성 일시 |
+| `sent_at` | `timestamptz` | YES | null | 발송 완료 일시 |
+
+### 2.10 `nomination_responses` (선곡회의 세션 참여 응답 및 메모)
+공연 참여자들이 각 후보곡에 대해 본인의 연주/보컬 참여 가능 여부와 관련 메모를 세션별로 기록하는 테이블입니다.
+
+| 컬럼명 | 데이터 타입 | Nullable | 기본값 | 설명 및 관계 |
+| :--- | :--- | :--- | :--- | :--- |
+| `id` | `int8` (Identity) | NO | 자동증가 | 응답 고유 식별자 (PK) |
+| `nomination_id` | `int8` | NO | - | FK → `nominations(id)` (ON DELETE CASCADE) |
+| `user_id` | `uuid` | NO | - | FK → `users(id)` (ON DELETE CASCADE) |
+| `session_part` | `text` | NO | `''` | 응답 대상 세션 파트 (예: `'보컬'`, `'기타'`, `'아코디언'` 등) |
+| `status` | `text` | NO | `'undecided'` | 참여 가능 여부 (`'available'`, `'undecided'`, `'unavailable'`) |
+| `comment` | `text` | NO | `''` | 참여 관련 메모 (선택 입력) |
+| `created_at` | `timestamptz` | NO | `now()` | 생성 일시 |
+| `updated_at` | `timestamptz` | NO | `now()` | 수정 일시 |
+
+> **고유 제약**: `UNIQUE (nomination_id, user_id, session_part)` (후보곡 세션별 1인 1상태 보장)  
+> **RLS**:
+> - SELECT: 인증된 사용자(`auth.role() = 'authenticated'`) 조회 허용
+> - INSERT / UPDATE / DELETE: 본인(`auth.uid() = user_id`)만 가능
+
 
 
 ### 2.7 `profiles` (기기 및 푸시 토큰)

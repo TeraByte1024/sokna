@@ -24,7 +24,7 @@
   - `user_id`: 수신 대상 유저 UUID
   - `title`: 알림 제목
   - `body`: 알림 본문
-  - `link`: 클릭 시 이동할 URL (예: `/gigs/12/setlists`)
+  - `link`: 클릭 시 이동할 URL (예: `/gigs/12/nominations`)
   - `created_at`: 발송 시각
 
 ---

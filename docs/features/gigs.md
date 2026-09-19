@@ -21,9 +21,14 @@
 ### 2.2 공연 등록 (`/gigs/new`)
 - **접근 권한**: 관리자 전용 (`getIsAdmin()` 검증).
 - **입력 항목**:
-  - 공연 제목 (`title`, 필수)
-  - 공연 일시 (`perform_date`, 필수)
-  - 총회 일시 (`meeting_date`, 선택)
+  - 포스터 이미지 (`poster_url`, 업로드/미리보기, 데스크톱 기준 좌측 배치)
+  - 공연 제목 및 부제목 (`title` 필수, `subtitle` 선택, 데스크톱 기준 우측 배치)
+  - 사전예매 및 현장예매 가격 (`advance_ticket_price`, `door_ticket_price`, 정수 KRW, 선택)
+  - 공연 일시 및 시각 (`perform_date`, 일자 및 24hh:mm 시각, 필수)
+  - 공연 장소 (`location`, 선택)
+  - 선곡회의 일시 및 시각 (`meeting_date`, 일자 및 24hh:mm 시각, 선택)
+  - 선곡회의 장소 (`meeting_location`, 선택)
+  - 공개 여부 (`is_public`: 비공개 / 공개, **기본값: 비공개**)
   - 참여자 목록 (`performers`, JSON 포맷):
     - `id`: 유저 UUID
     - `name`: 이름
@@ -34,26 +39,35 @@
   3. `performersList`를 순회하며 `performers` 매핑 테이블에 `gig_id`와 `performer_id` (또는 `user_id`, `part`) 삽입.
   4. `revalidatePath("/gigs")` 호출로 캐시 갱신.
 
-### 2.3 공연 상세 및 셋리스트 진입 (`/gigs/[id]`)
-- 특정 공연을 선택하면 해당 공연의 세부 정보 및 셋리스트(`app/gigs/[id]/setlists`) 페이지로 이동합니다.
-- 관리자에게는 상단 액션 바에 `공연 수정`(`/gigs/[id]/edit`) 및 `참가 신청 링크 복사` 버튼이 노출됩니다.
+### 2.3 공연 상세 및 참가 신청 / 선곡회의 진입 (`/gigs/[id]`)
+- 특정 공연을 선택하면 해당 공연의 세부 정보 페이지로 이동하며, 히어로 섹션 및 모바일 하단 플로팅 바에서 `공연 참여` 및 `선곡회의`(`app/gigs/[id]/nominations`)로 즉시 이동할 수 있습니다.
+  - **히어로 정보**: 포스터, 공연 일시 및 장소와 함께 등록된 티켓 예매 정보(사전예매 / 현장구매 가격)를 표시합니다.
+  - **비회원 권한 제어**: 비회원(로그아웃 상태) 사용자에게는 `공연 참여` 및 `선곡회의` CTA 버튼이 렌더링되지 않습니다.
+- **공연 참가 신청 모달 (`GigJoinDialog`)**:
+  - 별도 페이지 이동 없이 공연 상세 페이지 내 다이얼로그로 즉시 신청/수정 가능.
+  - 다이얼로그 내에 포스터를 제외한 공연 핵심 정보(일시/시각, 장소)와 선곡회의 정보(일시/시각, 장소)를 카드 형태로 요약 표시.
+  - 참여 상태(`going`, `not_going`, `undecided`), 희망 파트, 비고 입력을 지원하며 `submitGigRsvp` Server Action으로 저장.
+  - 기존 URL(`/gigs/[id]/join`) 접근 시 `/gigs/[id]?join=true`로 자동 리다이렉트되어 해당 다이얼로그를 오픈.
+- 상단 액션 바에는 `공연 공유` 버튼이 노출되며, 관리자에게는 `공연 수정`(`/gigs/[id]/edit`) 버튼이 함께 제공됩니다.
 
 ### 2.4 공연 정보 수정 (`/gigs/[id]/edit`)
 - **접근 권한**: 관리자 전용 (`getIsAdmin()` 검증 후 비인가자 리다이렉트).
 - **수정 가능 항목**:
-  - 공연 제목 (`title`, 필수)
-  - 공연 일시 (`perform_date`, 필수)
-  - 선곡 회의 일시 (`meeting_date`, 선택)
+  - 공연 제목 (`title`, 필수) 및 부제목 (`subtitle`)
+  - 사전예매 가격 (`advance_ticket_price`) 및 현장예매 가격 (`door_ticket_price`, 정수 KRW)
+  - 공식 포스터 이미지 (`poster_url`, 업로드/교체/삭제, 포스터 | 제목, 포스터 | 부제목 레이아웃)
+  - 공연 일시 및 시각 (`perform_date`, 24hh:mm, 필수)
   - 공연 장소 (`location`, 선택)
-  - 공식 포스터 이미지 (`poster_url`, 업로드/교체/삭제)
-  - 공개 여부 설정 (`is_public`: 공개 / 비공개)
+  - 선곡 회의 일시 및 시각 (`meeting_date`, 24hh:mm, 선택)
+  - 선곡 회의 장소 (`meeting_location`, 선택)
+  - 공개 여부 (`is_public`: 비공개 / 공개)
   - 참여 공연자 명단 (`performers`):
     - 세션원 추가 및 삭제
     - 개별 세션원의 담당 파트 수정
     - 공연별 세션 프로필 사진 업로드 및 수정
 - **처리 절차 (`updateGig` Server Action)**:
   1. `getIsAdmin()` 검증.
-  2. `gigs` 테이블의 기본 정보(`title`, `perform_date`, `meeting_date`, `location`, `poster_url`, `is_public`) update.
+  2. `gigs` 테이블의 기본 정보(`title`, `subtitle`, `advance_ticket_price`, `door_ticket_price`, `perform_date`, `meeting_date`, `location`, `meeting_location`, `poster_url`, `is_public`) update.
   3. 참여자(Performers) 지능형 동기화 (Diff/Upsert):
      - 기존 `performers` 목록과 새 목록 비교.
      - 유지되는 참여자는 파트/프로필 사진 변경사항만 update하여 고유 `performers.id` 보존 (`setlists.created_by` FK 무결성 유지).

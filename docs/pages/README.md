@@ -17,7 +17,7 @@ flowchart TD
     
     subgraph Gigs Domain
         Gigs -->|공연 카드 클릭| GigDetail["10. 공연 상세 (/gigs/[id])"]
-        GigDetail -->|선곡 회의 바로가기 (회원)| Setlists["04. 선곡 회의 및 셋리스트 (/gigs/[id]/setlists)"]
+        GigDetail -->|선곡 회의 바로가기 (회원)| Setlists["04. 선곡 회의 및 셋리스트 (/gigs/[id]/nominations)"]
         Gigs -->|선곡 회의 미니버튼 (회원)| Setlists
         Gigs -->|관리자: '공연 등록' 클릭| GigCreate["03. 공연 등록 (/gigs/new)"]
     end
@@ -37,7 +37,7 @@ flowchart TD
 | **01** | [메인 랜딩](./01-landing.md) | `/` | 전체 (방문자/회원) | 동아리 비주얼 브랜딩, 패럴랙스 섹션, 티켓 스타일 예매 CTA |
 | **02** | [공연 목록](./02-gigs.md) | `/gigs` | 전체 (방문자/회원/관리자) | 예정/지난 공연 그리드, D-Day 배지, 관리자 전용 등록 CTA |
 | **03** | [공연 등록](./03-gig-create.md) | `/gigs/new` | **관리자 전용** | 공연 일정 입력, 회원 검색 및 세션(Performer) 파트 일괄 배정 |
-| **04** | [선곡 회의/셋리스트](./04-setlists.md) | `/gigs/[id]/setlists` | **세션 참여자/회원/관리자** | 마감 타이머, 곡 카드 리스트, 곡 제안 모달, 곡 상세 드로어, 악보/링크 |
+| **04** | [선곡 회의/셋리스트](./04-setlists.md) | `/gigs/[id]/nominations` | **세션 참여자/회원/관리자** | 마감 타이머, 곡 카드 리스트, 곡 제안 모달, 곡 상세 드로어, 악보/링크 |
 | **05** | [인증 및 계정](./05-auth.md) | `/auth/*` | 방문자 및 회원 | 회원가입(이름/기수/파트), 로그인, 세션 쿠키 발급, 비밀번호 재설정 |
 | **06** | [40주년 기념 공연](./06-40th-anniversary.md) | `/40th-anniversary` | 전체 (동문 OB / 재학생 YB) | D-Day 카운트다운 타이머, 타임테이블, 오시는 길, 사진 아카이브, 참석 설문(RSVP) |
 | **07** | [동아리 역사](./07-history.md) | `/history` | 전체 (방문자/회원) | 1986년 창립부터 현재까지 연혁 타임라인 및 마일스톤 |

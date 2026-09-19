@@ -278,7 +278,21 @@ export function ProfileForm({ user, isAdmin }: ProfileFormProps) {
         </CardHeader>
 
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form
+            onSubmit={handleSubmit}
+            className="space-y-5"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                const target = e.target as HTMLElement | null;
+                if (target && target.tagName === "INPUT") {
+                  const input = target as HTMLInputElement;
+                  if (!["button", "submit", "reset"].includes(input.type)) {
+                    e.preventDefault();
+                  }
+                }
+              }
+            }}
+          >
             {/* 알림 메시지 */}
             {message && (
               <div

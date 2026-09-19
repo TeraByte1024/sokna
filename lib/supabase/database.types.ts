@@ -60,6 +60,54 @@ export type Database = {
         }
         Relationships: []
       }
+      gig_notification_queue: {
+        Row: {
+          created_at: string
+          gig_id: number
+          id: number
+          scheduled_at: string
+          sent_at: string | null
+          song_ids: number[]
+          status: string
+          triggered_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          gig_id: number
+          id?: never
+          scheduled_at: string
+          sent_at?: string | null
+          song_ids?: number[]
+          status?: string
+          triggered_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          gig_id?: number
+          id?: never
+          scheduled_at?: string
+          sent_at?: string | null
+          song_ids?: number[]
+          status?: string
+          triggered_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gig_notification_queue_gig_id_fkey"
+            columns: ["gig_id"]
+            isOneToOne: false
+            referencedRelation: "gigs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gig_notification_queue_triggered_by_fkey"
+            columns: ["triggered_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gig_rsvps: {
         Row: {
           created_at: string
@@ -110,39 +158,162 @@ export type Database = {
       }
       gigs: {
         Row: {
+          advance_ticket_price: number | null
           created_at: string
+          door_ticket_price: number | null
           id: number
           is_public: boolean
           location: string | null
           meeting_date: string | null
+          meeting_location: string | null
+          meeting_time: string | null
           perform_date: string
+          perform_time: string | null
           poster_url: string | null
           subtitle: string | null
           title: string | null
         }
         Insert: {
+          advance_ticket_price?: number | null
           created_at?: string
+          door_ticket_price?: number | null
           id?: number
           is_public?: boolean
           location?: string | null
           meeting_date?: string | null
+          meeting_location?: string | null
+          meeting_time?: string | null
           perform_date: string
+          perform_time?: string | null
           poster_url?: string | null
           subtitle?: string | null
           title?: string | null
         }
         Update: {
+          advance_ticket_price?: number | null
           created_at?: string
+          door_ticket_price?: number | null
           id?: number
           is_public?: boolean
           location?: string | null
           meeting_date?: string | null
+          meeting_location?: string | null
+          meeting_time?: string | null
           perform_date?: string
+          perform_time?: string | null
           poster_url?: string | null
           subtitle?: string | null
           title?: string | null
         }
         Relationships: []
+      }
+      nomination_responses: {
+        Row: {
+          comment: string
+          created_at: string
+          id: number
+          nomination_id: number
+          session_part: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          comment?: string
+          created_at?: string
+          id?: never
+          nomination_id: number
+          session_part?: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          comment?: string
+          created_at?: string
+          id?: never
+          nomination_id?: number
+          session_part?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nomination_responses_nomination_id_fkey"
+            columns: ["nomination_id"]
+            isOneToOne: false
+            referencedRelation: "nominations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nomination_responses_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nominations: {
+        Row: {
+          artist: string | null
+          created_at: string
+          created_by: number | null
+          description: string | null
+          gig_id: number
+          id: number
+          links: Json | null
+          recommended_vocals: Json | null
+          required_parts: string[] | null
+          sheet_exists: boolean | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          artist?: string | null
+          created_at?: string
+          created_by?: number | null
+          description?: string | null
+          gig_id: number
+          id?: number
+          links?: Json | null
+          recommended_vocals?: Json | null
+          required_parts?: string[] | null
+          sheet_exists?: boolean | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          artist?: string | null
+          created_at?: string
+          created_by?: number | null
+          description?: string | null
+          gig_id?: number
+          id?: number
+          links?: Json | null
+          recommended_vocals?: Json | null
+          required_parts?: string[] | null
+          sheet_exists?: boolean | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nominations_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "performers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nominations_gig_id_fkey"
+            columns: ["gig_id"]
+            isOneToOne: false
+            referencedRelation: "gigs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       notifications: {
         Row: {
@@ -283,6 +454,39 @@ export type Database = {
           },
         ]
       }
+      setlist_views: {
+        Row: {
+          gig_id: number
+          last_viewed_at: string
+          user_id: string
+        }
+        Insert: {
+          gig_id: number
+          last_viewed_at?: string
+          user_id: string
+        }
+        Update: {
+          gig_id?: number
+          last_viewed_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "setlist_views_gig_id_fkey"
+            columns: ["gig_id"]
+            isOneToOne: false
+            referencedRelation: "gigs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "setlist_views_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       setlists: {
         Row: {
           artist: string | null
@@ -293,6 +497,7 @@ export type Database = {
           id: number
           links: Json | null
           order_num: number
+          recommended_vocals: Json | null
           required_parts: string[] | null
           session_members: string | null
           sheet_exists: boolean | null
@@ -308,6 +513,7 @@ export type Database = {
           id?: number
           links?: Json | null
           order_num?: number
+          recommended_vocals?: Json | null
           required_parts?: string[] | null
           session_members?: string | null
           sheet_exists?: boolean | null
@@ -323,6 +529,7 @@ export type Database = {
           id?: number
           links?: Json | null
           order_num?: number
+          recommended_vocals?: Json | null
           required_parts?: string[] | null
           session_members?: string | null
           sheet_exists?: boolean | null

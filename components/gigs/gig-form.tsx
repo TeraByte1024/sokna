@@ -10,7 +10,8 @@ import {
   type Performer,
   isPerformerLinked,
 } from "@/components/performer-selector";
-import { SetlistBulkImporter } from "@/components/gigs/setlist-bulk-importer";
+import { GigSpreadsheetImporterDialog } from "@/components/gigs/gig-spreadsheet-importer-dialog";
+import { NominationImportDialog, type ImportedSongPayload } from "@/components/gigs/nomination-import-dialog";
 import { LeaveConfirmDialog, useUnsavedChangesWarning } from "@/components/ui/leave-confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,14 +24,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+
 import {
   parseSessionSlots,
   serializeSessionSlots,
@@ -52,19 +46,32 @@ import {
   UploadCloud,
   ChevronUp,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  SlidersHorizontal,
   FileSpreadsheet,
+  ListPlus,
   AlertTriangle,
+  Clock,
+  Users,
   X,
 } from "lucide-react";
+import { SessionOrderDialog } from "./session-order-dialog";
 import { toast } from "sonner";
+import { cn, parseDateTime, combineDateTime } from "@/lib/utils";
 
 export interface GigFormData {
   id?: number;
   title: string | null;
   subtitle?: string | null;
+  advance_ticket_price?: number | null;
+  door_ticket_price?: number | null;
   perform_date: string;
+  perform_time?: string | null;
   meeting_date: string | null;
+  meeting_time?: string | null;
   location: string | null;
+  meeting_location?: string | null;
   poster_url: string | null;
   is_public: boolean | null;
 }
@@ -120,23 +127,6 @@ export function isPerformerInSessionFamily(p: Performer, sessionName: string): b
   return false;
 }
 
-const SUGGESTED_SESSIONS = [
-  "보컬",
-  "기타1",
-  "기타2",
-  "어쿠스틱기타",
-  "일렉기타",
-  "베이스",
-  "키보드1",
-  "키보드2",
-  "건반",
-  "신디사이저",
-  "드럼",
-  "코러스",
-  "브라스",
-  "색소폰",
-];
-
 const DEFAULT_SESSION_SLOTS: SessionSlot[] = [
   { sessionName: "보컬", members: [] },
   { sessionName: "기타", members: [] },
@@ -154,296 +144,555 @@ function AddMemberDropdown({
   performers: Performer[];
   onSelectMember: (name: string) => void;
 }) {
-  const [customName, setCustomName] = useState("");
-  const available = performers.filter((p) => !slot.members.includes(p.name));
-  const primary = available.filter((p) => isPerformerInSessionFamily(p, slot.sessionName));
-  const others = available.filter((p) => !isPerformerInSessionFamily(p, slot.sessionName));
+  const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState("");
+
+  // 외부 클릭 시 팝업 닫기 및 접기
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+        setIsExpanded(false);
+        setQuery("");
+      }
+    }
+    if (isExpanded) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [isExpanded]);
+
+  // 확장 시 input 자동 포커스
+  useEffect(() => {
+    if (isExpanded) {
+      inputRef.current?.focus();
+    }
+  }, [isExpanded]);
+
+  const available = useMemo(() => {
+    return performers.filter((p) => !slot.members.includes(p.name));
+  }, [performers, slot.members]);
+
+  const { primary, others } = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const filtered = q
+      ? available.filter(
+        (p) =>
+          p.name.toLowerCase().includes(q) ||
+          (p.part && p.part.toLowerCase().includes(q))
+      )
+      : available;
+
+    const prim = filtered.filter((p) => isPerformerInSessionFamily(p, slot.sessionName));
+    const oth = filtered.filter((p) => !isPerformerInSessionFamily(p, slot.sessionName));
+    return { primary: prim, others: oth };
+  }, [available, query, slot.sessionName]);
+
+  const handleSelect = (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    onSelectMember(trimmed);
+    setQuery("");
+    setIsOpen(false);
+    setIsExpanded(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      e.stopPropagation();
+      const trimmed = query.trim();
+      if (!trimmed) {
+        setIsExpanded(false);
+        setIsOpen(false);
+        return;
+      }
+      const exactMatch = available.find(
+        (p) => p.name.trim().toLowerCase() === trimmed.toLowerCase()
+      );
+      if (exactMatch) {
+        handleSelect(exactMatch.name);
+      } else {
+        handleSelect(trimmed);
+      }
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsOpen(false);
+      setIsExpanded(false);
+      setQuery("");
+    }
+  };
+
+  if (!isExpanded) {
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          setIsExpanded(true);
+          setIsOpen(true);
+        }}
+        className="size-5 inline-flex items-center justify-center rounded text-muted-foreground/60 hover:text-foreground hover:bg-muted/70 transition-colors"
+        title={`${slot.sessionName}에 인원 추가`}
+      >
+        <Plus className="size-3" />
+      </button>
+    );
+  }
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
+    <div ref={containerRef} className="relative inline-flex items-center">
+      <div className="relative inline-flex items-center">
+        <input
+          ref={inputRef}
+          type="text"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            if (!isOpen) setIsOpen(true);
+          }}
+          onFocus={() => setIsOpen(true)}
+          onKeyDown={handleKeyDown}
+          placeholder="인원 입력..."
+          className="h-6 w-20 sm:w-24 pl-1.5 pr-4 rounded text-[11px] bg-background hover:bg-background focus:bg-background border border-primary/70 focus:border-primary focus:ring-1 focus:ring-primary/30 outline-none transition-all placeholder:text-muted-foreground/60 placeholder:text-[10px]"
+          title={`${slot.sessionName}에 인원 직접 입력 또는 검색`}
+        />
         <button
           type="button"
-          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground border border-dashed border-border/80 transition-colors"
-          title={`${slot.sessionName}에 인원 추가`}
+          onClick={() => {
+            setIsExpanded(false);
+            setIsOpen(false);
+            setQuery("");
+          }}
+          className="absolute right-1 size-3.5 inline-flex items-center justify-center text-muted-foreground/50 hover:text-foreground"
+          title="취소"
         >
-          <Plus className="size-3" />
-          <span>인원 추가</span>
+          <X className="size-2.5" />
         </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-52 max-h-72 overflow-y-auto">
-        {primary.length > 0 && (
-          <>
-            <DropdownMenuLabel className="text-[10px] font-bold text-primary flex items-center gap-1">
-              <span>{slot.sessionName} 담당 부원 ({primary.length})</span>
-            </DropdownMenuLabel>
-            {primary.map((p) => (
-              <DropdownMenuItem
-                key={p.email || p.id || p.name}
-                onClick={() => onSelectMember(p.name)}
-                className="text-xs cursor-pointer flex items-center justify-between py-1.5"
-              >
-                <span className="font-bold text-foreground">{p.name}</span>
-                <span className="text-[10px] text-muted-foreground font-mono">
-                  {p.generation ? `${p.generation}기 · ` : ""}{p.part || "세션"}
+      </div>
+
+      {isOpen && (
+        <div
+          className="absolute left-0 top-full mt-1.5 w-56 max-h-64 overflow-y-auto rounded-xl border border-border/80 bg-popover text-popover-foreground shadow-xl z-50 p-1.5 text-xs animate-in fade-in-50 zoom-in-95 duration-100"
+          onMouseDown={(e) => e.preventDefault()}
+        >
+          {primary.length > 0 && (
+            <div className="space-y-0.5">
+              <div className="px-2 py-1 text-[10px] font-bold text-primary flex items-center justify-between">
+                <span>
+                  {slot.sessionName} ({primary.length})
                 </span>
-              </DropdownMenuItem>
-            ))}
-          </>
-        )}
+              </div>
+              {primary.map((p) => (
+                <button
+                  key={p.email || p.id || p.name}
+                  type="button"
+                  onClick={() => handleSelect(p.name)}
+                  className="w-full text-left px-2 py-1.5 rounded-md hover:bg-accent hover:text-accent-foreground cursor-pointer flex items-center justify-between transition-colors group"
+                >
+                  <span className="font-bold text-foreground group-hover:text-primary transition-colors">
+                    {p.name}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground font-mono">
+                    {p.generation ? `${p.generation}기 · ` : ""}{p.part || "세션"}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
 
-        {others.length > 0 && (
-          <>
-            {primary.length > 0 && <DropdownMenuSeparator />}
-            <DropdownMenuLabel className="text-[10px] font-medium text-muted-foreground">
-              다른 세션 부원 ({others.length})
-            </DropdownMenuLabel>
-            {others.map((p) => (
-              <DropdownMenuItem
-                key={p.email || p.id || p.name}
-                onClick={() => onSelectMember(p.name)}
-                className="text-xs cursor-pointer flex items-center justify-between py-1.5"
-              >
-                <span className="text-foreground">{p.name}</span>
-                <span className="text-[10px] text-muted-foreground font-mono">
-                  {p.generation ? `${p.generation}기 · ` : ""}{p.part || "세션"}
-                </span>
-              </DropdownMenuItem>
-            ))}
-          </>
-        )}
+          {primary.length > 0 && others.length > 0 && (
+            <div className="my-1 border-t border-border/50" />
+          )}
 
-        {available.length === 0 && (
-          <div className="p-2 text-center text-xs text-muted-foreground">
-            선택 가능한 부원이 없습니다.
-          </div>
-        )}
+          {others.length > 0 && (
+            <div className="space-y-0.5">
+              <div className="px-2 py-1 text-[10px] font-medium text-muted-foreground flex items-center justify-between">
+                <span>다른 세션 ({others.length})</span>
+              </div>
+              {others.map((p) => (
+                <button
+                  key={p.email || p.id || p.name}
+                  type="button"
+                  onClick={() => handleSelect(p.name)}
+                  className="w-full text-left px-2 py-1.5 rounded-md hover:bg-accent hover:text-accent-foreground cursor-pointer flex items-center justify-between transition-colors"
+                >
+                  <span className="text-foreground">{p.name}</span>
+                  <span className="text-[10px] text-muted-foreground font-mono">
+                    {p.generation ? `${p.generation}기 · ` : ""}{p.part || "세션"}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
 
-        <DropdownMenuSeparator />
-        <div className="p-1.5 flex gap-1">
-          <Input
-            type="text"
-            placeholder="직접 입력..."
-            value={customName}
-            onChange={(e) => setCustomName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                const trimmed = customName.trim();
-                if (trimmed) {
-                  onSelectMember(trimmed);
-                  setCustomName("");
-                }
-              }
-            }}
-            className="h-7 text-xs bg-background"
-          />
-          <Button
-            type="button"
-            size="sm"
-            disabled={!customName.trim()}
-            onClick={() => {
-              const trimmed = customName.trim();
-              if (trimmed) {
-                onSelectMember(trimmed);
-                setCustomName("");
-              }
-            }}
-            className="h-7 px-2 text-xs"
-          >
-            추가
-          </Button>
+          {primary.length === 0 && others.length === 0 && (
+            <div className="p-3 text-center text-xs text-muted-foreground space-y-1">
+              {query.trim() ? (
+                <>
+                  <p className="font-medium text-foreground">'{query.trim()}' 일치 부원 없음</p>
+                  <p className="text-[10px] text-primary font-semibold">
+                    Enter를 누르면 이름 그대로 직접 추가됩니다
+                  </p>
+                </>
+              ) : (
+                <p>선택 가능한 부원이 없습니다.</p>
+              )}
+            </div>
+          )}
+
+          {query.trim() &&
+            !available.some(
+              (p) => p.name.trim().toLowerCase() === query.trim().toLowerCase()
+            ) && (
+              <div className="mt-1 pt-1 border-t border-border/50 px-0.5">
+                <button
+                  type="button"
+                  onClick={() => handleSelect(query.trim())}
+                  className="w-full text-left px-2 py-1.5 rounded-md bg-primary/10 hover:bg-primary/20 text-primary text-[11px] font-semibold flex items-center justify-between transition-colors"
+                >
+                  <span>'{query.trim()}' 직접 추가</span>
+                  <span className="text-[10px] font-normal text-muted-foreground font-mono">Enter ↵</span>
+                </button>
+              </div>
+            )}
         </div>
-      </DropdownMenuContent>
-    </DropdownMenu>
+      )}
+    </div>
   );
 }
 
 function AddSessionDropdown({
-  existingSessionNames,
+  existingSessionNames = [],
   onAddSession,
 }: {
-  existingSessionNames: string[];
+  existingSessionNames?: string[];
   onAddSession: (name: string) => void;
 }) {
-  const [customSession, setCustomSession] = useState("");
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [sessionName, setSessionName] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // 외부 클릭 시 접기
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsExpanded(false);
+        setSessionName("");
+      }
+    }
+    if (isExpanded) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [isExpanded]);
+
+  // 확장 시 자동 포커스
+  useEffect(() => {
+    if (isExpanded) {
+      inputRef.current?.focus();
+    }
+  }, [isExpanded]);
+
+  const handleSubmit = () => {
+    const trimmed = sessionName.trim();
+    if (!trimmed) return;
+    if (existingSessionNames.includes(trimmed)) {
+      toast.info(`'${trimmed}' 세션이 이미 존재합니다.`);
+      return;
+    }
+    onAddSession(trimmed);
+    setSessionName("");
+    setIsExpanded(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      e.stopPropagation();
+      handleSubmit();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsExpanded(false);
+      setSessionName("");
+    }
+  };
+
+  if (!isExpanded) {
+    return (
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => setIsExpanded(true)}
+        className="h-7 text-xs font-semibold px-2.5 gap-1 border-primary/30 text-primary hover:bg-primary/10 shadow-2xs"
+      >
+        <Plus className="size-3.5" />
+        <span>세션 추가</span>
+      </Button>
+    );
+  }
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="h-7 text-xs font-semibold px-2.5 gap-1 border-primary/30 text-primary hover:bg-primary/10"
-        >
-          <Plus className="size-3.5" />
-          <span>세션 추가</span>
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-48 max-h-72 overflow-y-auto">
-        <DropdownMenuLabel className="text-[11px] font-medium text-muted-foreground">
-          자주 쓰는 세션
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        {SUGGESTED_SESSIONS.map((session) => {
-          const isAlready = existingSessionNames.includes(session);
-          return (
-            <DropdownMenuItem
-              key={session}
-              disabled={isAlready}
-              onClick={() => {
-                if (!isAlready) onAddSession(session);
-              }}
-              className="text-xs cursor-pointer flex items-center justify-between py-1.5"
-            >
-              <span className={isAlready ? "text-muted-foreground" : "font-medium"}>
-                {session}
-              </span>
-              {isAlready && <Check className="size-3 text-muted-foreground" />}
-            </DropdownMenuItem>
-          );
-        })}
-        <DropdownMenuSeparator />
-        <div className="p-1.5 flex gap-1">
-          <Input
-            type="text"
-            placeholder="새 세션명 직접 입력..."
-            value={customSession}
-            onChange={(e) => setCustomSession(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                const trimmed = customSession.trim();
-                if (trimmed) {
-                  onAddSession(trimmed);
-                  setCustomSession("");
-                }
-              }
-            }}
-            className="h-7 text-xs bg-background"
-          />
-          <Button
-            type="button"
-            size="sm"
-            disabled={!customSession.trim()}
-            onClick={() => {
-              const trimmed = customSession.trim();
-              if (trimmed) {
-                onAddSession(trimmed);
-                setCustomSession("");
-              }
-            }}
-            className="h-7 px-2 text-xs"
-          >
-            추가
-          </Button>
-        </div>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <div
+      ref={containerRef}
+      className="inline-flex items-center gap-1 bg-background border border-primary/40 rounded-lg p-0.5 shadow-2xs animate-in fade-in-50 zoom-in-95 duration-100"
+    >
+      <Input
+        ref={inputRef}
+        type="text"
+        placeholder="세션명 입력..."
+        value={sessionName}
+        onChange={(e) => setSessionName(e.target.value)}
+        onKeyDown={handleKeyDown}
+        className="h-6 w-24 sm:w-28 text-xs bg-transparent border-none px-2 focus-visible:ring-0 shadow-none"
+      />
+      <Button
+        type="button"
+        size="sm"
+        disabled={!sessionName.trim()}
+        onClick={handleSubmit}
+        className="h-6 px-2 text-xs font-medium"
+      >
+        추가
+      </Button>
+      <button
+        type="button"
+        onClick={() => {
+          setIsExpanded(false);
+          setSessionName("");
+        }}
+        className="size-6 inline-flex items-center justify-center text-muted-foreground hover:text-foreground rounded transition-colors"
+        title="취소"
+      >
+        <X className="size-3" />
+      </button>
+    </div>
   );
 }
 
 function SongSessionManager({
+  songTitle,
   slots,
   performers,
   onAddSession,
   onRemoveSession,
   onAddMember,
   onRemoveMember,
+  onMoveSession,
 }: {
+  songTitle?: string;
   slots: SessionSlot[];
   performers: Performer[];
   onAddSession: (sessionName: string) => void;
   onRemoveSession: (slotIdx: number) => void;
   onAddMember: (slotIdx: number, memberName: string) => void;
   onRemoveMember: (slotIdx: number, memberName: string) => void;
+  onMoveSession?: (slotIdx: number, direction: "prev" | "next") => void;
 }) {
-  return (
-    <div className="space-y-2.5">
-      {slots.length > 0 ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-          {slots.map((slot, slotIdx) => (
-            <div
-              key={`${slot.sessionName}-${slotIdx}`}
-              className="p-2.5 rounded-xl border border-border/70 bg-background/80 space-y-2 flex flex-col justify-between shadow-2xs"
-            >
-              <div className="flex items-center justify-between border-b border-border/40 pb-1.5">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-bold text-foreground">
-                    {slot.sessionName}
-                  </span>
-                  {slot.members.length > 0 && (
-                    <span className="size-4 rounded-full bg-primary text-primary-foreground text-[9px] font-bold flex items-center justify-center font-mono">
-                      {slot.members.length}
-                    </span>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => onRemoveSession(slotIdx)}
-                  className="size-5 flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded transition-colors"
-                  title={`${slot.sessionName} 세션 삭제`}
-                >
-                  <Trash2 className="size-3" />
-                </button>
-              </div>
+  const [sessionToDelete, setSessionToDelete] = useState<{
+    slotIdx: number;
+    sessionName: string;
+    members: string[];
+  } | null>(null);
 
-              <div className="flex flex-wrap gap-1 items-center min-h-[26px]">
-                {slot.members.length > 0 ? (
-                  slot.members.map((m) => (
-                    <span
-                      key={m}
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-primary text-primary-foreground shadow-2xs"
-                    >
-                      <span>{m}</span>
-                      <button
-                        type="button"
-                        onClick={() => onRemoveMember(slotIdx, m)}
-                        className="hover:text-primary-foreground/70 transition-colors ml-0.5"
-                        title={`${m} 제외`}
-                      >
-                        <X className="size-2.5" />
-                      </button>
-                    </span>
-                  ))
-                ) : (
-                  <span className="text-[10px] text-muted-foreground/60 italic">
-                    선택된 인원 없음
-                  </span>
-                )}
-              </div>
+  useEffect(() => {
+    if (!sessionToDelete) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setSessionToDelete(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [sessionToDelete]);
 
-              <div className="pt-1 flex items-center justify-end">
-                <AddMemberDropdown
-                  slot={slot}
-                  performers={performers}
-                  onSelectMember={(name) => onAddMember(slotIdx, name)}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="p-4 text-center rounded-xl border border-dashed border-border/70 bg-muted/10 text-muted-foreground text-xs space-y-1">
-          <p className="font-medium">지정된 세션이 없습니다.</p>
-          <p className="text-[11px] text-muted-foreground/70">
-            아래 [세션 추가] 버튼을 눌러 원하는 세션을 추가하세요.
-          </p>
-        </div>
-      )}
-
-      <div className="flex items-center justify-between pt-0.5">
+  if (slots.length === 0) {
+    return (
+      <div className="flex items-center gap-2 py-1 text-xs text-muted-foreground">
+        <span>지정된 세션이 없습니다.</span>
         <AddSessionDropdown
-          existingSessionNames={slots.map((s) => s.sessionName)}
+          existingSessionNames={[]}
           onAddSession={onAddSession}
         />
-        {slots.length > 0 && (
-          <span className="text-[11px] text-muted-foreground font-mono">
-            총 {slots.length}개 세션
-          </span>
-        )}
       </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+      {slots.map((slot, slotIdx) => {
+        const hasMembers = slot.members.length > 0;
+        return (
+          <div
+            key={`${slot.sessionName}-${slotIdx}`}
+            className={cn(
+              "inline-flex items-center gap-1.5 px-2 py-1 rounded-lg border text-xs transition-colors shadow-2xs",
+              hasMembers
+                ? "bg-background/90 border-border/80"
+                : "bg-muted/20 border-dashed border-border/70 text-muted-foreground"
+            )}
+          >
+            {/* 세션 순서 좌우 이동 버튼 (세션이 2개 이상일 때) */}
+            {onMoveSession && slots.length > 1 && (
+              <div className="inline-flex items-center -ml-1 mr-0.5 border-r border-border/40 pr-0.5 gap-0.25 shrink-0">
+                <button
+                  type="button"
+                  disabled={slotIdx === 0}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onMoveSession(slotIdx, "prev");
+                  }}
+                  className="size-4 inline-flex items-center justify-center rounded text-muted-foreground/60 hover:text-foreground hover:bg-muted disabled:opacity-20 disabled:pointer-events-none transition-colors"
+                  title="세션 앞으로 이동"
+                >
+                  <ChevronLeft className="size-3" />
+                </button>
+                <button
+                  type="button"
+                  disabled={slotIdx === slots.length - 1}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onMoveSession(slotIdx, "next");
+                  }}
+                  className="size-4 inline-flex items-center justify-center rounded text-muted-foreground/60 hover:text-foreground hover:bg-muted disabled:opacity-20 disabled:pointer-events-none transition-colors"
+                  title="세션 뒤로 이동"
+                >
+                  <ChevronRight className="size-3" />
+                </button>
+              </div>
+            )}
+
+            {/* 세션명 */}
+            <span
+              className={cn(
+                "font-bold text-[11px] shrink-0 tracking-tight",
+                hasMembers ? "text-foreground" : "text-muted-foreground"
+              )}
+            >
+              {slot.sessionName}
+            </span>
+
+            {/* 연주자 뱃지들 */}
+            {hasMembers && (
+              <div className="inline-flex items-center gap-1 flex-wrap">
+                {slot.members.map((m) => (
+                  <span
+                    key={m}
+                    className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[11px] font-semibold bg-primary/15 text-primary border border-primary/20 shadow-2xs"
+                  >
+                    <span>{m}</span>
+                    <button
+                      type="button"
+                      onClick={() => onRemoveMember(slotIdx, m)}
+                      className="hover:text-destructive transition-colors ml-0.5"
+                      title={`${m} 제외`}
+                    >
+                      <X className="size-2.5" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* 인원 추가 드롭다운 */}
+            <AddMemberDropdown
+              slot={slot}
+              performers={performers}
+              onSelectMember={(name) => onAddMember(slotIdx, name)}
+            />
+
+            {/* 세션 삭제 버튼 (클릭 시 확인 팝업/다이얼로그) */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setSessionToDelete({
+                  slotIdx,
+                  sessionName: slot.sessionName,
+                  members: slot.members,
+                });
+              }}
+              className="size-4 inline-flex items-center justify-center text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 rounded transition-colors"
+              title={`${slot.sessionName} 세션 삭제`}
+            >
+              <Trash2 className="size-3" />
+            </button>
+          </div>
+        );
+      })}
+
+      <AddSessionDropdown
+        existingSessionNames={slots.map((s) => s.sessionName)}
+        onAddSession={onAddSession}
+      />
+
+      {/* 세션 삭제 확인 다이얼로그 */}
+      {sessionToDelete && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
+          onClick={() => setSessionToDelete(null)}
+        >
+          <div
+            className="w-full max-w-sm bg-card border border-border rounded-2xl shadow-2xl p-5 space-y-4 animate-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3">
+              <div className="p-2.5 rounded-xl bg-destructive/10 text-destructive shrink-0">
+                <Trash2 className="size-5" />
+              </div>
+              <div className="space-y-1 flex-1 min-w-0">
+                <h4 className="text-sm font-bold text-foreground">
+                  '{sessionToDelete.sessionName}' 세션 삭제
+                </h4>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  {sessionToDelete.members.length > 0 ? (
+                    <>
+                      {songTitle?.trim() ? `'${songTitle.trim()}'` : "해당 곡"}에서 '{sessionToDelete.sessionName}' 세션을 삭제하시겠습니까?<br />
+                      <span className="text-destructive font-medium">
+                        배정된 인원({sessionToDelete.members.join(", ")})도 함께 제거됩니다.
+                      </span>
+                    </>
+                  ) : (
+                    `${songTitle?.trim() ? `'${songTitle.trim()}'` : "해당 곡"}에서 '${sessionToDelete.sessionName}' 세션을 삭제하시겠습니까?`
+                  )}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/50">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setSessionToDelete(null)}
+                className="h-8 text-xs"
+              >
+                취소
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                onClick={() => {
+                  onRemoveSession(sessionToDelete.slotIdx);
+                  setSessionToDelete(null);
+                }}
+                className="h-8 text-xs font-semibold"
+              >
+                삭제하기
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -462,13 +711,22 @@ export function GigForm({
   // 1. 공연 기본 정보 상태
   const [title, setTitle] = useState(gig?.title ?? "");
   const [subtitle, setSubtitle] = useState(gig?.subtitle ?? "");
-  const [performDate, setPerformDate] = useState(
-    formatDateForInput(gig?.perform_date) || ""
+  const [advanceTicketPrice, setAdvanceTicketPrice] = useState<number | null>(
+    gig?.advance_ticket_price ?? null
   );
-  const [meetingDate, setMeetingDate] = useState(
-    formatDateForInput(gig?.meeting_date) || ""
+  const [doorTicketPrice, setDoorTicketPrice] = useState<number | null>(
+    gig?.door_ticket_price ?? null
   );
+  const initialPerform = parseDateTime(gig?.perform_date);
+  const [performDate, setPerformDate] = useState(initialPerform.date || gig?.perform_date || "");
+  const [performTime, setPerformTime] = useState(gig?.perform_time ?? initialPerform.time);
+
+  const initialMeeting = parseDateTime(gig?.meeting_date);
+  const [meetingDate, setMeetingDate] = useState(initialMeeting.date || gig?.meeting_date || "");
+  const [meetingTime, setMeetingTime] = useState(gig?.meeting_time ?? initialMeeting.time);
+
   const [location, setLocation] = useState(gig?.location ?? "");
+  const [meetingLocation, setMeetingLocation] = useState(gig?.meeting_location ?? "");
 
   // 2. 포스터 이미지 관련 상태 & 드래그 앤 드롭
   const [posterUrl, setPosterUrl] = useState<string>(gig?.poster_url ?? "");
@@ -477,7 +735,7 @@ export function GigForm({
   const posterFileRef = useRef<HTMLInputElement>(null);
 
   // 3. 공개/비공개 설정 상태
-  const [isPublic, setIsPublic] = useState(gig?.is_public ?? true);
+  const [isPublic, setIsPublic] = useState(gig?.is_public ?? false);
 
   // 4. 참여자 관련 상태
   const [performers, setPerformers] = useState<Performer[]>(initialPerformers);
@@ -491,7 +749,10 @@ export function GigForm({
   const [newSongSlots, setNewSongSlots] = useState<SessionSlot[]>(
     DEFAULT_SESSION_SLOTS.map((s) => ({ ...s, members: [] }))
   );
-  const [isImportOpen, setIsImportOpen] = useState(false);
+  const [isSpreadsheetImportOpen, setIsSpreadsheetImportOpen] = useState(false);
+  const [isNominationImportOpen, setIsNominationImportOpen] = useState(false);
+  const [isSessionOrderOpen, setIsSessionOrderOpen] = useState(false);
+  const [globalSessionOrder, setGlobalSessionOrder] = useState<string[] | null>(null);
 
   // 6. 페이지 이탈 방지 확인 팝업 (isDirty 감지 및 이벤트 인터셉트)
   const backLink = mode === "create" ? "/gigs" : `/gigs/${gig?.id}`;
@@ -503,8 +764,11 @@ export function GigForm({
         title.trim() ||
         subtitle.trim() ||
         performDate ||
+        performTime ||
         meetingDate ||
+        meetingTime ||
         location.trim() ||
+        meetingLocation.trim() ||
         posterUrl ||
         performers.length > 0 ||
         setlists.length > 0
@@ -512,18 +776,26 @@ export function GigForm({
     } else {
       const initTitle = gig?.title ?? "";
       const initSubtitle = gig?.subtitle ?? "";
-      const initPerformDate = formatDateForInput(gig?.perform_date) || "";
-      const initMeetingDate = formatDateForInput(gig?.meeting_date) || "";
+      const initPerform = parseDateTime(gig?.perform_date);
+      const initPerformDate = initPerform.date || gig?.perform_date || "";
+      const initPerformTime = gig?.perform_time ?? initPerform.time;
+      const initMeeting = parseDateTime(gig?.meeting_date);
+      const initMeetingDate = initMeeting.date || gig?.meeting_date || "";
+      const initMeetingTime = gig?.meeting_time ?? initMeeting.time;
       const initLocation = gig?.location ?? "";
+      const initMeetingLocation = gig?.meeting_location ?? "";
       const initPosterUrl = gig?.poster_url ?? "";
-      const initIsPublic = gig?.is_public ?? true;
+      const initIsPublic = gig?.is_public ?? false;
 
       if (
         title !== initTitle ||
         subtitle !== initSubtitle ||
         performDate !== initPerformDate ||
+        performTime !== initPerformTime ||
         meetingDate !== initMeetingDate ||
+        meetingTime !== initMeetingTime ||
         location !== initLocation ||
+        meetingLocation !== initMeetingLocation ||
         posterUrl !== initPosterUrl ||
         isPublic !== initIsPublic
       ) {
@@ -778,25 +1050,56 @@ export function GigForm({
         toast.info(`'${trimmed}' 세션이 이미 존재합니다.`);
         return prev;
       }
-      const nextSlots = [...slots, { sessionName: trimmed, members: [] }];
+      let nextSlots = [...slots, { sessionName: trimmed, members: [] }];
+      if (globalSessionOrder && globalSessionOrder.length > 0) {
+        const orderMap = new Map(globalSessionOrder.map((name, i) => [name, i]));
+        nextSlots.sort((a, b) => {
+          const ordA = orderMap.has(a.sessionName) ? orderMap.get(a.sessionName)! : 999;
+          const ordB = orderMap.has(b.sessionName) ? orderMap.get(b.sessionName)! : 999;
+          return ordA - ordB;
+        });
+      }
       next[songIdx] = { ...song, session_members: serializeSessionSlots(nextSlots) };
       return next;
     });
-    toast.success(`'${trimmed}' 세션이 추가되었습니다.`);
   };
 
-  const handleRemoveSessionFromSong = (songIdx: number, slotIdx: number) => {
+  const handleMoveSessionInSong = (songIdx: number, slotIdx: number, direction: "prev" | "next") => {
     setSetlists((prev) => {
       const next = [...prev];
       const song = next[songIdx];
       if (!song) return prev;
       const slots = parseSessionSlots(song.session_members);
-      const removed = slots[slotIdx]?.sessionName;
-      const nextSlots = slots.filter((_, idx) => idx !== slotIdx);
+      const targetIdx = direction === "prev" ? slotIdx - 1 : slotIdx + 1;
+      if (targetIdx < 0 || targetIdx >= slots.length) return prev;
+
+      const nextSlots = [...slots];
+      const temp = nextSlots[slotIdx];
+      nextSlots[slotIdx] = nextSlots[targetIdx];
+      nextSlots[targetIdx] = temp;
+
       next[songIdx] = { ...song, session_members: serializeSessionSlots(nextSlots) };
-      if (removed) toast.info(`'${removed}' 세션이 삭제되었습니다.`);
       return next;
     });
+  };
+
+  const handleRemoveSessionFromSong = (songIdx: number, slotIdx: number) => {
+    const currentSong = setlists[songIdx];
+    const removed = currentSong?.session_members
+      ? parseSessionSlots(currentSong.session_members)[slotIdx]?.sessionName
+      : undefined;
+
+    setSetlists((prev) => {
+      const next = [...prev];
+      const song = next[songIdx];
+      if (!song) return prev;
+      const slots = parseSessionSlots(song.session_members);
+      const nextSlots = slots.filter((_, idx) => idx !== slotIdx);
+      next[songIdx] = { ...song, session_members: serializeSessionSlots(nextSlots) };
+      return next;
+    });
+
+    if (removed) toast.info(`'${removed}' 세션이 삭제되었습니다.`);
   };
 
   const handleAddMemberToSongSession = (songIdx: number, slotIdx: number, memberName: string) => {
@@ -839,14 +1142,72 @@ export function GigForm({
       toast.info(`'${trimmed}' 세션이 이미 존재합니다.`);
       return;
     }
-    setNewSongSlots((prev) => [...prev, { sessionName: trimmed, members: [] }]);
-    toast.success(`'${trimmed}' 세션이 추가되었습니다.`);
+    setNewSongSlots((prev) => {
+      let nextSlots = [...prev, { sessionName: trimmed, members: [] }];
+      if (globalSessionOrder && globalSessionOrder.length > 0) {
+        const orderMap = new Map(globalSessionOrder.map((name, i) => [name, i]));
+        nextSlots.sort((a, b) => {
+          const ordA = orderMap.has(a.sessionName) ? orderMap.get(a.sessionName)! : 999;
+          const ordB = orderMap.has(b.sessionName) ? orderMap.get(b.sessionName)! : 999;
+          return ordA - ordB;
+        });
+      }
+      return nextSlots;
+    });
+  };
+
+  const handleMoveSessionInNewSong = (slotIdx: number, direction: "prev" | "next") => {
+    setNewSongSlots((prev) => {
+      const targetIdx = direction === "prev" ? slotIdx - 1 : slotIdx + 1;
+      if (targetIdx < 0 || targetIdx >= prev.length) return prev;
+      const next = [...prev];
+      const temp = next[slotIdx];
+      next[slotIdx] = next[targetIdx];
+      next[targetIdx] = temp;
+      return next;
+    });
   };
 
   const handleRemoveSessionFromNewSong = (slotIdx: number) => {
     const removed = newSongSlots[slotIdx]?.sessionName;
     setNewSongSlots((prev) => prev.filter((_, idx) => idx !== slotIdx));
     if (removed) toast.info(`'${removed}' 세션이 삭제되었습니다.`);
+  };
+
+  // 셋리스트 전체 세션 표시 순서 일괄 적용 핸들러
+  const handleApplyGlobalSessionOrder = (orderedSessionNames: string[]) => {
+    setGlobalSessionOrder(orderedSessionNames);
+    const orderMap = new Map(orderedSessionNames.map((name, i) => [name, i]));
+
+    setSetlists((prev) =>
+      prev.map((song) => {
+        if (!song.session_members) return song;
+        const slots = parseSessionSlots(song.session_members);
+        if (slots.length <= 1) return song;
+
+        const sorted = [...slots].sort((a, b) => {
+          const ordA = orderMap.has(a.sessionName) ? orderMap.get(a.sessionName)! : 999;
+          const ordB = orderMap.has(b.sessionName) ? orderMap.get(b.sessionName)! : 999;
+          return ordA - ordB;
+        });
+
+        return {
+          ...song,
+          session_members: serializeSessionSlots(sorted),
+        };
+      })
+    );
+
+    setNewSongSlots((prev) => {
+      if (prev.length <= 1) return prev;
+      return [...prev].sort((a, b) => {
+        const ordA = orderMap.has(a.sessionName) ? orderMap.get(a.sessionName)! : 999;
+        const ordB = orderMap.has(b.sessionName) ? orderMap.get(b.sessionName)! : 999;
+        return ordA - ordB;
+      });
+    });
+
+    toast.success("셋리스트의 세션 표시 순서가 일괄 적용되었습니다.");
   };
 
   const handleAddMemberToNewSongSession = (slotIdx: number, memberName: string) => {
@@ -890,7 +1251,16 @@ export function GigForm({
     setSetlists([...setlists, newSong]);
     setNewSongTitle("");
     setNewSongArtist("");
-    setNewSongSlots(DEFAULT_SESSION_SLOTS.map((s) => ({ ...s, members: [] })));
+    const baseSlots = DEFAULT_SESSION_SLOTS.map((s) => ({ ...s, members: [] }));
+    if (globalSessionOrder && globalSessionOrder.length > 0) {
+      const orderMap = new Map(globalSessionOrder.map((name, i) => [name, i]));
+      baseSlots.sort((a, b) => {
+        const ordA = orderMap.has(a.sessionName) ? orderMap.get(a.sessionName)! : 999;
+        const ordB = orderMap.has(b.sessionName) ? orderMap.get(b.sessionName)! : 999;
+        return ordA - ordB;
+      });
+    }
+    setNewSongSlots(baseSlots);
     toast.success("셋리스트에 곡이 추가되었습니다.");
   };
 
@@ -925,101 +1295,37 @@ export function GigForm({
     });
   };
 
-  // 셋리스트 일괄 가져오기 (Excel/스프레드시트)
-  const handleImportSetlists = async (
-    newSongs: SetlistItem[],
-    modeImport: "append" | "replace",
-    performersToRegister: { name: string; part: string }[]
-  ) => {
-    if (modeImport === "replace") {
+  // 선곡회의 후보곡 가져오기 (텍스트 복사 및 자동 추가)
+  const handleImportNominations = (songs: ImportedSongPayload[]) => {
+    setSetlists((prev) => [
+      ...prev,
+      ...songs.map((song, i) => ({
+        title: song.title,
+        artist: song.artist,
+        session_members: song.session_members,
+        order_num: prev.length + i + 1,
+      })),
+    ]);
+  };
+
+  // 엑셀 표 일괄 불러오기 (덮어쓰기 적용)
+  const handleApplySpreadsheetImport = (result: {
+    performers: Performer[];
+    setlists?: SetlistItem[];
+    mode: "performers_only" | "full";
+  }) => {
+    // 1. 공연자 목록 덮어쓰기
+    setPerformers(result.performers);
+
+    // 2. 세션 분배 결과표일 경우 셋리스트도 덮어쓰기
+    if (result.mode === "full" && result.setlists) {
       setSetlists(
-        newSongs.map((song, i) => ({
+        result.setlists.map((song, i) => ({
           ...song,
           order_num: i + 1,
         }))
       );
-    } else {
-      setSetlists((prev) => [
-        ...prev,
-        ...newSongs.map((song, i) => ({
-          ...song,
-          order_num: prev.length + i + 1,
-        })),
-      ]);
     }
-
-    // 신규 연주자 공연자 목록에 스마트 자동 등록
-    if (performersToRegister.length > 0) {
-      try {
-        const namesToQuery = performersToRegister.map((p) => p.name.trim());
-        const { data: matchedUsers } = await supabase
-          .from("users")
-          .select("id, name, email, generation, part")
-          .in("name", namesToQuery)
-          .neq("status", "rejected");
-
-        const userMap = new Map<
-          string,
-          Array<{
-            id: string;
-            name: string;
-            email?: string | null;
-            generation?: number | null;
-            part?: string | null;
-          }>
-        >();
-
-        (matchedUsers ?? []).forEach((u) => {
-          const list = userMap.get(u.name) || [];
-          list.push(u);
-          userMap.set(u.name, list);
-        });
-
-        setPerformers((prev) => {
-          const existingNames = new Set(prev.map((p) => p.name.trim()));
-          const toAdd: Performer[] = [];
-
-          for (const p of performersToRegister) {
-            const trimmedName = p.name.trim();
-            if (!existingNames.has(trimmedName)) {
-              existingNames.add(trimmedName);
-              const matched = userMap.get(trimmedName);
-
-              if (matched && matched.length === 1) {
-                const u = matched[0];
-                toAdd.push({
-                  id: u.id,
-                  name: u.name,
-                  email: u.email ?? undefined,
-                  generation: u.generation ?? null,
-                  part: p.part || u.part || "세션",
-                });
-              } else {
-                toAdd.push({
-                  name: trimmedName,
-                  email: `temp-${Math.random().toString(36).substring(2, 9)}`,
-                  part: p.part || "세션",
-                });
-              }
-            }
-          }
-
-          return [...prev, ...toAdd];
-        });
-      } catch (err) {
-        console.error("신규 연주자 자동 조회 실패:", err);
-      }
-    }
-
-    const performerMsg =
-      performersToRegister.length > 0
-        ? ` (신규 공연자 ${performersToRegister.length}명 자동 추가)`
-        : "";
-    toast.success(
-      `${newSongs.length}곡의 셋리스트가 ${
-        modeImport === "replace" ? "교체" : "추가"
-      }되었습니다.${performerMsg}`
-    );
   };
 
   // 폼 제출 핸들러 (중복 실행 방지 및 토스트 단일화)
@@ -1036,9 +1342,20 @@ export function GigForm({
     }
     formData.set("title", title);
     formData.set("subtitle", subtitle);
-    formData.set("perform_date", performDate);
-    formData.set("meeting_date", meetingDate);
+    formData.set(
+      "advance_ticket_price",
+      advanceTicketPrice != null ? String(advanceTicketPrice) : ""
+    );
+    formData.set(
+      "door_ticket_price",
+      doorTicketPrice != null ? String(doorTicketPrice) : ""
+    );
+    formData.set("perform_date", performDate || "");
+    formData.set("perform_time", performTime || "");
+    formData.set("meeting_date", meetingDate || "");
+    formData.set("meeting_time", meetingTime || "");
     formData.set("location", location);
+    formData.set("meeting_location", meetingLocation);
     formData.set("poster_url", posterUrl);
     formData.set("is_public", isPublic ? "true" : "false");
     formData.set("performers", JSON.stringify(performers));
@@ -1082,7 +1399,7 @@ export function GigForm({
   const backLabel =
     mode === "create" ? "공연 목록으로" : "공연 상세로 돌아가기";
   const headingTitle =
-    mode === "create" ? "공연 추가" : "공연 정보 수정";
+    mode === "create" ? "공연 추가" : "공연 수정하기";
   const headingDescription =
     mode === "create"
       ? "새로운 공연 일정과 참여할 공연자 명단을 등록합니다."
@@ -1101,9 +1418,6 @@ export function GigForm({
           <ArrowLeft className="size-4 group-hover:-translate-x-1 transition-transform" />
           {backLabel}
         </Link>
-        {mode === "edit" && gig?.id && (
-          <span className="text-xs text-muted-foreground font-mono">공연 ID: #{gig.id}</span>
-        )}
       </div>
 
       <div className="space-y-1">
@@ -1115,17 +1429,33 @@ export function GigForm({
         </p>
       </div>
 
-      <form className="w-full space-y-8" onSubmit={handleFormSubmit}>
+      <form
+        className="w-full space-y-8"
+        onSubmit={handleFormSubmit}
+        onKeyDown={(e) => {
+          // 페이지 단위에서 input 내 Enter 키 입력으로 인한 자동 폼 저장(제출) 방지
+          // (UI 컴포넌트 단위의 자체 Enter 핸들링은 정상 동작 유지)
+          if (e.key === "Enter") {
+            const target = e.target as HTMLElement | null;
+            if (target && target.tagName === "INPUT") {
+              const input = target as HTMLInputElement;
+              if (!["button", "submit", "reset"].includes(input.type)) {
+                e.preventDefault();
+              }
+            }
+          }
+        }}
+      >
         {mode === "edit" && gig?.id && (
           <input type="hidden" name="id" value={gig.id} />
         )}
 
-        {/* 1. 공연 기본 정보 섹션 */}
+        {/* 1. 기본 정보 섹션 */}
         <Card className="border-border/70 shadow-sm overflow-hidden">
           <CardHeader className="bg-muted/30 pb-4 border-b border-border/60">
             <CardTitle className="text-base font-bold flex items-center gap-2">
               <Music className="size-4 text-primary" />
-              공연 기본 정보
+              기본 정보
             </CardTitle>
             <CardDescription className="text-xs">
               공연의 이름, 포스터, 일정 및 장소를 설정합니다.
@@ -1133,77 +1463,44 @@ export function GigForm({
           </CardHeader>
 
           <CardContent className="p-5 sm:p-6 space-y-6">
-            {/* 공연 제목 */}
-            <div className="space-y-1.5">
-              <Label htmlFor="title" className="text-xs font-semibold text-foreground">
-                공연 제목 <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="title"
-                name="title"
-                required
-                placeholder="예: 2026 봄 정기공연"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className="bg-background border-border text-foreground placeholder:text-muted-foreground text-sm font-medium"
-              />
-            </div>
+            {/* 포스터 & 제목 / 부제목 레이아웃 (포스터 | 제목, 포스터 | 부제목) */}
+            <div className="flex flex-col md:flex-row gap-6 items-start">
+              {/* 포스터 이미지 (좌측) */}
+              <div className="w-full max-w-[240px] md:max-w-none md:w-48 lg:w-52 shrink-0 mx-auto md:mx-0 space-y-2">
+                <Label className="text-xs font-semibold text-foreground flex items-center justify-between">
+                  <span>포스터 이미지</span>
+                </Label>
 
-            {/* 공연 부제목 */}
-            <div className="space-y-1.5">
-              <Label htmlFor="subtitle" className="text-xs font-semibold text-foreground flex items-center justify-between">
-                <span>공연 부제목</span>
-                <span className="text-[11px] font-normal text-muted-foreground">선택 사항</span>
-              </Label>
-              <Input
-                id="subtitle"
-                name="subtitle"
-                placeholder="예: SOKNA 40th LIVE CONCERT, 봄의 소리를 찾아서 등"
-                value={subtitle}
-                onChange={(e) => setSubtitle(e.target.value)}
-                className="bg-background border-border text-foreground placeholder:text-muted-foreground text-sm"
-              />
-            </div>
+                <input
+                  type="file"
+                  ref={posterFileRef}
+                  onChange={handleFileInputChange}
+                  accept="image/*"
+                  className="hidden"
+                />
 
-            {/* 포스터 이미지 (드래그 앤 드롭 지원) */}
-            <div className="space-y-2">
-              <Label className="text-xs font-semibold text-foreground flex items-center justify-between">
-                <span>포스터 이미지 등록</span>
-                <span className="text-[11px] font-normal text-muted-foreground">표준 포스터 규격 (A4/A3, 1:1.41)</span>
-              </Label>
-
-              <input
-                type="file"
-                ref={posterFileRef}
-                onChange={handleFileInputChange}
-                accept="image/*"
-                className="hidden"
-              />
-
-              {posterUrl ? (
-                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-4 rounded-xl border border-border/80 bg-muted/20">
-                  <div className="relative w-28 aspect-[1/1.414] rounded-lg overflow-hidden border border-border shadow-xs shrink-0 bg-muted">
-                    <img
-                      src={posterUrl}
-                      alt="포스터 미리보기"
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <div className="space-y-2 flex-1 min-w-0">
-                    <p className="text-xs font-medium text-foreground truncate">
-                      포스터 이미지가 등록되어 있습니다.
-                    </p>
-                    <p className="text-[11px] text-muted-foreground truncate">
-                      {posterUrl}
-                    </p>
-                    <div className="flex items-center gap-2 pt-1">
+                {posterUrl ? (
+                  <div className="space-y-2">
+                    <div className="relative w-full aspect-[1/1.414] rounded-xl overflow-hidden border border-border/80 shadow-xs bg-muted group">
+                      <img
+                        src={posterUrl}
+                        alt="포스터 미리보기"
+                        className="w-full h-full object-cover"
+                      />
+                      {isUploadingPoster && (
+                        <div className="absolute inset-0 bg-background/60 backdrop-blur-xs flex items-center justify-center">
+                          <Loader2 className="size-6 animate-spin text-primary" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5">
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
                         onClick={() => posterFileRef.current?.click()}
                         disabled={isUploadingPoster}
-                        className="h-8 text-xs font-medium"
+                        className="h-8 text-xs font-medium flex-1"
                       >
                         {isUploadingPoster ? (
                           <Loader2 className="size-3.5 animate-spin mr-1.5" />
@@ -1218,123 +1515,275 @@ export function GigForm({
                         size="sm"
                         onClick={() => setPosterUrl("")}
                         disabled={isUploadingPoster}
-                        className="h-8 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                        className="h-8 text-xs text-destructive hover:text-destructive hover:bg-destructive/10 px-2.5"
+                        title="포스터 삭제"
                       >
-                        <Trash2 className="size-3.5 mr-1" /> 삭제
+                        <Trash2 className="size-3.5" />
                       </Button>
                     </div>
                   </div>
-                </div>
-              ) : (
-                <div
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                  onClick={() => posterFileRef.current?.click()}
-                  className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2 ${
-                    isDragging
+                ) : (
+                  <div
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                    onClick={() => posterFileRef.current?.click()}
+                    className={`w-full aspect-[1/1.414] border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2 ${isDragging
                       ? "border-primary bg-primary/10 scale-[0.99]"
                       : "border-border/80 hover:border-primary/50 hover:bg-muted/30 bg-muted/10"
-                  }`}
-                >
-                  <div className="p-3 rounded-full bg-muted text-muted-foreground">
-                    {isUploadingPoster ? (
-                      <Loader2 className="size-5 animate-spin text-primary" />
-                    ) : (
-                      <ImageIcon className="size-5" />
-                    )}
+                      }`}
+                  >
+                    <div className="p-3 rounded-full bg-muted text-muted-foreground">
+                      {isUploadingPoster ? (
+                        <Loader2 className="size-5 animate-spin text-primary" />
+                      ) : (
+                        <ImageIcon className="size-5" />
+                      )}
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs font-semibold text-foreground leading-snug">
+                        {isUploadingPoster
+                          ? "업로드 중..."
+                          : isDragging
+                            ? "여기에 놓으세요"
+                            : "포스터 이미지 등록"}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">
+                        클릭 또는 드래그 앤 드롭
+                      </p>
+                      <p className="text-[10px] text-muted-foreground/70">
+                        PNG, JPG, WEBP (최대 10MB)
+                      </p>
+                    </div>
                   </div>
-                  <div className="space-y-1">
-                    <p className="text-xs font-semibold text-foreground">
-                      {isUploadingPoster
-                        ? "포스터 이미지 업로드 중..."
-                        : isDragging
-                        ? "여기에 이미지를 놓으세요"
-                        : "포스터 이미지를 드래그 앤 드롭하거나 클릭하여 선택하세요"}
-                    </p>
-                    <p className="text-[11px] text-muted-foreground">
-                      PNG, JPG, WEBP 지원 (최대 10MB)
-                    </p>
+                )}
+              </div>
+
+              {/* 제목 & 부제목 영역 (우측: 포스터 | 제목, 포스터 | 부제목) */}
+              <div className="flex-1 w-full space-y-4 pt-0.5">
+                {/* 공연 제목 */}
+                <div className="space-y-1.5">
+                  <Label htmlFor="title" className="text-xs font-semibold text-foreground">
+                    공연 제목 <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="title"
+                    name="title"
+                    required
+                    placeholder="예: 2026 봄 정기공연"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    className="bg-background border-border text-foreground placeholder:text-muted-foreground text-sm font-medium h-10"
+                  />
+                </div>
+
+                {/* 공연 부제목 */}
+                <div className="space-y-1.5">
+                  <Label htmlFor="subtitle" className="text-xs font-semibold text-foreground flex items-center justify-between">
+                    <span>공연 부제목</span>
+                  </Label>
+                  <Input
+                    id="subtitle"
+                    name="subtitle"
+                    placeholder="예: SOKNA 40th LIVE CONCERT, 봄의 소리를 찾아서 등"
+                    value={subtitle}
+                    onChange={(e) => setSubtitle(e.target.value)}
+                    className="bg-background border-border text-foreground placeholder:text-muted-foreground text-sm h-10"
+                  />
+                </div>
+
+                {/* 티켓 예매 가격 (사전예매 / 현장예매) */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-0.5">
+                  {/* 사전예매 가격 */}
+                  <div className="space-y-1.5">
+                    <Label htmlFor="advance_ticket_price" className="text-xs font-semibold text-foreground flex items-center justify-between">
+                      <span>사전예매 가격</span>
+                      <span className="text-[10px] text-muted-foreground font-normal">KRW (원)</span>
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        id="advance_ticket_price"
+                        name="advance_ticket_price"
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="예: 5,000"
+                        value={
+                          advanceTicketPrice != null
+                            ? advanceTicketPrice.toLocaleString("ko-KR")
+                            : ""
+                        }
+                        onChange={(e) => {
+                          const raw = e.target.value.replace(/[^\d]/g, "");
+                          setAdvanceTicketPrice(raw ? parseInt(raw, 10) : null);
+                        }}
+                        className="bg-background border-border text-foreground placeholder:text-muted-foreground text-sm h-10 pr-8 font-mono"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-medium pointer-events-none">
+                        원
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* 현장예매 가격 */}
+                  <div className="space-y-1.5">
+                    <Label htmlFor="door_ticket_price" className="text-xs font-semibold text-foreground flex items-center justify-between">
+                      <span>현장예매 가격</span>
+                      <span className="text-[10px] text-muted-foreground font-normal">KRW (원)</span>
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        id="door_ticket_price"
+                        name="door_ticket_price"
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="예: 7,000"
+                        value={
+                          doorTicketPrice != null
+                            ? doorTicketPrice.toLocaleString("ko-KR")
+                            : ""
+                        }
+                        onChange={(e) => {
+                          const raw = e.target.value.replace(/[^\d]/g, "");
+                          setDoorTicketPrice(raw ? parseInt(raw, 10) : null);
+                        }}
+                        className="bg-background border-border text-foreground placeholder:text-muted-foreground text-sm h-10 pr-8 font-mono"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-medium pointer-events-none">
+                        원
+                      </span>
+                    </div>
                   </div>
                 </div>
-              )}
+              </div>
             </div>
 
-            {/* 일정 (공연 일시 & 선곡 회의 일시) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* 일정 (공연 일시 & 선곡회의 일시) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* 공연 일시 */}
               <div className="space-y-1.5">
-                <Label htmlFor="perform_date" className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                  <Calendar className="size-3.5 text-primary" />
-                  공연 일시 <span className="text-destructive">*</span>
+                <Label className="text-xs font-semibold text-foreground flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <Calendar className="size-3.5 text-primary" />
+                    공연 일시 <span className="text-destructive">*</span>
+                  </span>
+                </Label>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="col-span-2">
+                    <Input
+                      id="perform_date"
+                      name="perform_date"
+                      type="date"
+                      required
+                      value={performDate}
+                      onChange={(e) => setPerformDate(e.target.value)}
+                      className="bg-background border-border text-foreground text-sm font-medium"
+                    />
+                  </div>
+                  <div className="col-span-1">
+                    <Input
+                      id="perform_time"
+                      name="perform_time"
+                      type="time"
+                      value={performTime}
+                      onChange={(e) => setPerformTime(e.target.value)}
+                      placeholder="18:00"
+                      className="bg-background border-border text-foreground text-sm"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* 선곡회의 일시 */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-foreground flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <Clock className="size-3.5 text-indigo-500" />
+                    선곡회의 일시
+                  </span>
+                </Label>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="col-span-2">
+                    <Input
+                      id="meeting_date"
+                      name="meeting_date"
+                      type="date"
+                      value={meetingDate}
+                      onChange={(e) => setMeetingDate(e.target.value)}
+                      className="bg-background border-border text-foreground text-sm"
+                    />
+                  </div>
+                  <div className="col-span-1">
+                    <Input
+                      id="meeting_time"
+                      name="meeting_time"
+                      type="time"
+                      value={meetingTime}
+                      onChange={(e) => setMeetingTime(e.target.value)}
+                      placeholder="19:00"
+                      className="bg-background border-border text-foreground text-sm"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 장소 (공연 장소 & 선곡회의 장소) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="location" className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                  <MapPin className="size-3.5 text-primary" />
+                  공연 장소
                 </Label>
                 <Input
-                  id="perform_date"
-                  name="perform_date"
-                  type="date"
-                  required
-                  value={performDate}
-                  onChange={(e) => setPerformDate(e.target.value)}
-                  className="bg-background border-border text-foreground text-sm font-medium"
+                  id="location"
+                  name="location"
+                  placeholder="예: 홍대 클럽 프리버드 / 학생회관 소극장"
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  className="bg-background border-border text-foreground placeholder:text-muted-foreground text-sm"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="meeting_date" className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                  <Calendar className="size-3.5 text-muted-foreground" />
-                  선곡 회의 일시
+                <Label htmlFor="meeting_location" className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                  <MapPin className="size-3.5 text-indigo-500" />
+                  선곡회의 장소
                 </Label>
                 <Input
-                  id="meeting_date"
-                  name="meeting_date"
-                  type="date"
-                  value={meetingDate}
-                  onChange={(e) => setMeetingDate(e.target.value)}
-                  className="bg-background border-border text-foreground text-sm"
+                  id="meeting_location"
+                  name="meeting_location"
+                  placeholder="예: 동아리방, 학생회관 301호 등"
+                  value={meetingLocation}
+                  onChange={(e) => setMeetingLocation(e.target.value)}
+                  className="bg-background border-border text-foreground placeholder:text-muted-foreground text-sm"
                 />
               </div>
             </div>
 
-            {/* 공연 장소 */}
-            <div className="space-y-1.5">
-              <Label htmlFor="location" className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                <MapPin className="size-3.5 text-primary" />
-                공연 장소
-              </Label>
-              <Input
-                id="location"
-                name="location"
-                placeholder="예: 홍대 클럽 프리버드 / 학생회관 소극장"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                className="bg-background border-border text-foreground placeholder:text-muted-foreground text-sm"
-              />
-            </div>
-
-            {/* 공개 여부 설정 */}
+            {/* 공개 여부 */}
             <div className="space-y-2 pt-2 border-t border-border/60">
               <Label className="text-xs font-semibold text-foreground">
-                공개 여부 설정
+                공개 여부
               </Label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <button
                   type="button"
                   onClick={() => setIsPublic(false)}
-                  className={`p-3.5 rounded-xl border text-left transition-all flex items-start gap-3 ${
-                    !isPublic
-                      ? "border-primary bg-primary/5 ring-1 ring-primary"
-                      : "border-border/70 hover:border-border hover:bg-muted/20"
-                  }`}
+                  className={`p-3.5 rounded-xl border text-left transition-all flex items-start gap-3 ${!isPublic
+                    ? "border-primary bg-primary/5 ring-1 ring-primary"
+                    : "border-border/70 hover:border-border hover:bg-muted/20"
+                    }`}
                 >
                   <div className={`p-2 rounded-lg ${!isPublic ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
                     <Lock className="size-4" />
                   </div>
                   <div className="space-y-0.5">
                     <p className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                      비공개 공연
+                      비공개
                       {!isPublic && <Check className="size-3 text-primary" />}
                     </p>
                     <p className="text-[11px] text-muted-foreground leading-relaxed">
-                      링크를 직접 공유받은 부원에게만 노출됩니다.
+                      공연 참여 부원에게만 노출됩니다.
                     </p>
                   </div>
                 </button>
@@ -1342,18 +1791,17 @@ export function GigForm({
                 <button
                   type="button"
                   onClick={() => setIsPublic(true)}
-                  className={`p-3.5 rounded-xl border text-left transition-all flex items-start gap-3 ${
-                    isPublic
-                      ? "border-primary bg-primary/5 ring-1 ring-primary"
-                      : "border-border/70 hover:border-border hover:bg-muted/20"
-                  }`}
+                  className={`p-3.5 rounded-xl border text-left transition-all flex items-start gap-3 ${isPublic
+                    ? "border-primary bg-primary/5 ring-1 ring-primary"
+                    : "border-border/70 hover:border-border hover:bg-muted/20"
+                    }`}
                 >
                   <div className={`p-2 rounded-lg ${isPublic ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
                     <Globe className="size-4" />
                   </div>
                   <div className="space-y-0.5">
                     <p className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                      전체 공개 공연
+                      공개
                       {isPublic && <Check className="size-3 text-primary" />}
                     </p>
                     <p className="text-[11px] text-muted-foreground leading-relaxed">
@@ -1364,39 +1812,88 @@ export function GigForm({
               </div>
             </div>
 
-            {/* 6. SETLIST (셋리스트 관리 섹션) */}
-            <div className="pt-4 border-t border-border/60 space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div>
-                  <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-                    <ListMusic className="size-4 text-primary" />
-                    SETLIST (셋리스트 곡 관리)
-                  </h3>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
-                    곡 제목, 아티스트 및 연주자를 지정합니다. 각 항목을 텍스트로 바로 수정하거나 엑셀로 일괄 가져올 수 있습니다.
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
+          </CardContent>
+        </Card>
+
+        {/* 2. SETLIST 관리 섹션 */}
+        <Card className="border-border/70 shadow-sm overflow-hidden">
+          <CardHeader className="bg-muted/30 pb-4 border-b border-border/60">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <CardTitle className="text-base font-bold flex items-center gap-2">
+                  <ListMusic className="size-4 text-primary" />
+                  SETLIST 관리 (총 {setlists.length}곡)
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  공연에서 연주할 곡 목록과 세션 연주자를 구성합니다.
+                </CardDescription>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap shrink-0">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsSessionOrderOpen(true)}
+                  className="h-7 text-xs px-2.5 font-semibold gap-1.5 border-border hover:bg-muted text-foreground shadow-2xs"
+                  title="셋리스트에 표시될 세션 종류의 순서를 편집합니다"
+                >
+                  <SlidersHorizontal className="size-3.5 text-primary" />
+                  세션 순서 설정
+                </Button>
+                {gig?.id && (
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => setIsImportOpen(!isImportOpen)}
+                    onClick={() => setIsNominationImportOpen(true)}
                     className="h-7 text-xs px-2.5 font-semibold gap-1.5 border-primary/40 text-primary hover:bg-primary/10"
                   >
-                    <FileSpreadsheet className="size-3.5" />
-                    엑셀 일괄 가져오기
+                    <ListPlus className="size-3.5" />
+                    선곡회의 곡 가져오기
                   </Button>
-                  <span className="text-xs text-muted-foreground font-mono">총 {setlists.length}곡</span>
-                </div>
+                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsSpreadsheetImportOpen(true)}
+                  className="h-7 text-xs px-2.5 font-semibold gap-1.5 border-primary/40 text-primary hover:bg-primary/10"
+                >
+                  <FileSpreadsheet className="size-3.5" />
+                  엑셀에서 공연자 / 셋리스트 불러오기
+                </Button>
               </div>
+            </div>
+          </CardHeader>
 
-              {/* 엑셀 일괄 가져오기 다이얼로그/컴포넌트 */}
-              <SetlistBulkImporter
-                isOpen={isImportOpen}
-                onClose={() => setIsImportOpen(false)}
-                existingPerformers={performers}
-                onImportSetlists={handleImportSetlists}
+          <CardContent className="p-5 sm:p-6 space-y-4">
+            {/* 선곡회의 후보곡 가져오기 다이얼로그 */}
+            {gig?.id && (
+              <NominationImportDialog
+                isOpen={isNominationImportOpen}
+                onClose={() => setIsNominationImportOpen(false)}
+                gigId={gig.id}
+                onImportSongs={handleImportNominations}
+              />
+            )}
+
+              {/* 엑셀 일괄 가져오기 다이얼로그 */}
+              <GigSpreadsheetImporterDialog
+                isOpen={isSpreadsheetImportOpen}
+                onClose={() => setIsSpreadsheetImportOpen(false)}
+                existingPerformersCount={performers.length}
+                existingSetlistsCount={setlists.length}
+                onApplyImport={handleApplySpreadsheetImport}
+              />
+
+              {/* 세션 표시 순서 일괄 설정 다이얼로그 */}
+              <SessionOrderDialog
+                isOpen={isSessionOrderOpen}
+                onClose={() => setIsSessionOrderOpen(false)}
+                songs={setlists}
+                newSongSlots={newSongSlots}
+                initialOrder={globalSessionOrder ?? undefined}
+                onApplyOrder={handleApplyGlobalSessionOrder}
               />
 
               {/* 셋리스트 목록 */}
@@ -1407,88 +1904,87 @@ export function GigForm({
                       key={song.id ?? `song-${idx}`}
                       className="p-3.5 rounded-xl border border-border/80 bg-background/80 space-y-3 shadow-xs hover:border-primary/40 transition-colors"
                     >
-                        {/* 1행: 곡 번호 | 곡 제목 Input | 아티스트 Input | 상하 이동 및 삭제 액션 버튼 */}
-                        <div className="flex items-center gap-2">
-                          <span className="inline-flex items-center justify-center size-6 rounded-md bg-muted text-muted-foreground font-mono text-xs font-bold shrink-0">
-                            #{idx + 1}
-                          </span>
+                      {/* 1행: 곡 번호 | 곡 제목 Input | 아티스트 Input | 상하 이동 및 삭제 액션 버튼 */}
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center justify-center size-6 rounded-md bg-muted text-muted-foreground font-mono text-xs font-bold shrink-0">
+                          #{idx + 1}
+                        </span>
 
-                          <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            <Input
-                              type="text"
-                              value={song.title}
-                              onChange={(e) => handleUpdateSongField(idx, "title", e.target.value)}
-                              placeholder="곡 제목 입력"
-                              className="h-8 text-xs font-semibold bg-background border-border"
-                            />
-                            <Input
-                              type="text"
-                              value={song.artist || ""}
-                              onChange={(e) => handleUpdateSongField(idx, "artist", e.target.value)}
-                              placeholder="아티스트명 (선택)"
-                              className="h-8 text-xs bg-background border-border text-muted-foreground"
-                            />
-                          </div>
-
-                          <div className="flex items-center gap-1 shrink-0">
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              disabled={idx === 0}
-                              onClick={() => handleMoveSong(idx, "up")}
-                              className="size-7 text-muted-foreground hover:text-foreground"
-                              title="위로 이동"
-                            >
-                              <ChevronUp className="size-3.5" />
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              disabled={idx === setlists.length - 1}
-                              onClick={() => handleMoveSong(idx, "down")}
-                              className="size-7 text-muted-foreground hover:text-foreground"
-                              title="아래로 이동"
-                            >
-                              <ChevronDown className="size-3.5" />
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleRemoveSong(idx)}
-                              className="size-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                              title="곡 삭제"
-                            >
-                              <Trash2 className="size-3.5" />
-                            </Button>
-                          </div>
-                        </div>
-
-                        {/* 세션별 연주자 관리 (가변 세션 추가/삭제 및 인원 배정) */}
-                        <div className="space-y-2 pt-2 border-t border-border/50">
-                          <Label className="text-[11px] font-semibold text-muted-foreground">
-                            세션 및 연주자 구성:
-                          </Label>
-
-                          <SongSessionManager
-                            slots={parseSessionSlots(song.session_members)}
-                            performers={performers}
-                            onAddSession={(name) => handleAddSessionToSong(idx, name)}
-                            onRemoveSession={(slotIdx) => handleRemoveSessionFromSong(idx, slotIdx)}
-                            onAddMember={(slotIdx, name) => handleAddMemberToSongSession(idx, slotIdx, name)}
-                            onRemoveMember={(slotIdx, name) => handleRemoveMemberFromSongSession(idx, slotIdx, name)}
+                        <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <Input
+                            type="text"
+                            value={song.title}
+                            onChange={(e) => handleUpdateSongField(idx, "title", e.target.value)}
+                            placeholder="곡 제목 입력"
+                            className="h-8 text-xs font-semibold bg-background border-border"
+                          />
+                          <Input
+                            type="text"
+                            value={song.artist || ""}
+                            onChange={(e) => handleUpdateSongField(idx, "artist", e.target.value)}
+                            placeholder="아티스트명 (선택)"
+                            className="h-8 text-xs bg-background border-border text-muted-foreground"
                           />
                         </div>
+
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            disabled={idx === 0}
+                            onClick={() => handleMoveSong(idx, "up")}
+                            className="size-7 text-muted-foreground hover:text-foreground"
+                            title="위로 이동"
+                          >
+                            <ChevronUp className="size-3.5" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            disabled={idx === setlists.length - 1}
+                            onClick={() => handleMoveSong(idx, "down")}
+                            className="size-7 text-muted-foreground hover:text-foreground"
+                            title="아래로 이동"
+                          >
+                            <ChevronDown className="size-3.5" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleRemoveSong(idx)}
+                            className="size-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                            title="곡 삭제"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </Button>
+                        </div>
                       </div>
-                    ))}
+
+                      {/* 세션별 연주자 관리 (가변 세션 추가/삭제 및 인원 배정) */}
+                      <div className="pt-2 border-t border-border/50">
+
+                        <SongSessionManager
+                          songTitle={song.title}
+                          slots={parseSessionSlots(song.session_members)}
+                          performers={performers}
+                          onAddSession={(name) => handleAddSessionToSong(idx, name)}
+                          onRemoveSession={(slotIdx) => handleRemoveSessionFromSong(idx, slotIdx)}
+                          onAddMember={(slotIdx, name) => handleAddMemberToSongSession(idx, slotIdx, name)}
+                          onRemoveMember={(slotIdx, name) => handleRemoveMemberFromSongSession(idx, slotIdx, name)}
+                          onMoveSession={(slotIdx, direction) => handleMoveSessionInSong(idx, slotIdx, direction)}
+                        />
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ) : (
                 <div className="py-6 text-center rounded-xl border border-dashed border-border/70 bg-muted/20 text-muted-foreground text-xs space-y-1">
                   <p className="font-medium">등록된 곡이 없습니다.</p>
                   <p className="text-muted-foreground/80">
-                    아래 입력창에서 곡을 추가하거나 [엑셀 일괄 가져오기]로 등록하세요.
+                    아래 입력창에서 곡을 추가하거나 [엑셀에서 공연자 / 셋리스트 불러오기]로 등록하세요.
                   </p>
                 </div>
               )}
@@ -1516,18 +2012,17 @@ export function GigForm({
                 </div>
 
                 {/* 새 곡 세션 관리 */}
-                <div className="space-y-2 pt-1 border-t border-border/50">
-                  <Label className="text-[11px] font-semibold text-muted-foreground">
-                    세션 및 연주자 구성:
-                  </Label>
+                <div className="pt-1.5 border-t border-border/50">
 
                   <SongSessionManager
+                    songTitle={newSongTitle}
                     slots={newSongSlots}
                     performers={performers}
                     onAddSession={handleAddNewSessionToNewSong}
                     onRemoveSession={handleRemoveSessionFromNewSong}
                     onAddMember={handleAddMemberToNewSongSession}
                     onRemoveMember={handleRemoveMemberFromNewSongSession}
+                    onMoveSession={handleMoveSessionInNewSong}
                   />
                 </div>
 
@@ -1543,23 +2038,38 @@ export function GigForm({
                   </Button>
                 </div>
               </div>
-            </div>
+          </CardContent>
+        </Card>
 
-            {/* 7. 공연자 명단 관리 */}
-            <div className="pt-2 border-t border-border/60">
-              <PerformerSelector
-                search={search}
-                setSearch={setSearch}
-                results={searchResults}
-                selected={performers}
-                onAdd={addPerformer}
-                onRemove={removePerformer}
-                onBulkAdd={handleBulkAdd}
-                onMapPerformer={handleMapPerformer}
-                onUpdatePart={handleUpdatePart}
-                onUpdatePhoto={handleUpdatePhoto}
-              />
+        {/* 3. 공연자 관리 섹션 */}
+        <Card className="border-border/70 shadow-sm overflow-hidden">
+          <CardHeader className="bg-muted/30 pb-4 border-b border-border/60">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-base font-bold flex items-center gap-2">
+                  <Users className="size-4 text-primary" />
+                  공연자 관리 (총 {performers.length}명)
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  공연에 참여하는 부원 명단을 등록하고 세션을 지정합니다.
+                </CardDescription>
+              </div>
             </div>
+          </CardHeader>
+
+          <CardContent className="p-5 sm:p-6">
+            <PerformerSelector
+              search={search}
+              setSearch={setSearch}
+              results={searchResults}
+              selected={performers}
+              onAdd={addPerformer}
+              onRemove={removePerformer}
+              onBulkAdd={handleBulkAdd}
+              onMapPerformer={handleMapPerformer}
+              onUpdatePart={handleUpdatePart}
+              onUpdatePhoto={handleUpdatePhoto}
+            />
           </CardContent>
         </Card>
 

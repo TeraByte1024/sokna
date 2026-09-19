@@ -1,11 +1,12 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Users, Camera, Loader2 } from "lucide-react";
+import { Users, Camera, Loader2, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { createClient } from "@/lib/supabase/client";
 import { updatePerformerPhoto } from "@/app/gigs/actions";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import type { GigPerformer } from "@/lib/gig";
 
 interface PerformerCardGridProps {
@@ -78,10 +79,32 @@ export function PerformerCardGrid({
     }
   };
 
+  // 프로필 사진 삭제 처리
+  const handlePhotoDelete = async (performerId: number) => {
+    if (!window.confirm("프로필 사진을 삭제하시겠습니까?")) return;
+    setUploadingId(performerId);
+    try {
+      const result = await updatePerformerPhoto(performerId, null);
+      if (result.ok) {
+        setPerformers((prev) =>
+          prev.map((p) => (p.id === performerId ? { ...p, photo_url: null } : p))
+        );
+        toast.success("프로필 사진이 삭제되었습니다.", { id: "performer-photo" });
+      } else {
+        toast.error(result.error || "사진 삭제에 실패했습니다.");
+      }
+    } catch (err) {
+      console.error("사진 삭제 실패:", err);
+      toast.error("사진 삭제 중 오류가 발생했습니다.");
+    } finally {
+      setUploadingId(null);
+    }
+  };
+
   if (performers.length === 0) {
     return (
       <p className="text-center py-10 text-sm text-muted-foreground">
-        아직 등록된 공연자가 없습니다.
+        아직 등록된 LINEUP이 없습니다.
       </p>
     );
   }
@@ -99,20 +122,35 @@ export function PerformerCardGrid({
 
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 sm:gap-5">
         {performers.map((p) => {
-          const canEdit = isAdmin || (Boolean(currentUserId) && p.user_id === currentUserId);
+          const isSelf = Boolean(currentUserId) && p.user_id === currentUserId;
+          const canEdit = isAdmin || isSelf;
           const isUploading = uploadingId === p.id;
 
           return (
             <div
               key={p.id}
-              className="flex flex-col bg-card border border-border/70 rounded-2xl p-2.5 sm:p-3 shadow-xs hover:border-primary/40 hover:shadow-md transition-all group relative"
+              className={cn(
+                "flex flex-col bg-card border rounded-2xl p-2.5 sm:p-3 shadow-xs hover:border-primary/40 hover:shadow-md transition-all group relative",
+                isSelf
+                  ? "border-primary/50 ring-1 ring-primary/20 bg-primary/[0.02]"
+                  : "border-border/70"
+              )}
             >
               {/* 프로필 사진: 세로로 긴 3:4 비율의 모서리 둥근 직사각형 */}
               <div className="relative aspect-[3/4] w-full rounded-xl overflow-hidden bg-muted/30 border border-border/60">
+                {/* 본인 식별 배지 */}
+                {isSelf && (
+                  <div className="absolute top-2 left-2 z-10">
+                    <Badge className="bg-primary text-primary-foreground text-[10px] font-bold px-1.5 py-0 shadow-xs pointer-events-none">
+                      나
+                    </Badge>
+                  </div>
+                )}
+
                 {p.photo_url ? (
                   <img
                     src={p.photo_url}
-                    alt={p.user?.name || "공연자"}
+                    alt={p.user?.name || p.name || "LINEUP"}
                     className="w-full h-full object-cover rounded-xl transition-transform duration-300 group-hover:scale-102"
                   />
                 ) : (
@@ -129,16 +167,36 @@ export function PerformerCardGrid({
                   </div>
                 )}
 
-                {/* 관리자 또는 본인 전용 사진 업로드 버튼 */}
+                {/* 관리자 또는 본인 전용 사진 업로드/삭제 버튼 */}
                 {canEdit && !isUploading && (
-                  <button
-                    type="button"
-                    onClick={() => triggerUpload(p.id)}
-                    className="absolute bottom-2 right-2 size-8 rounded-full bg-background/90 hover:bg-background text-foreground shadow-md flex items-center justify-center transition-all border border-border/80 hover:scale-105 z-10"
-                    title={p.photo_url ? "프로필 사진 변경" : "프로필 사진 등록"}
-                  >
-                    <Camera className="size-4" />
-                  </button>
+                  <div className="absolute bottom-2 right-2 flex items-center gap-1 z-10">
+                    {p.photo_url && (
+                      <button
+                        type="button"
+                        onClick={() => handlePhotoDelete(p.id)}
+                        className="size-7 sm:size-8 rounded-full bg-background/90 hover:bg-destructive hover:text-destructive-foreground text-muted-foreground shadow-md flex items-center justify-center transition-all border border-border/80 hover:scale-105 cursor-pointer"
+                        title={isSelf ? "내 프로필 사진 삭제" : "프로필 사진 삭제 (관리자)"}
+                      >
+                        <Trash2 className="size-3.5" />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => triggerUpload(p.id)}
+                      className="size-7 sm:size-8 rounded-full bg-background/90 hover:bg-background text-foreground shadow-md flex items-center justify-center transition-all border border-border/80 hover:scale-105 cursor-pointer"
+                      title={
+                        isSelf
+                          ? p.photo_url
+                            ? "내 프로필 사진 변경"
+                            : "내 프로필 사진 등록"
+                          : p.photo_url
+                            ? "프로필 사진 변경 (관리자)"
+                            : "프로필 사진 등록 (관리자)"
+                      }
+                    >
+                      <Camera className="size-3.5 sm:size-4" />
+                    </button>
+                  </div>
                 )}
               </div>
 

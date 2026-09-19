@@ -2,9 +2,14 @@ export type Gig = {
   id: number;
   title: string;
   subtitle?: string | null;
+  advance_ticket_price?: number | null;
+  door_ticket_price?: number | null;
   perform_date: string | null;
+  perform_time?: string | null;
   meeting_date: string | null;
+  meeting_time?: string | null;
   location: string | null;
+  meeting_location?: string | null;
   poster_url: string | null;
   is_public: boolean;
   created_at: string;
@@ -142,18 +147,38 @@ export function mapGigRow(row: Record<string, unknown>): Gig {
       row.subtitle == null || row.subtitle === ""
         ? null
         : String(row.subtitle),
+    advance_ticket_price:
+      row.advance_ticket_price == null || row.advance_ticket_price === ""
+        ? null
+        : Number(row.advance_ticket_price),
+    door_ticket_price:
+      row.door_ticket_price == null || row.door_ticket_price === ""
+        ? null
+        : Number(row.door_ticket_price),
     perform_date:
       row.perform_date == null || row.perform_date === ""
         ? null
         : String(row.perform_date),
+    perform_time:
+      row.perform_time == null || row.perform_time === ""
+        ? null
+        : String(row.perform_time),
     meeting_date:
       row.meeting_date == null || row.meeting_date === ""
         ? null
         : String(row.meeting_date),
+    meeting_time:
+      row.meeting_time == null || row.meeting_time === ""
+        ? null
+        : String(row.meeting_time),
     location:
       row.location == null || row.location === ""
         ? null
         : String(row.location),
+    meeting_location:
+      row.meeting_location == null || row.meeting_location === ""
+        ? null
+        : String(row.meeting_location),
     poster_url:
       row.poster_url == null || row.poster_url === ""
         ? null
