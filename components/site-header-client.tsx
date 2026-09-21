@@ -22,9 +22,9 @@ interface SecondaryNavLink extends NavLink {
 const gigsLink: NavLink = { href: "/gigs", label: "공연" };
 
 const secondaryLinks: SecondaryNavLink[] = [
-  { href: "/history", label: "역사", icon: History },
-  { href: "/members", label: "부원", icon: Users },
-  { href: "/photos", label: "갤러리", icon: ImageIcon },
+  // { href: "/history", label: "역사", icon: History },
+  // { href: "/members", label: "부원", icon: Users },
+  // { href: "/photos", label: "갤러리", icon: ImageIcon },
 ];
 
 const anniversaryLink: NavLink = {
@@ -123,7 +123,7 @@ export function SiteHeaderClient({ authButton }: SiteHeaderClientProps) {
             {secondaryLinks.map((link) => renderNavLink(link, "hidden md:inline-flex"))}
 
             {/* '🎂 40주년' 링크 (항상 노출) */}
-            {renderNavLink(anniversaryLink)}
+            {/* {renderNavLink(anniversaryLink)} */}
           </nav>
         </div>
 
