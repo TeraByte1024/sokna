@@ -21,6 +21,7 @@ import {
   LeaveConfirmDialog,
   useUnsavedChangesWarning,
 } from "@/components/ui/leave-confirm-dialog";
+import { dispatchSignupPushNotificationsAction } from "@/app/auth/sign-up/actions";
 
 const SESSION_PRESETS = [
   "보컬",
@@ -139,6 +140,10 @@ export function SignUpForm({
       });
 
       if (signUpError) throw signUpError;
+
+      // DB 트리거가 만든 관리자용 가입 요청 outbox를 즉시 발송합니다.
+      // 실패하더라도 가입은 유지되고 cron이 남은 pending 레코드를 복구합니다.
+      await dispatchSignupPushNotificationsAction();
       
       markSubmitting();
       router.push("/auth/sign-up-success");

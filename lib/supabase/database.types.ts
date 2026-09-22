@@ -324,6 +324,11 @@ export type Database = {
           created_at: string
           id: string
           link: string | null
+          push_attempted_at: string | null
+          push_eligible: boolean
+          push_error: string | null
+          push_sent_at: string | null
+          push_status: string
           title: string | null
           user_id: string | null
         }
@@ -332,6 +337,11 @@ export type Database = {
           created_at?: string
           id?: string
           link?: string | null
+          push_attempted_at?: string | null
+          push_eligible?: boolean
+          push_error?: string | null
+          push_sent_at?: string | null
+          push_status?: string
           title?: string | null
           user_id?: string | null
         }
@@ -340,6 +350,11 @@ export type Database = {
           created_at?: string
           id?: string
           link?: string | null
+          push_attempted_at?: string | null
+          push_eligible?: boolean
+          push_error?: string | null
+          push_sent_at?: string | null
+          push_status?: string
           title?: string | null
           user_id?: string | null
         }
@@ -600,6 +615,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      approve_member_with_notification: {
+        Args: { p_user_id: string }
+        Returns: boolean
+      }
       is_admin: { Args: never; Returns: boolean }
     }
     Enums: {

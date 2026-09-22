@@ -24,11 +24,12 @@ export async function AuthButton() {
   let pendingCount = 0;
   let userStatus: string | null = null;
   let userName: string | null = null;
+  let marketingOptIn = false;
 
   if (user.sub) {
     const { data: userProfile } = await supabase
       .from("users")
-      .select("name, status")
+      .select("name, status, marketing_opt_in")
       .eq("id", user.sub)
       .maybeSingle();
 
@@ -42,6 +43,7 @@ export async function AuthButton() {
       metaName ||
       null;
     userStatus = userProfile?.status ?? null;
+    marketingOptIn = userProfile?.marketing_opt_in ?? false;
   }
 
   if (isAdmin) {
@@ -86,6 +88,7 @@ export async function AuthButton() {
       <UserProfileMenu
         userName={userName}
         userEmail={user.email}
+        marketingOptIn={marketingOptIn}
       />
     </div>
   );

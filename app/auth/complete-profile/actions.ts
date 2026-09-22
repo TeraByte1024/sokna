@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
+import { processPendingPushNotificationsByIds } from "@/lib/push-notifications";
 
 export type CompleteProfileResult =
   | { ok: true }
@@ -56,15 +58,25 @@ export async function completeProfileAction(
 
     // 관리자들에게 알림 전송
     try {
-      const { data: admins } = await supabase.from("admins").select("id");
+      const serviceClient = createServiceClient();
+      const { data: admins } = await serviceClient.from("admins").select("id");
       if (admins && admins.length > 0) {
         const notis = admins.map((admin) => ({
           user_id: admin.id,
           title: "신규 회원가입 승인 요청 (Google)",
           body: `${trimmedName} (${generation}기, ${trimmedPart})님이 Google 계정으로 가입 승인을 요청했습니다.`,
           link: "/admin/members",
+          push_eligible: true,
         }));
-        await supabase.from("notifications").insert(notis);
+        const { data: insertedNotifications, error: notificationError } = await serviceClient
+          .from("notifications")
+          .insert(notis)
+          .select("id");
+        if (notificationError) throw notificationError;
+
+        await processPendingPushNotificationsByIds(
+          (insertedNotifications ?? []).map((notification) => notification.id),
+        );
       }
     } catch (notiErr) {
       console.warn("관리자 알림 실패 건너뜀:", notiErr);

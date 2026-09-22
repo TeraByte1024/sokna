@@ -2,8 +2,14 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { User, LogOut } from "lucide-react";
+import { useState } from "react";
+import { Bell, BellOff, Loader2, User, LogOut } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import {
+  MarketingPushConsentDialog,
+  usePushNotificationDevice,
+} from "@/components/push-notification-settings";
+import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,10 +21,14 @@ import {
 interface UserProfileMenuProps {
   userName: string | null;
   userEmail?: string;
+  marketingOptIn: boolean;
 }
 
-export function UserProfileMenu({ userName, userEmail }: UserProfileMenuProps) {
+export function UserProfileMenu({ userName, userEmail, marketingOptIn }: UserProfileMenuProps) {
   const router = useRouter();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [consentDialogOpen, setConsentDialogOpen] = useState(false);
+  const push = usePushNotificationDevice(marketingOptIn);
 
   const handleLogout = async () => {
     const supabase = createClient();
@@ -28,7 +38,8 @@ export function UserProfileMenu({ userName, userEmail }: UserProfileMenuProps) {
   };
 
   return (
-    <DropdownMenu>
+    <>
+    <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
       <DropdownMenuTrigger asChild>
         <button
           type="button"
@@ -73,6 +84,47 @@ export function UserProfileMenu({ userName, userEmail }: UserProfileMenuProps) {
           </Link>
         </DropdownMenuItem>
 
+        <DropdownMenuItem
+          disabled={push.isPending || push.permission === "unsupported" || push.permission === "denied"}
+          onSelect={(event) => {
+            event.preventDefault();
+            if (push.enabled) {
+              void push.disablePush();
+              return;
+            }
+            if (!push.hasMarketingConsent) {
+              setMenuOpen(false);
+              setConsentDialogOpen(true);
+              return;
+            }
+            void push.enablePush();
+          }}
+          className="cursor-pointer py-2"
+        >
+          {push.isPending ? (
+            <Loader2 className="animate-spin text-muted-foreground" />
+          ) : push.enabled ? (
+            <Bell className="text-primary" />
+          ) : (
+            <BellOff className="text-muted-foreground" />
+          )}
+          <span className="font-medium text-xs sm:text-sm">이 기기에서 알림 받기</span>
+          <span
+            aria-hidden="true"
+            className={cn(
+              "ml-auto relative h-5 w-9 rounded-full transition-colors",
+              push.enabled ? "bg-primary" : "bg-muted-foreground/30",
+            )}
+          >
+            <span
+              className={cn(
+                "absolute top-0.5 h-4 w-4 rounded-full bg-background shadow-sm transition-transform",
+                push.enabled ? "translate-x-[18px]" : "translate-x-0.5",
+              )}
+            />
+          </span>
+        </DropdownMenuItem>
+
         <DropdownMenuSeparator />
 
         <DropdownMenuItem
@@ -84,5 +136,16 @@ export function UserProfileMenu({ userName, userEmail }: UserProfileMenuProps) {
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+    <MarketingPushConsentDialog
+      isOpen={consentDialogOpen}
+      isPending={push.isPending}
+      onClose={() => setConsentDialogOpen(false)}
+      onConfirm={() => {
+        void push.consentAndEnablePush().then((ok) => {
+          if (ok) setConsentDialogOpen(false);
+        });
+      }}
+    />
+    </>
   );
 }

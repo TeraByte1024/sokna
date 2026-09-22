@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,7 +20,6 @@ import { LeaveConfirmDialog, useUnsavedChangesWarning } from "@/components/ui/le
 import {
   User,
   Mail,
-  Calendar,
   Sparkles,
   ShieldCheck,
   Crown,
@@ -57,6 +57,7 @@ interface ProfileFormProps {
 }
 
 export function ProfileForm({ user, isAdmin }: ProfileFormProps) {
+  const router = useRouter();
   const [name, setName] = useState(user.name || "");
   const [generation, setGeneration] = useState(
     user.generation ? String(user.generation) : ""
@@ -76,6 +77,10 @@ export function ProfileForm({ user, isAdmin }: ProfileFormProps) {
   const [marketingOptIn, setMarketingOptIn] = useState<boolean>(
     user.marketing_opt_in ?? false
   );
+
+  useEffect(() => {
+    setMarketingOptIn(user.marketing_opt_in ?? false);
+  }, [user.marketing_opt_in]);
 
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState<{
@@ -154,6 +159,7 @@ export function ProfileForm({ user, isAdmin }: ProfileFormProps) {
 
       if (res.ok) {
         markSubmitting();
+        router.refresh();
         toast.success(res.message || "회원 정보가 성공적으로 수정되었습니다.");
         setMessage({
           type: "success",
@@ -420,7 +426,7 @@ export function ProfileForm({ user, isAdmin }: ProfileFormProps) {
               </p>
             </div>
 
-            {/* 마케팅 및 안내 수신 동의 */}
+            {/* 앱 푸시 알림 수신 동의 */}
             <div className="pt-3 border-t border-border/40">
               <div className="flex items-start space-x-2.5">
                 <Checkbox
@@ -429,15 +435,23 @@ export function ProfileForm({ user, isAdmin }: ProfileFormProps) {
                   onCheckedChange={(checked) => setMarketingOptIn(Boolean(checked))}
                   className="mt-0.5"
                 />
-                <div className="space-y-0.5">
-                  <Label
-                    htmlFor="marketingOptIn"
-                    className="text-xs font-semibold cursor-pointer"
-                  >
-                    동아리 공연 및 행사 소식 수신 동의 (선택)
-                  </Label>
+                <div className="flex-1 space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Label
+                      htmlFor="marketingOptIn"
+                      className="text-xs font-semibold cursor-pointer"
+                    >
+                      앱 푸시 알림 수신 동의 (선택)
+                    </Label>
+                    <Badge
+                      variant={marketingOptIn ? "default" : "outline"}
+                      className="h-5 px-1.5 text-[10px]"
+                    >
+                      {marketingOptIn ? "동의 중" : "미동의"}
+                    </Badge>
+                  </div>
                   <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    소크나 정기공연, 버스킹, 총회 및 동문 행사 안내 소식을 이메일로 받아봅니다.
+                    소크나 공연, 행사, 가입 승인 및 선곡회의 소식을 앱 푸시로 받아봅니다. 기기 등록은 헤더 프로필 메뉴에서 관리합니다.
                   </p>
                 </div>
               </div>

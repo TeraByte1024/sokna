@@ -1,12 +1,25 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { processNotificationQueue } from "@/lib/nomination-notifications";
+import { processPendingPushNotifications } from "@/lib/push-notifications";
 
-export async function GET() {
+function isAuthorized(request: NextRequest) {
+	const secret = process.env.CRON_SECRET;
+	if (!secret) return process.env.NODE_ENV !== "production";
+	return request.headers.get("authorization") === `Bearer ${secret}`;
+}
+
+export async function GET(request: NextRequest) {
+	if (!isAuthorized(request)) {
+		return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+	}
+
 	try {
-		const result = await processNotificationQueue();
+		const nominationQueues = await processNotificationQueue();
+		const pendingPush = await processPendingPushNotifications();
 		return NextResponse.json({
 			ok: true,
-			...result,
+			nominationQueues,
+			pendingPush,
 			timestamp: new Date().toISOString(),
 		});
 	} catch (error: unknown) {
@@ -19,6 +32,6 @@ export async function GET() {
 	}
 }
 
-export async function POST() {
-	return GET();
+export async function POST(request: NextRequest) {
+	return GET(request);
 }

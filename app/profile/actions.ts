@@ -52,6 +52,18 @@ export async function updateMyProfileAction(
       return { ok: false, error: updateError.message };
     }
 
+    // 수신 동의를 철회하면 등록된 모든 기기 토큰도 즉시 제거합니다.
+    if (!marketingOptIn) {
+      const { error: tokenDeleteError } = await supabase
+        .from("profiles")
+        .delete()
+        .eq("user_id", user.id);
+      if (tokenDeleteError) {
+        console.error("푸시 토큰 삭제 실패:", tokenDeleteError);
+        return { ok: false, error: "수신 동의는 변경됐지만 푸시 토큰 해제에 실패했습니다." };
+      }
+    }
+
     // 만약 사용자가 관리자(admins 테이블)인 경우 이름 동기화
     try {
       await supabase

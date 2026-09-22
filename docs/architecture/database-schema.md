@@ -284,11 +284,22 @@ erDiagram
 | 컬럼명 | 데이터 타입 | Nullable | 기본값 | 설명 |
 | :--- | :--- | :--- | :--- | :--- |
 | `id` | `uuid` | NO | - | 알림 식별자 |
-| `user_id` | `uuid` | YES | null | FK → `users(id)` (수신 대상) |
+| `user_id` | `uuid` | YES | null | FK → `users(id)` (수신 대상, 사용자 삭제 시 `ON DELETE SET NULL`) |
 | `title` | `text` | YES | null | 알림 제목 |
 | `body` | `text` | YES | null | 알림 내용 |
 | `link` | `text` | YES | null | 클릭 시 이동할 URL 경로 |
 | `created_at` | `timestamptz` | NO | `now()` | 발송 일시 |
+| `push_eligible` | `bool` | NO | `false` | FCM 푸시 발송 대상 이벤트 여부 |
+| `push_status` | `text` | NO | `'pending'` | `pending`, `processing`, `sent`, `skipped`, `failed` |
+| `push_attempted_at` | `timestamptz` | YES | null | 마지막 발송 시도 시각 |
+| `push_sent_at` | `timestamptz` | YES | null | FCM 발송 성공 시각 |
+| `push_error` | `text` | YES | null | 미발송 또는 실패 사유 |
+
+> **푸시 수신 제한**: 실제 FCM 발송 직전 `users.marketing_opt_in = true`를 서버에서 재검증합니다. `profiles.fcm_token`은 전역 고유하며 사용자는 본인의 토큰만 조회/등록/삭제할 수 있습니다.
+
+> **사용자 삭제**: `notifications` 로그는 보존하되 사용자 삭제를 막지 않도록, `users` 레코드가 삭제되면 해당 알림의 `user_id`만 외래키 `ON DELETE SET NULL`로 해제됩니다.
+
+회원 승인에는 `approve_member_with_notification(p_user_id uuid)` DB 함수를 사용합니다. 이 함수는 관리자 권한을 확인하고 `pending → approved` 상태 변경과 승인 완료 푸시 outbox 생성을 단일 트랜잭션으로 처리하며, 이미 처리된 사용자는 `false`를 반환합니다.
 
 ### 2.8 `photos` (갤러리 사진첩)
 동아리 정기 공연 및 연습 활동 사진을 관리합니다.

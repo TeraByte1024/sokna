@@ -32,14 +32,14 @@
    - 15분 내에 동일한 공연에 추가로 곡이 등록되면 기존 대기열의 `song_ids`에 누적되고, `scheduled_at`이 마지막 등록 시점 기준 15분 후로 자동 연장(디바운스)됩니다.
 3. **발송 처리 (`processNotificationQueue`)**:
    - `scheduled_at <= now() AND status = 'pending'`인 만료 대기열을 조회하여 처리.
-   - 해당 공연의 참여 세션원(`performers`) 중 유효 계정을 가진 부원들에게 `notifications` 테이블에 일괄 등록:
+   - 해당 공연의 참여 세션원(`performers`) 중 유효 계정이며 `users.marketing_opt_in = true`인 부원들에게 `notifications` 테이블에 일괄 등록하고 FCM 푸시 발송:
      - **제목**: `🎵 [공연명] 새 후보곡 N건 등록`
      - **본문**: 곡 명칭 요약 (예: `'곡1', '곡2'이(가) 선곡회의에 추천되었습니다. 지금 세션 편성과 악보를 확인해보세요!`)
      - **링크**: `/gigs/:id/nominations`
-     - **수신 제외**: 곡을 등록한 본인(`triggered_by`)은 알림 대상에서 자동 제외.
+   - **수신 제외**: 곡을 등록한 본인(`triggered_by`)과 마케팅 알림 미동의 계정은 자동 제외.
    - 발송 완료 시 `status = 'sent'`, `sent_at = now()`로 상태 전이.
 4. **발송 트리거 파이프라인**:
-   - **Cron 엔드포인트**: `/api/cron/notifications` (Vercel Cron, Supabase pg_cron 등 주기적 호출 지원)
+   - **Cron 엔드포인트**: `/api/cron/notifications` (`CRON_SECRET` Bearer 인증, 외부 스케줄러에서 매분 호출)
    - **Passive Drain**: 새 곡 등록 시 백그라운드에서 이전 만료 큐가 있을 경우 즉시 함께 소진 처리.
 
 ---

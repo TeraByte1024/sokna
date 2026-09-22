@@ -93,5 +93,6 @@ docs/
 | **Architecture** | [database-schema.md](./architecture/database-schema.md) | Supabase DB 스키마, 테이블 상세, ERD, 제약조건 |
 | **Maintenance** | [environment-setup.md](./maintenance/environment-setup.md) | `.env.local` 환경 변수 설정 및 로컬 서버 구동 |
 | **Maintenance** | [supabase-workflow.md](./maintenance/supabase-workflow.md) | DB 변경 사항 반영, `npm run types` 스크립트 활용법 |
+| **Maintenance** | [push-notification-test-20260922.md](./maintenance/push-notification-test-20260922.md) | 2026-09-22 웹 푸시 즉시 알림 통합 테스트 증적 및 남은 검증 |
 | **Template** | [feature-spec-template.md](./templates/feature-spec-template.md) | 신규 기능 개발을 위한 표준 명세 작성 양식 |
 

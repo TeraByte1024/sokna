@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getIsAdmin } from "@/lib/auth-admin";
+import { processPendingApprovalPushNotification } from "@/lib/push-notifications";
 
 export type AdminMember = {
   id: string;
@@ -69,32 +70,26 @@ export async function approveMemberAction(
     }
 
     const supabase = await createClient();
-    const now = new Date().toISOString();
+    const { data: approved, error: approveError } = await supabase.rpc(
+      "approve_member_with_notification",
+      { p_user_id: userId },
+    );
 
-    const { error: updateError } = await supabase
-      .from("users")
-      .update({
-        status: "approved",
-        approved_at: now,
-      })
-      .eq("id", userId);
-
-    if (updateError) {
-      console.error("회원 승인 실패:", updateError);
-      return { ok: false, error: updateError.message };
+    if (approveError) {
+      console.error("회원 승인 실패:", approveError);
+      return { ok: false, error: approveError.message };
     }
 
-    // 승인된 회원에게 알림 전송
+    if (!approved) {
+      return { ok: false, error: "승인 대기 중인 회원을 찾을 수 없습니다." };
+    }
+
     try {
-      await supabase.from("notifications").insert({
-        user_id: userId,
-        title: "회원가입 승인 완료",
-        body: "소리로 크는 나무(소크나)의 정식 회원으로 승인되었습니다. 환영합니다!",
-        link: "/members",
-        created_at: now,
-      });
-    } catch (notiErr) {
-      console.warn("승인 완료 알림 발송 건너뜀:", notiErr);
+      await processPendingApprovalPushNotification(userId);
+    } catch (pushError) {
+      // 승인은 이미 DB 트랜잭션으로 완료됐으므로 성공을 유지합니다.
+      // pending outbox는 cron이 복구합니다.
+      console.warn("승인 완료 즉시 푸시 실패, cron 재시도 대기:", pushError);
     }
 
     revalidatePath("/admin/members");

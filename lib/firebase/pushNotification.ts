@@ -1,59 +1,37 @@
 "use client";
 
-import { getToken, isSupported, onMessage } from "firebase/messaging";
+import { deleteToken, getToken, isSupported, onMessage, type MessagePayload } from "firebase/messaging";
 import { messaging } from "@/lib/firebase/firebase";
 
-// 푸시 알림 권한 요청
 export async function requestNotificationPermission() {
-  // 서비스워커 등록 오류
-  if (!window.navigator.serviceWorker) {
-    return { data: null, error: "서비스워커 등록 오류" };
-  }
-
-  // FCM 지원 여부 확인
-  const supported = await isSupported();
-  if (!supported) {
-    return { data: null, error: "이 브라우저는 FCM을 지원하지 않습니다." };
-  }
-
-  // 알림 권한 요청
-  const permission = await Notification.requestPermission();
-
-  // 알림 거부
-  if (permission === "denied") {
-    return { data: null, error: "알림 거부" };
-  }
-
-  // ...알림 권한 허용 시 실행할 코드...
-  return { data: "알림 허용", error: null };
+	if (!("serviceWorker" in navigator)) {
+		return { data: null, error: "서비스 워커를 지원하지 않는 브라우저입니다." };
+	}
+	if (!(await isSupported())) {
+		return { data: null, error: "이 브라우저는 FCM을 지원하지 않습니다." };
+	}
+	const permission = await Notification.requestPermission();
+	return permission === "granted"
+		? { data: permission, error: null }
+		: { data: null, error: "브라우저 알림 권한이 허용되지 않았습니다." };
 }
 
-// FCM 토큰 발급
-export async function getFcmToken() {
-  // messaging이 undefined인 경우 처리
-  if (!messaging) {
-    return { data: null, error: "Firebase Messaging이 초기화되지 않았습니다." };
-  }
-  // 토큰 발급
-  const token = await getToken(messaging, {
-    vapidKey: process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY,
-  });
-
-  if (!token) {
-    return { data: null, error: "토큰 발급 실패" };
-  }
-
-  return { data: token, error: null };
+export async function getFcmToken(serviceWorkerRegistration?: ServiceWorkerRegistration) {
+	if (!messaging) return { data: null, error: "Firebase Messaging이 초기화되지 않았습니다." };
+	const token = await getToken(messaging, {
+		vapidKey: process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY,
+		serviceWorkerRegistration,
+	});
+	return token ? { data: token, error: null } : { data: null, error: "FCM 토큰 발급에 실패했습니다." };
 }
 
-// 푸시 알림 메시지 수신
-export async function onForegroundMessage() {
-  if (!messaging) {
-    return { data: null, error: "Firebase Messaging이 초기화되지 않았습니다." };
-  }
+export async function deleteFcmToken() {
+	if (!messaging) return { data: null, error: "Firebase Messaging이 초기화되지 않았습니다." };
+	const deleted = await deleteToken(messaging);
+	return deleted ? { data: true, error: null } : { data: null, error: "브라우저 토큰 삭제에 실패했습니다." };
+}
 
-  // 포그라운드 환경에서 메시지 수신 시 실행
-  onMessage(messaging, (payload) => {
-    alert("메시지가 도착했습니다." + payload);
-  });
+export async function onForegroundMessage(handler: (payload: MessagePayload) => void) {
+	if (!messaging) return { data: null, error: "Firebase Messaging이 초기화되지 않았습니다." };
+	return { data: onMessage(messaging, handler), error: null };
 }

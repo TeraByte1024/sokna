@@ -1,4 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
+import { sendPushToUsers } from "@/lib/push-notifications";
 
 // 알림 지연 버퍼 시간 (기본 15분)
 const NOTIFICATION_DELAY_MINUTES = 15;
@@ -14,7 +16,7 @@ export async function enqueueSongNotification(
 	triggeredByUserId: string,
 ): Promise<void> {
 	try {
-		const supabase = await createClient();
+		const supabase = createServiceClient();
 		const now = new Date();
 		const scheduledAt = new Date(now.getTime() + NOTIFICATION_DELAY_MINUTES * 60 * 1000).toISOString();
 
@@ -84,7 +86,7 @@ export async function processNotificationQueue(): Promise<{
 	let totalNotificationsSent = 0;
 
 	try {
-		const supabase = await createClient();
+		const supabase = createServiceClient();
 		const nowIso = new Date().toISOString();
 
 		// 1. 발송 대기 중인 만료 큐 조회
@@ -154,23 +156,72 @@ export async function processNotificationQueue(): Promise<{
 				);
 
 				if (recipientUserIds.length > 0) {
-					// 푸시 발송 API 호출
-					const origin = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-					const pushRes = await fetch(`${origin}/api/push/send`, {
-						method: "POST",
-						headers: { "Content-Type": "application/json" },
-						body: JSON.stringify({
-							userIds: recipientUserIds,
-							title: `[${gigTitle}] 선곡회의 새 후보곡 등록`,
-							body: `${songTitlesText}이(가) 등록되었습니다. 참여 가능한 세션을 응답해주세요!`,
-							url: `/gigs/${queue.gig_id}/nominations`,
-							tag: `gig-nomination-${queue.gig_id}`,
-						}),
-					});
+					const title = `[${gigTitle}] 선곡회의 새 후보곡 등록`;
+					const body = `${songTitlesText}이(가) 등록되었습니다. 참여 가능한 세션을 응답해주세요!`;
+					const link = `/gigs/${queue.gig_id}/nominations`;
 
-					if (pushRes.ok) {
-						const pushResult = await pushRes.json();
-						totalNotificationsSent += pushResult.sentCount || recipientUserIds.length;
+					// 서버에서 마케팅 동의자를 먼저 제한합니다. sendPushToUsers도 다시 검증합니다.
+					const { data: eligibleUsers, error: eligibleError } = await supabase
+						.from("users")
+						.select("id")
+						.in("id", recipientUserIds)
+						.eq("marketing_opt_in", true);
+					if (eligibleError) throw eligibleError;
+
+					const eligibleIds = (eligibleUsers ?? []).map((user) => user.id);
+					if (eligibleIds.length > 0) {
+						const { data: notificationRows, error: notificationError } = await supabase
+							.from("notifications")
+							.insert(
+								eligibleIds.map((userId) => ({
+									user_id: userId,
+									title,
+									body,
+									link,
+									push_eligible: true,
+									push_status: "processing",
+									push_attempted_at: new Date().toISOString(),
+								})),
+							)
+							.select("id");
+						if (notificationError) throw notificationError;
+
+						try {
+							const result = await sendPushToUsers(eligibleIds, {
+								title,
+								body,
+								url: link,
+								tag: `gig-nomination-${queue.gig_id}`,
+							});
+							totalNotificationsSent += result.sentCount;
+
+							if (notificationRows && notificationRows.length > 0) {
+								await supabase
+									.from("notifications")
+									.update({
+										push_status: result.sentCount > 0 ? "sent" : "skipped",
+										push_sent_at:
+											result.sentCount > 0 ? new Date().toISOString() : null,
+										push_error:
+											result.sentCount > 0 ? null : "no_active_token",
+									})
+									.in("id", notificationRows.map((row) => row.id));
+							}
+						} catch (pushError) {
+							if (notificationRows && notificationRows.length > 0) {
+								await supabase
+									.from("notifications")
+									.update({
+										push_status: "failed",
+										push_error:
+											pushError instanceof Error
+												? pushError.message.slice(0, 500)
+												: "unknown_error",
+									})
+									.in("id", notificationRows.map((row) => row.id));
+							}
+							throw pushError;
+						}
 					}
 				}
 
