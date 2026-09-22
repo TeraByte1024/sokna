@@ -231,8 +231,8 @@ erDiagram
 > **기본키**: `PRIMARY KEY (user_id, gig_id)`  
 > **RLS**: 본인(`auth.uid() = user_id`)만 조회/등록/수정 가능
 
-### 2.9 `gig_notification_queue` (새 곡 지연 알림 대기열)
-새 곡 등록 시 일정 시간(15분 디바운스 버퍼) 동안 추가 등록되는 곡들을 모아서 일괄 알림을 발송하기 위한 스케줄 대기열입니다.
+### 2.9 `gig_notification_queue` (새 곡 즉시 알림 대기열)
+새 후보곡 등록 이벤트를 기록하고 중복 처리를 방지하며, 등록 요청 안에서 즉시 알림을 발송하기 위한 대기열입니다. 현재 기존 15분 디바운스는 비활성화되어 `scheduled_at = now()`를 사용합니다.
 
 | 컬럼명 | 데이터 타입 | Nullable | 기본값 | 설명 및 관계 |
 | :--- | :--- | :--- | :--- | :--- |
@@ -240,7 +240,7 @@ erDiagram
 | `gig_id` | `int8` | NO | - | FK → `gigs(id)` (ON DELETE CASCADE) |
 | `triggered_by` | `uuid` | YES | null | FK → `users(id)` (등록자 제외용) |
 | `song_ids` | `int8[]` | NO | `'{}'` | 누적 등록된 후보곡 ID 배열 |
-| `scheduled_at` | `timestamptz` | NO | - | 알림 발송 예정 일시 (디바운스 연장) |
+| `scheduled_at` | `timestamptz` | NO | - | 알림 처리 가능 일시 (현재 즉시 처리를 위해 생성 시각과 동일) |
 | `status` | `text` | NO | `'pending'` | 상태 (`'pending'`, `'processing'`, `'sent'`, `'cancelled'`) |
 | `created_at` | `timestamptz` | NO | `now()` | 큐 생성 일시 |
 | `sent_at` | `timestamptz` | YES | null | 발송 완료 일시 |

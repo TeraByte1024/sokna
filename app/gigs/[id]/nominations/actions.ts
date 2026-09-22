@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { getIsAdmin } from "@/lib/auth-admin";
-import type { NominationFormValues, SetlistFormValues } from "@/lib/nomination";
+import type { NominationFormValues } from "@/lib/nomination";
 import {
 	enqueueSongNotification,
 	processNotificationQueue,
@@ -13,7 +13,7 @@ import {
 /**
  * 선곡회의 후보곡 등록 액션
  * - nominations 테이블에 저장
- * - 새 곡 알림 대기열(15분 지연 디바운스 큐)에 등록
+ * - 새 곡 알림 큐를 생성하고 요청 안에서 즉시 발송
  */
 export async function addNomination(gigId: string, payload: NominationFormValues) {
 	const supabase = await createClient();
@@ -88,13 +88,15 @@ export async function addNomination(gigId: string, payload: NominationFormValues
 		throw new Error("후보곡 등록 중 오류가 발생했습니다: " + (error?.message || ""));
 	}
 
-	// 4. 지연 알림 대기열(Queue)에 예약 등록
+	// 4. 알림 큐를 생성하고 현재 요청 안에서 즉시 처리
 	try {
-		await enqueueSongNotification(numericGigId, inserted.id, user.id);
-		// 만료된 이전 알림이 있다면 백그라운드에서 함께 처리 (passive drain)
-		processNotificationQueue().catch((err) => {
-			console.warn("Background notification queue drain warning:", err);
-		});
+		const queueId = await enqueueSongNotification(numericGigId, inserted.id, user.id);
+		if (queueId !== null) {
+			const result = await processNotificationQueue([queueId]);
+			if (result.processedCount === 0) {
+				console.warn("후보곡 알림 큐가 즉시 처리되지 않았습니다:", queueId);
+			}
+		}
 	} catch (queueErr) {
 		console.warn("알림 큐 등록 실패 건너뜀:", queueErr);
 	}
@@ -352,9 +354,12 @@ export async function saveNominationResponsesAction(
 
 		revalidatePath(`/gigs/${gigId}/nominations`);
 		return { ok: true };
-	} catch (err: any) {
+	} catch (err: unknown) {
 		console.error("saveNominationResponsesAction catch error:", err);
-		return { ok: false, error: err.message || "응답 저장에 실패했습니다." };
+		return {
+			ok: false,
+			error: err instanceof Error ? err.message : "응답 저장에 실패했습니다.",
+		};
 	}
 }
 

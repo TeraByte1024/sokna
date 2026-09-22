@@ -2,19 +2,19 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { sendPushToUsers } from "@/lib/push-notifications";
 
-// 알림 지연 버퍼 시간 (기본 15분)
-const NOTIFICATION_DELAY_MINUTES = 15;
+// 즉시 알림 테스트 기간에는 디바운스 지연을 사용하지 않습니다.
+const NOTIFICATION_DELAY_MINUTES = 0;
 
 /**
- * 선곡회의 새 후보곡 등록 시 알림 대기열(Queue)에 추가 및 지연 예약
- * - 이미 pending 상태인 대기열이 있으면 song_ids에 추가하고 예약 시각을 연장(디바운스)합니다.
+ * 선곡회의 새 후보곡 등록 시 즉시 처리할 알림 대기열(Queue)에 추가합니다.
+ * - 이미 pending 상태인 대기열이 있으면 song_ids에 추가하고 즉시 처리 가능하게 갱신합니다.
  * - 없으면 새 큐 레코드를 생성합니다.
  */
 export async function enqueueSongNotification(
 	gigId: number,
 	songId: number,
 	triggeredByUserId: string,
-): Promise<void> {
+): Promise<number | null> {
 	try {
 		const supabase = createServiceClient();
 		const now = new Date();
@@ -32,7 +32,7 @@ export async function enqueueSongNotification(
 
 		if (fetchErr) {
 			console.error("알림 대기열 조회 오류:", fetchErr);
-			return;
+			return null;
 		}
 
 		if (existingQueue) {
@@ -51,10 +51,13 @@ export async function enqueueSongNotification(
 
 			if (updateErr) {
 				console.error("알림 대기열 갱신 오류:", updateErr);
+				return null;
 			}
+
+			return existingQueue.id;
 		} else {
 			// 신규 큐 레코드 생성
-			const { error: insertErr } = await supabase
+			const { data: insertedQueue, error: insertErr } = await supabase
 				.from("gig_notification_queue")
 				.insert({
 					gig_id: gigId,
@@ -62,23 +65,30 @@ export async function enqueueSongNotification(
 					scheduled_at: scheduledAt,
 					triggered_by: triggeredByUserId,
 					status: "pending",
-				});
+				})
+				.select("id")
+				.single();
 
 			if (insertErr) {
 				console.error("알림 대기열 등록 오류:", insertErr);
+				return null;
 			}
+
+			return insertedQueue.id;
 		}
 	} catch (err) {
 		console.error("enqueueSongNotification 예외:", err);
+		return null;
 	}
 }
 
 export const enqueueNominationNotification = enqueueSongNotification;
 
 /**
- * 만료된 알림 대기열(`scheduled_at <= now()`)을 일괄 처리하여 참여자들에게 알림 발송
+ * 처리 가능한 알림 대기열(`scheduled_at <= now()`)을 참여자들에게 발송합니다.
+ * queueIds를 전달하면 새 후보곡 등록 요청이 만든 정확한 큐만 처리합니다.
  */
-export async function processNotificationQueue(): Promise<{
+export async function processNotificationQueue(queueIds?: number[]): Promise<{
 	processedCount: number;
 	totalNotificationsSent: number;
 }> {
@@ -90,23 +100,38 @@ export async function processNotificationQueue(): Promise<{
 		const nowIso = new Date().toISOString();
 
 		// 1. 발송 대기 중인 만료 큐 조회
-		const { data: pendingQueues, error: queueErr } = await supabase
+		let pendingQuery = supabase
 			.from("gig_notification_queue")
 			.select("id, gig_id, song_ids, triggered_by")
 			.eq("status", "pending")
-			.lte("scheduled_at", nowIso)
-			.limit(20);
+			.lte("scheduled_at", nowIso);
 
-		if (queueErr || !pendingQueues || pendingQueues.length === 0) {
+		if (queueIds && queueIds.length > 0) {
+			pendingQuery = pendingQuery.in("id", queueIds);
+		}
+
+		const { data: pendingQueues, error: queueErr } = await pendingQuery.limit(20);
+
+		if (queueErr) {
+			console.error("알림 대기열 처리 조회 오류:", queueErr);
+			return { processedCount: 0, totalNotificationsSent: 0 };
+		}
+
+		if (!pendingQueues || pendingQueues.length === 0) {
 			return { processedCount: 0, totalNotificationsSent: 0 };
 		}
 
 		for (const queue of pendingQueues) {
 			// 처리 중 상태로 먼저 변경하여 중복 발송 방지
-			await supabase
+			const { data: claimedQueue } = await supabase
 				.from("gig_notification_queue")
 				.update({ status: "processing" })
-				.eq("id", queue.id);
+				.eq("id", queue.id)
+				.eq("status", "pending")
+				.select("id")
+				.maybeSingle();
+
+			if (!claimedQueue) continue;
 
 			try {
 				// 공연 정보 조회

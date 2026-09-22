@@ -42,7 +42,7 @@ FCM Web Push로 모바일/데스크톱 브라우저에 다음 이벤트를 알�
 
 ### 3.3 선곡회의 새 후보곡
 
-- 신규 곡을 `gig_notification_queue`에 넣고 마지막 등록 이후 15분으로 예약 시각을 연장합니다.
+- 신규 곡을 `gig_notification_queue`에 `scheduled_at = now()`로 넣고, 후보곡 등록 서버 액션이 해당 큐 ID를 즉시 처리합니다. 기존 15분 디바운스는 현재 테스트를 위해 비활성화되어 있습니다.
 - cron이 만료된 큐를 선점하고 공연 참여자 중 등록자를 제외합니다.
 - 마케팅 동의자를 한 번 더 제한하고 `notifications` 로그를 만든 뒤 FCM으로 발송합니다.
 
@@ -50,7 +50,7 @@ FCM Web Push로 모바일/데스크톱 브라우저에 다음 이벤트를 알�
 
 - 엔드포인트: `GET/POST /api/cron/notifications`
 - 스케줄러: Vercel Pro/Enterprise Cron 또는 Supabase Cron에서 1분 간격 호출
-- 가입 요청 및 가입 승인 완료 알림은 cron 주기와 무관하게 이벤트 처리 중 즉시 발송하며, cron은 남은 `pending` outbox 복구용입니다. 후보곡 알림의 15분 집계 규칙은 그대로 유지합니다.
+- 가입 요청, 가입 승인 완료, 후보곡 등록 알림은 cron 주기와 무관하게 이벤트 처리 중 즉시 발송합니다. cron은 남은 `pending` outbox와 후보곡 큐의 복구용입니다.
 - 프로덕션에서는 `Authorization: Bearer <CRON_SECRET>`가 반드시 필요합니다.
 - 사용자 세션이 없는 외부 스케줄러 요청을 허용하기 위해 인증 프록시의 로그인 리다이렉트에서는 제외하되, 엔드포인트의 Bearer 검증은 항상 적용합니다.
 - DB outbox와 토큰 조회는 서버 전용 `SUPABASE_SECRET_KEY`를 사용합니다(기존 `SUPABASE_SERVICE_ROLE_KEY`도 호환).
