@@ -24,10 +24,18 @@ function formatDate(d: string | null) {
 
 export async function GigsInner() {
 	const supabase = await createClient();
-	const { data: rows, error } = await supabase
-		.from(SUPABASE_GIGS_TABLE)
-		.select("*")
-		.order("perform_date", { ascending: false });
+	const [
+		{ data: rows, error },
+		{ data: { user } },
+		isAdmin,
+	] = await Promise.all([
+		supabase
+			.from(SUPABASE_GIGS_TABLE)
+			.select("*")
+			.order("perform_date", { ascending: false }),
+		supabase.auth.getUser(),
+		getIsAdmin(),
+	]);
 
 	if (error)
 		return (
@@ -37,10 +45,23 @@ export async function GigsInner() {
 	const allGigs: Gig[] = (rows ?? []).map((r) =>
 		mapGigRow(r as Record<string, unknown>),
 	);
-	const isAdmin = await getIsAdmin();
 
-	// 비관리자는 공개 공연(is_public === true)만 노출, 관리자는 전체 노출
-	const gigs = isAdmin ? allGigs : allGigs.filter((g) => g.is_public);
+	let performerGigIds = new Set<number>();
+	if (user && !isAdmin) {
+		const { data: performerRows } = await supabase
+			.from("performers")
+			.select("gig_id")
+			.eq("user_id", user.id);
+
+		performerGigIds = new Set(
+			(performerRows ?? []).map((performer) => performer.gig_id),
+		);
+	}
+
+	// 공개 공연은 모두에게, 비공개 공연은 관리자와 해당 공연 참여자에게만 노출합니다.
+	const gigs = isAdmin
+		? allGigs
+		: allGigs.filter((gig) => gig.is_public || performerGigIds.has(gig.id));
 
 	// 현재 날짜 기준으로 공연 분류
 	const now = new Date();

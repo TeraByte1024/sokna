@@ -148,7 +148,7 @@ erDiagram
 | `location` | `text` | YES | null | 공연 장소 (예: 한양대학교 학생회관 콘서트홀) |
 | `meeting_location` | `text` | YES | null | 선곡회의 장소 (예: 동아리방, 학생회관 301호 등) |
 | `poster_url` | `text` | YES | null | 공연 공식 포스터 이미지 공개 URL (Supabase Storage: gigs/posters) |
-| `is_public` | `bool` | NO | `true` | 공연 공개 여부 (`true`: 전체 공개, `false`: 비공개/관리자 및 링크 보유자 전용) |
+| `is_public` | `bool` | NO | `true` | 공연 공개 여부 (`true`: 전체 공개, `false`: 관리자 및 해당 공연 참여자 전용) |
 | `created_at` | `timestamptz` | NO | `now()` | 생성 일시 |
 
 ### 2.4 `gig_rsvps` (공연 참가 신청/수요 조사)

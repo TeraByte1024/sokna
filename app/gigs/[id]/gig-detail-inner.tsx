@@ -2,10 +2,8 @@ import Link from "next/link";
 import {
   ArrowLeft,
   Calendar,
-  Clock,
   Users,
   Music2,
-  ChevronRight,
   MapPin,
   Lock,
   Pencil,
@@ -16,7 +14,7 @@ import { createClient } from "@/lib/supabase/server";
 import { SUPABASE_GIGS_TABLE } from "@/lib/supabase/gigs";
 import { getIsAdmin } from "@/lib/auth-admin";
 import { mapGigRow, parseSessionSlots, type Gig, type GigPerformer, type GigRsvp } from "@/lib/gig";
-import { getDDay, formatKoreanDateTime, formatKoreanDate, parseDateTime } from "@/lib/utils";
+import { getDDay, formatKoreanDateTime } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -45,12 +43,13 @@ export async function GigDetailInner({ gigId }: GigDetailInnerProps) {
     data: { user },
   } = await supabase.auth.getUser();
   const isLoggedIn = Boolean(user);
+  let isCurrentUserPerformer = false;
 
   // 1-1. 로그인 유저의 프로필 및 본 공연 참가 신청(RSVP) 내역 조회
   let userRsvp: GigRsvp | null = null;
   let userProfile: { name: string | null; part: string | null } | null = null;
   if (user && !isNaN(Number(gigId))) {
-    const [{ data: rsvpRow }, { data: profileRow }] = await Promise.all([
+    const [{ data: rsvpRow }, { data: profileRow }, { data: performerRow }] = await Promise.all([
       supabase
         .from("gig_rsvps")
         .select("*")
@@ -61,6 +60,12 @@ export async function GigDetailInner({ gigId }: GigDetailInnerProps) {
         .from("users")
         .select("name, part")
         .eq("id", user.id)
+        .maybeSingle(),
+      supabase
+        .from("performers")
+        .select("id")
+        .eq("gig_id", Number(gigId))
+        .eq("user_id", user.id)
         .maybeSingle(),
     ]);
 
@@ -77,6 +82,7 @@ export async function GigDetailInner({ gigId }: GigDetailInnerProps) {
       };
     }
     userProfile = profileRow;
+    isCurrentUserPerformer = Boolean(performerRow);
   }
 
   // 2. 공연 기본 정보 조회
@@ -112,25 +118,27 @@ export async function GigDetailInner({ gigId }: GigDetailInnerProps) {
   const gig: Gig = mapGigRow(gigRow as Record<string, unknown>);
 
   // 비공개 공연인 경우 비회원 접근 차단 (로그인 페이지로 안내)
-  if (!gig.is_public && !isLoggedIn && !isAdmin) {
+  if (!gig.is_public && !isAdmin && !isCurrentUserPerformer) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center gap-4 max-w-md mx-auto">
         <div className="size-12 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center">
           <Lock className="size-6" />
         </div>
         <div className="space-y-1">
-          <h2 className="text-lg font-bold text-foreground">비공개 상태입니다</h2>
+          <h2 className="text-lg font-bold text-foreground">비공개 공연입니다</h2>
           <p className="text-xs text-muted-foreground">
-            해당 공연 정보는 동아리 회원 및 관리자만 열람할 수 있습니다. 로그인 후 다시 확인해 주세요.
+            해당 공연의 참여자와 관리자만 공연 정보를 확인할 수 있습니다.
           </p>
         </div>
         <div className="flex items-center gap-2 pt-2">
           <Button asChild variant="outline" size="sm">
             <Link href="/gigs">목록으로</Link>
           </Button>
-          <Button asChild size="sm">
-            <Link href={`/auth/login?redirect=/gigs/${numericId}`}>로그인하기</Link>
-          </Button>
+          {!isLoggedIn && (
+            <Button asChild size="sm">
+              <Link href={`/auth/login?redirect=/gigs/${numericId}`}>로그인하기</Link>
+            </Button>
+          )}
         </div>
       </div>
     );
@@ -189,8 +197,6 @@ export async function GigDetailInner({ gigId }: GigDetailInnerProps) {
   // 공연 날짜 상태 계산
   const dDay = getDDay(gig.perform_date);
   const isPast = !dDay && Boolean(gig.perform_date);
-  const { time: performTime } = parseDateTime(gig.perform_date);
-
   return (
     <div className={`flex flex-col gap-10 w-full max-w-4xl mx-auto ${isLoggedIn ? "pb-28 sm:pb-16" : "pb-16"}`}>
       {/* 1. 상단 내비게이션 및 액션 바 */}
