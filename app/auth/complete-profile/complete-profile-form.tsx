@@ -19,7 +19,8 @@ import { completeProfileAction } from "./actions";
 import { Sparkles } from "lucide-react";
 
 const SESSION_PRESETS = [
-  "보컬",
+  "보컬(남)",
+  "보컬(여)",
   "기타",
   "베이스",
   "드럼",
@@ -37,7 +38,7 @@ export function CompleteProfileForm({ initialName = "", email = "" }: Props) {
   const router = useRouter();
   const [name, setName] = useState(initialName);
   const [generation, setGeneration] = useState("");
-  const [selectedPreset, setSelectedPreset] = useState<string>("보컬");
+  const [selectedPreset, setSelectedPreset] = useState<string>("보컬(남)");
   const [customPart, setCustomPart] = useState("");
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [agreeMarketing, setAgreeMarketing] = useState(false);
@@ -48,7 +49,7 @@ export function CompleteProfileForm({ initialName = "", email = "" }: Props) {
     return Boolean(
       (name.trim() && name.trim() !== initialName) ||
       generation.trim() ||
-      selectedPreset !== "보컬" ||
+      selectedPreset !== "보컬(남)" ||
       customPart.trim() ||
       agreeTerms ||
       agreeMarketing

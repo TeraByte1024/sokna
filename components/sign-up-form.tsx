@@ -24,7 +24,8 @@ import {
 import { dispatchSignupPushNotificationsAction } from "@/app/auth/sign-up/actions";
 
 const SESSION_PRESETS = [
-  "보컬",
+  "보컬(남)",
+  "보컬(여)",
   "기타",
   "베이스",
   "드럼",
@@ -42,7 +43,7 @@ export function SignUpForm({
   const [repeatPassword, setRepeatPassword] = useState("");
   const [name, setName] = useState("");
   const [generation, setGeneration] = useState("");
-  const [selectedPreset, setSelectedPreset] = useState<string>("보컬");
+  const [selectedPreset, setSelectedPreset] = useState<string>("보컬(남)");
   const [customPart, setCustomPart] = useState("");
   
   // 약관 동의 상태

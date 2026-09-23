@@ -9,13 +9,14 @@ SOKNA 애플리케이션은 **Supabase Auth**와 `@supabase/ssr`을 결합하여
 
 ### 2.1 인증 플로우 (Authentication Flow)
 1. **회원가입 신청 (`/auth/sign-up`)**:
-   - 이메일, 비밀번호, 실명, 기수, 세션(보컬, 기타, 베이스, 드럼, 건반, 창작, 직접 입력)을 입력받습니다.
+   - 이메일, 비밀번호, 실명, 기수, 세션(보컬(남), 보컬(여), 기타, 베이스, 드럼, 건반, 창작, 직접 입력)을 입력받습니다.
    - 개인정보 수집·이용 및 부원 명부 내 열람 동의(필수)와 공연/행사 소식 푸시 알림 수신 동의(선택)를 체크합니다.
    - 신청 완료 시 `public.users`에 `status = 'pending'` 상태로 저장되며, 관리자(`admins`)에게 `notifications` 알림이 자동 생성됩니다. 관리자 계정이 마케팅 알림에 동의하고 기기 토큰을 등록한 경우 cron 주기와 무관하게 웹 푸시를 즉시 발송합니다.
 2. **구글 소셜 로그인 (`Google OAuth`)**:
    - 로그인/가입 화면에서 Google 계정으로 1초 만에 간편 로그인할 수 있습니다.
    - OAuth 콜백(`app/auth/callback/route.ts`)에서 세션을 교환하며, 기수/세션 정보가 없는 신규 소셜 가입자는 프로필 등록 화면(`/auth/complete-profile`)으로 자동 안내됩니다.
    - 클라이언트는 현재 origin의 `/auth/callback`을 `redirectTo`로 전달합니다. 따라서 로컬 테스트 시 Supabase Auth Redirect URLs에 `http://localhost:3000/auth/callback`이 반드시 허용되어야 하며, 누락 시 운영 Site URL로 fallback될 수 있습니다.
+   - 프로필 입력 화면에서도 세션 프리셋의 보컬을 `보컬(남)`과 `보컬(여)`로 구분하여 입력받습니다.
    - 프로필 입력 완료 시 관리자 승인 대기(`pending`) 상태로 전환되며, 관리자에게 알림이 발송됩니다.
 3. **관리자 승인 (`/admin/members`)**:
    - 관리자가 독립된 관리자 전용 페이지에서 신청 내역을 검토한 후 승인(`status = 'approved'`) 또는 거절(`status = 'rejected'`)합니다.
