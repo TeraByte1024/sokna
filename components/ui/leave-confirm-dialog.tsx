@@ -114,31 +114,41 @@ export function useUnsavedChangesWarning({
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [isDirty]);
 
-  // 2. 내부 링크 클릭 가로채기 (capture phase)
+  // 2. 내부 링크 클릭 가로채기 (최상위 capture phase)
   useEffect(() => {
     if (!isDirty) return;
 
     const handleAnchorClick = (e: MouseEvent) => {
       if (isSubmittingRef.current) return;
+      if (e.button !== 0) return;
 
-      const target = e.target as HTMLElement | null;
-      const anchor = target?.closest("a");
+      const target = e.target;
+      if (!(target instanceof Element)) return;
+
+      const anchor = target.closest<HTMLAnchorElement>("a[href]");
       if (!anchor) return;
 
       const href = anchor.getAttribute("href");
       if (!href || href.startsWith("#") || href.startsWith("javascript:")) return;
-      if (anchor.target === "_blank" || e.ctrlKey || e.metaKey) return;
+      if (
+        anchor.target === "_blank" ||
+        anchor.hasAttribute("download") ||
+        e.ctrlKey ||
+        e.metaKey ||
+        e.shiftKey ||
+        e.altKey
+      ) return;
       if (anchor.href === window.location.href) return;
 
       e.preventDefault();
-      e.stopPropagation();
+      e.stopImmediatePropagation();
       setPendingNavUrl(anchor.href);
       setPendingAction(null);
       setShowLeaveModal(true);
     };
 
-    document.addEventListener("click", handleAnchorClick, true);
-    return () => document.removeEventListener("click", handleAnchorClick, true);
+    window.addEventListener("click", handleAnchorClick, true);
+    return () => window.removeEventListener("click", handleAnchorClick, true);
   }, [isDirty]);
 
   // 3. 브라우저 뒤로가기 / 앞으로가기 (popstate)

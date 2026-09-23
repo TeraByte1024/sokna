@@ -112,8 +112,18 @@ export function NominationForm({
 				Boolean(form.title.trim()) ||
 				Boolean(form.artist.trim()) ||
 				Boolean(form.description.trim()) ||
+				form.sheetExists !== true ||
 				Boolean(form.sheetNote?.trim()) ||
-				form.links.some((l) => l.url.trim().length > 0)
+				JSON.stringify(form.requiredParts) !==
+					JSON.stringify(["기타", "베이스", "드럼"]) ||
+				form.recommendedVocals.length > 0 ||
+				form.links.some(
+					(link) =>
+						Boolean(link.url.trim()) ||
+						Boolean(link.note?.trim()) ||
+						Boolean(link.timestamp?.trim()) ||
+						Boolean(link.timestamps?.length),
+				)
 			);
 		}
 		return (

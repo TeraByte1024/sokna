@@ -40,7 +40,6 @@ import { Input } from "@/components/ui/input";
 import {
 	type Nomination,
 	type RecommendedVocal,
-	type NominationResponseStatus,
 	parseNomination,
 	getYouTubeVideoId,
 	getYouTubeThumbnailUrl,
@@ -417,6 +416,15 @@ export function NominationPanel({ initialIsAdmin = false }: NominationPanelProps
 	}
 
 	const dDay = gigInfo?.performDate ? getDDay(gigInfo.performDate) : "";
+	const canRecommend = isAdmin || (!timeLeft.isOver && Boolean(currentPerformer));
+	const recommendationTitle =
+		isAdmin && timeLeft.isOver
+			? "선곡회의가 마감되었으나 관리자 권한으로 후보곡을 추천할 수 있습니다."
+			: !isAdmin && timeLeft.isOver
+				? "선곡회의 접수가 마감되었습니다."
+				: !isAdmin && !currentPerformer
+					? "공연 참여자만 후보곡을 추천할 수 있습니다."
+					: "후보곡 추천하기";
 
 	return (
 		<div className="flex flex-col gap-8 w-full pb-16">
@@ -440,26 +448,12 @@ export function NominationPanel({ initialIsAdmin = false }: NominationPanelProps
 				<div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
 					<div className="space-y-3 max-w-2xl">
 						<div className="flex flex-wrap items-center gap-2">
-							{dDay && (
-								<Badge className="bg-primary text-primary-foreground text-xs font-black tracking-wider px-2.5 py-0.5">
-									{dDay}
-								</Badge>
-							)}
-
-							{timeLeft.isOver ? (
+							{timeLeft.isOver && (
 								<Badge
 									variant="secondary"
 									className="text-xs font-bold gap-1 px-2.5 py-0.5"
 								>
 									<Lock className="size-3" /> 추천 마감
-								</Badge>
-							) : (
-								<Badge
-									variant="outline"
-									className="text-xs font-bold text-emerald-600 dark:text-emerald-400 border-emerald-500/30 bg-emerald-500/10 gap-1 px-2.5 py-0.5"
-								>
-									<span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
-									선곡 회의 진행 중
 								</Badge>
 							)}
 
@@ -475,7 +469,11 @@ export function NominationPanel({ initialIsAdmin = false }: NominationPanelProps
 						</div>
 
 						<h1 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground flex items-center gap-2.5">
-							<Disc3 className="size-7 text-primary animate-spin-slow" />
+							{dDay && (
+								<Badge className="bg-primary text-primary-foreground text-xs font-black tracking-wider px-2.5 py-0.5">
+									{dDay}
+								</Badge>
+							)}
 							<span>{gigInfo?.title} 선곡회의</span>
 						</h1>
 
@@ -524,20 +522,15 @@ export function NominationPanel({ initialIsAdmin = false }: NominationPanelProps
 							</div>
 						</div>
 
-						<Link href={`/gigs/${gigId}/nominations/new`}>
+						<Link
+							href={`/gigs/${gigId}/nominations/new`}
+							className="hidden sm:inline-flex"
+						>
 							<Button
 								size="lg"
-								disabled={!isAdmin && (timeLeft.isOver || !currentPerformer)}
+								disabled={!canRecommend}
 								className="font-bold shadow-sm hover:shadow-md transition-all h-11 px-6 text-sm"
-								title={
-									isAdmin && timeLeft.isOver
-										? "선곡회의가 마감되었으나 관리자 권한으로 후보곡을 추천할 수 있습니다."
-										: !isAdmin && timeLeft.isOver
-											? "선곡회의 접수가 마감되었습니다."
-											: !isAdmin && !currentPerformer
-												? "공연 참여자만 후보곡을 추천할 수 있습니다."
-												: undefined
-								}
+								title={recommendationTitle}
 							>
 								<Plus className="size-4 mr-1.5" />
 								후보곡 추천하기
@@ -853,19 +846,14 @@ export function NominationPanel({ initialIsAdmin = false }: NominationPanelProps
 									추천해보세요!
 								</p>
 							</div>
-							<Link href={`/gigs/${gigId}/nominations/new`}>
+							<Link
+								href={`/gigs/${gigId}/nominations/new`}
+								className="hidden sm:inline-flex"
+							>
 								<Button
-									disabled={!isAdmin && (timeLeft.isOver || !currentPerformer)}
+									disabled={!canRecommend}
 									className="mt-2 text-xs font-bold"
-									title={
-										isAdmin && timeLeft.isOver
-											? "선곡회의가 마감되었으나 관리자 권한으로 후보곡을 추천할 수 있습니다."
-											: !isAdmin && timeLeft.isOver
-												? "선곡회의 접수가 마감되었습니다."
-												: !isAdmin && !currentPerformer
-													? "공연 참여자만 후보곡을 추천할 수 있습니다."
-													: undefined
-									}
+									title={recommendationTitle}
 								>
 									<Plus className="size-4 mr-1" /> 첫 번째 곡 추천하기
 								</Button>
@@ -919,12 +907,42 @@ export function NominationPanel({ initialIsAdmin = false }: NominationPanelProps
 									index={idx + 1}
 									highlightState={highlightState}
 									currentUserId={currentUser?.id}
+									isCurrentUserPerformer={Boolean(currentPerformer)}
 								/>
 							</div>
 						);
 					})
 				)}
 			</section>
+
+			{/* 모바일 후보곡 추천 플로팅 버튼 */}
+			{canRecommend ? (
+				<Button
+					asChild
+					size="icon"
+					className="fixed right-4 bottom-[calc(1rem+env(safe-area-inset-bottom,0px))] z-40 size-14 rounded-full shadow-xl sm:hidden"
+				>
+					<Link
+						href={`/gigs/${gigId}/nominations/new`}
+						aria-label="후보곡 추천하기"
+						title={recommendationTitle}
+					>
+						<Plus className="size-6" />
+						<span className="sr-only">후보곡 추천하기</span>
+					</Link>
+				</Button>
+			) : (
+				<Button
+					type="button"
+					size="icon"
+					disabled
+					aria-label={recommendationTitle}
+					title={recommendationTitle}
+					className="fixed right-4 bottom-[calc(1rem+env(safe-area-inset-bottom,0px))] z-40 size-14 rounded-full shadow-xl sm:hidden"
+				>
+					<Plus className="size-6" />
+				</Button>
+			)}
 
 			{/* 6. 상세 슬라이드 오버 서랍 */}
 			<NominationDrawer
@@ -965,6 +983,7 @@ function NominationCard({
 	index,
 	highlightState,
 	currentUserId,
+	isCurrentUserPerformer,
 }: {
 	song: Nomination & {
 		createdBy?: { name: string; part: string; generation: number | null } | null;
@@ -972,35 +991,8 @@ function NominationCard({
 	index: number;
 	highlightState?: "new" | "updated" | null;
 	currentUserId?: string | null;
+	isCurrentUserPerformer: boolean;
 }) {
-	// 세션원 응답 요약 통계 (현재 곡의 requiredParts에 속한 유효 세션만 집계)
-	const responseSummary = useMemo(() => {
-		if (!song.responses || song.responses.length === 0) return null;
-		let available = 0;
-		let unavailable = 0;
-		let myStatus: NominationResponseStatus | null = null;
-
-		const activeResponses = song.responses.filter(
-			(r) => !song.requiredParts || song.requiredParts.length === 0 || song.requiredParts.includes(r.sessionPart),
-		);
-
-		activeResponses.forEach((r) => {
-			if (r.status === "available") available++;
-			if (r.status === "unavailable") unavailable++;
-			if (currentUserId && r.userId === currentUserId) {
-				if (!myStatus || r.status === "available") {
-					myStatus = r.status;
-				}
-			}
-		});
-
-		return {
-			available,
-			unavailable,
-			myStatus,
-		};
-	}, [song.responses, song.requiredParts, currentUserId]);
-
 	const partCounts = useMemo(() => {
 		return (song.requiredParts || []).reduce(
 			(acc, p) => {
@@ -1015,6 +1007,25 @@ function NominationCard({
 		() => sortSessionParts(Array.from(new Set(song.requiredParts || []))),
 		[song.requiredParts],
 	);
+
+	const mySessionResponses = useMemo(() => {
+		if (!isCurrentUserPerformer || !currentUserId || !song.responses) return [];
+
+		const responseByPart = new Map(
+			song.responses
+				.filter(
+					(response) =>
+						response.userId === currentUserId &&
+						uniqueParts.includes(response.sessionPart),
+				)
+				.map((response) => [response.sessionPart, response]),
+		);
+
+		return uniqueParts.flatMap((part) => {
+			const response = responseByPart.get(part);
+			return response ? [response] : [];
+		});
+	}, [song.responses, uniqueParts, currentUserId, isCurrentUserPerformer]);
 
 	// 첫 번째 유튜브 링크 썸네일 확인
 	const youtubeVideoId = useMemo(() => {
@@ -1068,130 +1079,115 @@ function NominationCard({
 
 				{/* 메인 정보 영역 */}
 				<div className="flex-1 min-w-0 space-y-2 text-left">
-					{/* 1행: 타이틀 & 하이라이트 뱃지 & 악보 상태 */}
+					{/* 1행: 곡 제목 - 아티스트 | 상세보기 */}
 					<div className="flex items-start justify-between gap-3">
-						<div className="min-w-0 flex-1">
-							<div className="flex flex-wrap items-center gap-2">
-								<h3 className="text-base sm:text-lg font-black text-foreground truncate group-hover:text-primary transition-colors">
-									{song.title}
-								</h3>
-								{song.artist && (
-									<span className="text-xs sm:text-sm text-muted-foreground font-semibold truncate">
-										— {song.artist}
-									</span>
-								)}
-
-								{/* 하이라이트 뱃지 */}
-								{highlightState === "new" && (
-									<Badge className="bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold text-[10px] px-2 py-0 h-5 gap-1 tracking-wide shadow-xs">
-										<Sparkles className="size-2.5" />
-										신규
-									</Badge>
-								)}
-								{highlightState === "updated" && (
-									<Badge className="bg-amber-500 hover:bg-amber-600 text-white font-extrabold text-[10px] px-2 py-0 h-5 gap-1 tracking-wide shadow-xs">
-										<Sparkles className="size-2.5" />
-										수정됨
-									</Badge>
-								)}
-							</div>
-						</div>
-
-						{/* 악보 상태 뱃지 */}
-						<span
-							className={cn(
-								"text-[11px] font-bold shrink-0 px-2 py-0.5 rounded-md border",
-								song.sheetExists
-									? "text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
-									: "text-muted-foreground bg-muted border-border/70",
-							)}
-						>
-							악보 {song.sheetExists ? "보유" : "미보유"}
-						</span>
-					</div>
-
-					{/* 2행: 세션 파트 구성 칩 (보컬 > 코러스 > 기타 > 베이스 > 드럼 > 건반 > 이외 순서 정렬) */}
-					<div className="flex flex-wrap items-center gap-1.5">
-						{uniqueParts.length > 0 ? (
-							uniqueParts.map((part) => (
-								<div
-									key={part}
-									className="flex items-center rounded-lg h-6 px-2 gap-1 border text-[11px] font-medium transition-colors bg-muted/60 text-foreground border-border/70"
-								>
-									<span>{part}</span>
-									<span className="font-extrabold text-primary">
-										{partCounts[part]}
-									</span>
-								</div>
-							))
-						) : (
-							<span className="text-[11px] text-muted-foreground">
-								세션 조율 중
-							</span>
-						)}
-					</div>
-
-					{/* 3행: 세션원 참여 응답 요약 뱃지 (있을 때만 노출) */}
-					{responseSummary && (responseSummary.available > 0 || responseSummary.unavailable > 0 || (responseSummary.myStatus && responseSummary.myStatus !== "undecided")) && (
-						<div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-							{responseSummary.available > 0 && (
-								<span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
-									<span className="size-1.5 rounded-full bg-emerald-500" />
-									가능 {responseSummary.available}명
+						<div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+							<h3 className="truncate text-base font-black text-foreground transition-colors group-hover:text-primary sm:text-lg">
+								{song.title}
+							</h3>
+							{song.artist && (
+								<span className="truncate text-xs font-semibold text-muted-foreground sm:text-sm">
+									— {song.artist}
 								</span>
 							)}
-							{responseSummary.unavailable > 0 && (
-								<span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-500/20">
-									<span className="size-1.5 rounded-full bg-rose-500" />
-									불가능 {responseSummary.unavailable}명
-								</span>
+							{highlightState === "new" && (
+								<Badge className="h-5 gap-1 bg-emerald-500 px-2 py-0 text-[10px] font-extrabold tracking-wide text-white shadow-xs hover:bg-emerald-600">
+									<Sparkles className="size-2.5" /> 신규
+								</Badge>
 							)}
-							{responseSummary.myStatus && responseSummary.myStatus !== "undecided" && (
-								<Badge
-									variant="outline"
-									className={cn(
-										"text-[10px] font-bold px-1.5 py-0 h-5 ml-auto sm:ml-0",
-										responseSummary.myStatus === "available"
-											? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30"
-											: "bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/30",
-									)}
-								>
-									내 응답: {responseSummary.myStatus === "available" ? "가능" : "불가능"}
+							{highlightState === "updated" && (
+								<Badge className="h-5 gap-1 bg-amber-500 px-2 py-0 text-[10px] font-extrabold tracking-wide text-white shadow-xs hover:bg-amber-600">
+									<Sparkles className="size-2.5" /> 수정됨
 								</Badge>
 							)}
 						</div>
-					)}
+						<div className="hidden shrink-0 items-center text-xs font-semibold text-primary opacity-0 transition-all group-hover:translate-x-0.5 group-hover:opacity-100 sm:inline-flex">
+							<span>상세보기</span>
+							<ChevronRight className="ml-0.5 size-3.5" />
+						</div>
+					</div>
 
-					{/* 4행: 추천 사유 한 줄 어필 (쌍따옴표, 이탤릭체 제거) */}
-					{song.description && (
-						<p className="text-xs text-muted-foreground truncate">
-							{song.description}
-						</p>
-					)}
-				</div>
+					{/* 2행: 필요 세션 | 나의 응답 */}
+					<div className="flex items-start justify-between gap-3">
+						<div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+							{uniqueParts.length > 0 ? (
+								uniqueParts.map((part) => (
+									<div
+										key={part}
+										className="flex h-6 items-center gap-1 rounded-lg border border-border/70 bg-muted/60 px-2 text-[11px] font-medium text-foreground transition-colors"
+									>
+										<span>{part}</span>
+										<span className="font-extrabold text-primary">{partCounts[part]}</span>
+									</div>
+								))
+							) : (
+								<span className="text-[11px] text-muted-foreground">세션 조율 중</span>
+							)}
+							<span
+								className={cn(
+									"shrink-0 rounded-md border px-2 py-0.5 text-[11px] font-bold",
+									song.sheetExists
+										? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+										: "border-border/70 bg-muted text-muted-foreground",
+								)}
+							>
+								<span className="sm:hidden">악보 {song.sheetExists ? "O" : "X"}</span>
+								<span className="hidden sm:inline">악보 {song.sheetExists ? "있음" : "없음"}</span>
+							</span>
+						</div>
 
-				{/* 우측 메타: 추천자 정보 및 상세 화살표 */}
-				<div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-2 shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0 border-border/60">
-					<div className="text-[11px] font-medium text-muted-foreground bg-muted/40 px-2.5 py-1 rounded-lg border border-border/60">
-						{song.createdBy && song.createdBy.name ? (
-							<>
-								{song.createdBy.generation ? (
-									<span className="text-muted-foreground mr-1">
-										{song.createdBy.generation}기
-									</span>
-								) : null}
-								<span className="font-bold text-foreground">
-									{song.createdBy.name}
-								</span>
-							</>
-						) : (
-							<span className="text-muted-foreground">동아리 부원</span>
+						{isCurrentUserPerformer && (
+							<div
+								className="flex max-w-[48%] shrink-0 flex-wrap items-center justify-end gap-1"
+								aria-label="나의 응답"
+							>
+								{mySessionResponses.length > 0 ? (
+									mySessionResponses.map((response) => (
+										<Badge
+											key={response.sessionPart}
+											variant="outline"
+											className={cn(
+												"h-5 shrink-0 px-1.5 py-0 text-[10px] font-bold",
+												response.status === "available"
+													? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+													: response.status === "unavailable"
+														? "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-400"
+														: "border-border/70 bg-muted text-muted-foreground",
+											)}
+										>
+											{response.sessionPart}{" "}
+											{response.status === "available"
+												? "가능"
+												: response.status === "unavailable"
+													? "불가능"
+													: "미응답"}
+										</Badge>
+									))
+								) : (
+									<Badge
+										variant="outline"
+										className="h-5 shrink-0 border-border/70 bg-muted px-1.5 py-0 text-[10px] font-bold text-muted-foreground"
+									>
+										내 응답 미선택
+									</Badge>
+								)}
+							</div>
 						)}
 					</div>
 
-					<div className="hidden sm:flex items-center text-xs font-semibold text-primary opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all">
-						<span>상세보기</span>
-						<ChevronRight className="size-3.5 ml-0.5" />
+					{/* 3행: 어필 | 작성자 */}
+					<div className="flex min-w-0 items-center justify-between gap-3 text-xs text-muted-foreground">
+						{song.description ? (
+							<span className="min-w-0 flex-1 truncate">{song.description}</span>
+						) : (
+							<span className="min-w-0 flex-1" />
+						)}
+						<span className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-border/60 bg-muted/40 px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+							{song.createdBy?.generation ? `${song.createdBy.generation}기 ` : ""}
+							<span className="font-bold text-foreground">
+								{song.createdBy?.name || "동아리 부원"}
+							</span>
+						</span>
 					</div>
 				</div>
 			</CardContent>
@@ -1201,4 +1197,3 @@ function NominationCard({
 
 export const SetlistPanel = NominationPanel;
 export type SetlistPanelProps = NominationPanelProps;
-

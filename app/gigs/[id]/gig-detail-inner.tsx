@@ -393,7 +393,7 @@ export async function GigDetailInner({ gigId }: GigDetailInnerProps) {
                   className="py-4 first:pt-0 last:pb-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3 group hover:bg-muted/10 px-3 rounded-xl transition-colors"
                 >
                   <div className="flex items-start gap-3.5 min-w-0">
-                    <span className="text-xs font-mono font-bold text-muted-foreground bg-muted px-2 py-1 rounded-lg shrink-0 mt-0.5">
+                    <span className="text-xs font-mono font-bold text-muted-foreground shrink-0 mt-1">
                       #{idx + 1}
                     </span>
                     <div className="space-y-1 min-w-0">
@@ -421,7 +421,7 @@ export async function GigDetailInner({ gigId }: GigDetailInnerProps) {
                                 className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-muted/60 text-[11px] font-medium text-foreground/85 border border-border/50"
                               >
                                 <span className="text-primary font-semibold">{slot.sessionName}</span>
-                                <span>{slot.members.join(", ")}</span>
+                                <span>{slot.members.join(" ")}</span>
                               </span>
                             ))}
                           </div>

@@ -629,7 +629,7 @@ export function NominationDrawer({
 						{/* 스크롤 가능한 메인 바디 */}
 						<div
 							ref={drawerBodyRef}
-							className="flex-1 overflow-y-auto p-6 space-y-6 text-left overscroll-contain"
+							className="flex-1 overflow-y-auto p-6 pb-28 space-y-6 text-left overscroll-contain sm:pb-6"
 						>
 							{/* 1. 곡 기본 정보 (타이틀, 아티스트, 뱃지, 추천자, 일시) */}
 							<div className="p-5 rounded-2xl border border-border/80 bg-gradient-to-br from-card to-muted/30 shadow-sm space-y-3">

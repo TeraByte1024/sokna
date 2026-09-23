@@ -220,6 +220,23 @@ export function NominationResponseSection({
 		);
 	};
 
+	const renderMobileStickyAction = () => {
+		if (!canRespond) return null;
+
+		return (
+			<div className="fixed inset-x-0 bottom-0 z-[120] border-t border-border/70 bg-background/95 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] shadow-[0_-4px_16px_rgba(0,0,0,0.08)] backdrop-blur-md sm:hidden">
+				<Button
+					type="button"
+					onClick={handleOpenDialog}
+					className="h-11 w-full gap-2 text-sm font-bold"
+				>
+					<Pencil className="size-4" />
+					<span>가능 여부 응답</span>
+				</Button>
+			</div>
+		);
+	};
+
 	// 참여 가능한 세션이 없을 때
 	if (eligibleSessions.length === 0) {
 		return (
@@ -282,13 +299,15 @@ export function NominationResponseSection({
 							type="button"
 							size="sm"
 							onClick={handleOpenDialog}
-							className="h-8 px-3 text-xs font-bold shrink-0 gap-1.5 cursor-pointer ml-auto"
+							className="hidden h-8 px-3 text-xs font-bold shrink-0 gap-1.5 cursor-pointer ml-auto sm:inline-flex"
 						>
 							<Pencil className="size-3.5" />
 							<span>가능 여부 응답</span>
 						</Button>
 					)}
 				</div>
+
+				{renderMobileStickyAction()}
 
 				{renderDialog()}
 			</>
@@ -308,7 +327,7 @@ export function NominationResponseSection({
 							type="button"
 							size="sm"
 							onClick={handleOpenDialog}
-							className="h-7 px-2.5 text-xs font-bold shrink-0 gap-1 cursor-pointer ml-auto"
+							className="hidden h-7 px-2.5 text-xs font-bold shrink-0 gap-1 cursor-pointer ml-auto sm:inline-flex"
 						>
 							<Pencil className="size-3" />
 							<span>가능 여부 응답</span>
@@ -365,6 +384,8 @@ export function NominationResponseSection({
 					})}
 				</div>
 			</div>
+
+			{renderMobileStickyAction()}
 
 			{renderDialog()}
 		</>
