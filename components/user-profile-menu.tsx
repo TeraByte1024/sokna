@@ -57,7 +57,7 @@ export function UserProfileMenu({ userName, userEmail, marketingOptIn }: UserPro
         </button>
       </DropdownMenuTrigger>
 
-      <DropdownMenuContent align="end" className="w-44 mt-1.5 shadow-lg border-border/60">
+      <DropdownMenuContent align="end" className="w-56 mt-1.5 shadow-lg border-border/60">
         {(userName || userEmail) && (
           <>
             <div className="px-2.5 py-1.5 text-xs">
@@ -108,11 +108,11 @@ export function UserProfileMenu({ userName, userEmail, marketingOptIn }: UserPro
           ) : (
             <BellOff className="text-muted-foreground" />
           )}
-          <span className="font-medium text-xs sm:text-sm">이 기기에서 알림 받기</span>
+          <span className="whitespace-nowrap font-medium text-xs sm:text-sm">이 기기에서 알림 받기</span>
           <span
             aria-hidden="true"
             className={cn(
-              "ml-auto relative h-5 w-9 rounded-full transition-colors",
+              "ml-auto relative h-5 w-9 shrink-0 rounded-full transition-colors",
               push.enabled ? "bg-primary" : "bg-muted-foreground/30",
             )}
           >
