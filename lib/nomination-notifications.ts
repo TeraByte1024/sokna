@@ -16,7 +16,10 @@ export async function enqueueSongNotification(
 	triggeredByUserId: string,
 ): Promise<number | null> {
 	try {
-		const supabase = createServiceClient();
+		// 후보곡을 등록한 로그인 세션으로 큐를 생성합니다.
+		// gig_notification_queue RLS가 authenticated INSERT/SELECT/UPDATE를 허용하므로
+		// 서버 전용 secret key 설정과 무관하게 등록 이벤트를 보존할 수 있습니다.
+		const supabase = await createClient();
 		const now = new Date();
 		const scheduledAt = new Date(now.getTime() + NOTIFICATION_DELAY_MINUTES * 60 * 1000).toISOString();
 

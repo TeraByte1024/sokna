@@ -29,6 +29,7 @@
    - 후보곡 등록 이벤트를 신뢰성 있게 기록하고 중복 처리를 방지하면서 즉시 알림을 발송합니다.
 2. **큐 등록 (`enqueueSongNotification`)**:
    - 새 곡 등록 시 `gig_notification_queue`에 즉시 처리 가능한 레코드를 생성합니다 (`scheduled_at = now()`).
+   - 큐 생성은 후보곡을 등록한 동일한 인증 사용자 세션과 RLS 정책을 사용하여 서버 secret key 설정과 독립적으로 등록 이벤트를 보존합니다.
    - 등록 액션은 새로 생성하거나 갱신한 정확한 큐 ID를 현재 서버 요청 안에서 `await`하여 처리합니다.
 3. **발송 처리 (`processNotificationQueue`)**:
    - `scheduled_at <= now() AND status = 'pending'`인 대기열을 조회하여 처리합니다.
