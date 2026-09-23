@@ -88,7 +88,7 @@ export async function GigsInner() {
 						공연 정보
 					</h1>
 					<p className="text-muted-foreground mt-1.5 text-sm">
-						소리로 크는 나무의 무대와 역사를 확인하세요.
+						소리로 크는 나무가 준비한 공연을 확인하세요.
 					</p>
 				</div>
 				{isAdmin && (

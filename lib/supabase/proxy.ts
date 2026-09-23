@@ -49,6 +49,31 @@ export async function updateSession(request: NextRequest) {
     const user = data?.claims;
 
     const pathname = request.nextUrl.pathname;
+    if (user && pathname === "/auth/login") {
+      const redirectParam = request.nextUrl.searchParams.get("redirect");
+      let destination = new URL("/", request.url);
+
+      if (
+        redirectParam?.startsWith("/") &&
+        !redirectParam.startsWith("//") &&
+        !redirectParam.includes("\\")
+      ) {
+        const candidate = new URL(redirectParam, request.url);
+        if (
+          candidate.origin === request.nextUrl.origin &&
+          candidate.pathname.replace(/\/+$/, "") !== "/auth/login"
+        ) {
+          destination = candidate;
+        }
+      }
+
+      const response = NextResponse.redirect(destination);
+      supabaseResponse.cookies.getAll().forEach((cookie) =>
+        response.cookies.set(cookie),
+      );
+      return response;
+    }
+
     const isPublicGigRoute =
       pathname === "/gigs" ||
       (/^\/gigs\/\d+$/.test(pathname));
