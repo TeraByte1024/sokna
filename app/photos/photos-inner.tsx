@@ -15,8 +15,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import { ResponsiveImage } from "@/components/ui/responsive-image";
 import {
   addPhotoAction,
   updatePhotoAction,
@@ -234,10 +234,12 @@ export function PhotosInner({ initialPhotos, isAdmin }: PhotosInnerProps) {
                 >
                   {/* 이미지 홀더 */}
                   <div className="aspect-[4/3] w-full bg-slate-100 dark:bg-zinc-950 rounded overflow-hidden relative border border-slate-200/20 dark:border-zinc-800">
-                    <img
+                    <ResponsiveImage
                       src={photo.url}
                       alt={photo.title}
                       className="w-full h-full object-cover filter contrast-[1.05] grayscale group-hover:grayscale-0 transition-all duration-700"
+                      sizes="(min-width: 1024px) 320px, (min-width: 640px) 50vw, 100vw"
+                      preload={index === 0}
                     />
                   </div>
                   {/* 캡션 영역 */}
@@ -306,6 +308,8 @@ export function PhotosInner({ initialPhotos, isAdmin }: PhotosInnerProps) {
 
               {/* 이미지 영역 (좌측/상단) */}
               <div className="flex-1 bg-black flex items-center justify-center p-2 min-h-[300px] max-h-[500px] md:max-h-[600px] relative">
+                {/* 확대 화면은 사용자가 선택한 원본을 표시합니다. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={activePhoto.url}
                   alt={activePhoto.title}

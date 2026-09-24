@@ -89,7 +89,7 @@ docs/
 | **Feature** | [push-notifications.md](./features/push-notifications.md) | Firebase Cloud Messaging(FCM) 토큰 관리 및 푸시 수신 |
 | **Feature** | [setlist-notifications-and-highlights.md](./features/setlist-notifications-and-highlights.md) | **선곡회의 곡 수정 하이라이팅 및 새 곡 15분 지연 알림 큐** |
 | **Feature** | [spreadsheet-bulk-import.md](./features/spreadsheet-bulk-import.md) | **엑셀 공연자 및 셋리스트 표 일괄 불러오기(덮어쓰기) 및 스마트 Conflict 해결** |
-| **Architecture** | [system-overview.md](./architecture/system-overview.md) | Next.js 15, Supabase SSR, Tailwind CSS 등 시스템 전체 구조 |
+| **Architecture** | [system-overview.md](./architecture/system-overview.md) | Next.js 16, Supabase SSR, Tailwind CSS 등 시스템 전체 구조 |
 | **Architecture** | [database-schema.md](./architecture/database-schema.md) | Supabase DB 스키마, 테이블 상세, ERD, 제약조건 |
 | **Maintenance** | [environment-setup.md](./maintenance/environment-setup.md) | `.env.local` 환경 변수 설정 및 로컬 서버 구동 |
 | **Maintenance** | [supabase-workflow.md](./maintenance/supabase-workflow.md) | DB 변경 사항 반영, `npm run types` 스크립트 활용법 |

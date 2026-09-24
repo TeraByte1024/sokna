@@ -23,8 +23,8 @@ flowchart TD
     end
     
     subgraph Setlist Interactions
-        Setlists -->|곡 추천하기 버튼| NewModal["곡 등록 모달 (SetlistNewModal)"]
-        Setlists -->|곡 카드 클릭| Drawer["곡 상세 드로어 (SetlistDrawer)"]
+        Setlists -->|곡 추천하기 버튼| NewPage["후보곡 등록 페이지 (NominationForm)"]
+        Setlists -->|곡 카드 클릭| Drawer["곡 상세 드로어 (NominationDrawer)"]
     end
 ```
 

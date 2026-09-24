@@ -4,6 +4,7 @@ import { PageContainer } from "@/components/page-container";
 import { createClient } from "@/lib/supabase/server";
 import { getIsAdmin } from "@/lib/auth-admin";
 import { MembersInner } from "./members-inner";
+import { LoadingIndicator } from "@/components/ui/loading-indicator";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -20,16 +21,17 @@ export type Member = {
 
 async function MembersLoader() {
   const supabase = await createClient();
-  const isAdmin = await getIsAdmin();
-
-  // 기수가 등록된 부원 중 승인된 부원 정보만 조회
-  const { data: rows, error } = await supabase
-    .from("users")
-    .select("id, name, generation, part")
-    .not("generation", "is", null)
-    .eq("status", "approved")
-    .order("generation", { ascending: true })
-    .order("name", { ascending: true });
+  // 권한 확인과 공개 목록 조회는 서로 독립적입니다.
+  const [isAdmin, { data: rows, error }] = await Promise.all([
+    getIsAdmin(),
+    supabase
+      .from("users")
+      .select("id, name, generation, part")
+      .not("generation", "is", null)
+      .eq("status", "approved")
+      .order("generation", { ascending: true })
+      .order("name", { ascending: true }),
+  ]);
 
   if (error) {
     console.error("부원 목록 로딩 오류:", error);
@@ -51,12 +53,7 @@ export default function MembersPage() {
     <SiteLayout>
       <PageContainer>
         <Suspense
-          fallback={
-            <div className="flex flex-col items-center justify-center py-20">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-              <p className="text-sm text-muted-foreground mt-4">부원 명단 불러오는 중…</p>
-            </div>
-          }
+          fallback={<LoadingIndicator label="부원 명단 불러오는 중…" />}
         >
           <MembersLoader />
         </Suspense>

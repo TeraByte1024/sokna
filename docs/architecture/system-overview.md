@@ -10,7 +10,7 @@ SOKNA(소리로 크는 나무)는 한양대학교·한양여자대학교 음악 
 
 | 영역 | 기술 | 버전 / 비고 |
 | :--- | :--- | :--- |
-| **Framework** | Next.js (App Router) | v15.x (React 19) |
+| **Framework** | Next.js (App Router) | v16.x (React 19) |
 | **Language** | TypeScript | v5.x |
 | **Styling** | Tailwind CSS | v3.4.x, Lucide React Icons |
 | **UI Components** | Radix UI Primitives | shadcn/ui 디자인 시스템 기반 |
@@ -43,7 +43,7 @@ c:\dev\sokna\
 ├── components/                    # 재사용 가능한 UI 컴포넌트
 │   ├── ui/                        # Radix UI 기반 atomic 컴포넌트 (button, dialog, input 등)
 │   ├── gigs/                      # 공연 관련 전용 컴포넌트
-│   ├── setlists/                  # 셋리스트 관련 전용 컴포넌트
+│   ├── nominations/              # 선곡회의 후보곡 관련 전용 컴포넌트
 │   ├── site-header.tsx            # 공통 상단 네비게이션 헤더
 │   ├── site-footer.tsx            # 공통 푸터
 │   └── landing.tsx                # 랜딩 페이지 섹션 컴포넌트
@@ -73,6 +73,8 @@ c:\dev\sokna\
 - **요청 가로채기 (`proxy.ts`)**: 모든 페이지 및 API 라우트 요청 시 `proxy.ts`에서 `@supabase/ssr`의 `updateSession`을 호출하여 유효한 세션 쿠키를 갱신합니다.
 - **Server Components & Server Actions**: 서버 사이드에서는 `lib/supabase/server.ts`의 `createClient()`를 호출해 쿠키 저장소를 참조하는 안전한 클라이언트를 생성합니다.
 - **관리자 권한 인가 (`lib/auth-admin.ts`)**: `getIsAdmin()`을 통해 현재 인증된 유저의 이메일이 `admins` 테이블에 존재하는지 확인합니다. React `cache`를 적용하여 단일 HTTP 요청 주기 내에서 중복 DB 쿼리를 방지합니다.
+- **공연 조회 (`lib/gig-server-data.ts`)**: 공연 상세·수정 페이지의 메타데이터와 본문에서 동일 공연 기본 정보 조회를 요청 단위로 재사용합니다. 비공개 공연의 접근 판정은 각 페이지에서 계속 수행합니다.
+- **이미지 (`components/ui/responsive-image.tsx`)**: 프로젝트의 Supabase 공개 Storage URL은 Next 이미지 최적화를 사용합니다. 외부 URL은 직접 표시하며, 목록 첫 이미지 우선 로드와 나머지 이미지 지연 로드를 구분합니다.
 
 ### 4.2 데이터 변경 및 캐싱 전략 (Mutations & Caching)
 - 데이터 변경은 Next.js **Server Actions**(`app/gigs/actions.ts`, `app/gigs/[id]/nominations/actions.ts`)를 통해 수행됩니다.

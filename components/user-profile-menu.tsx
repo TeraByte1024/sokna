@@ -28,7 +28,7 @@ export function UserProfileMenu({ userName, userEmail, marketingOptIn }: UserPro
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const [consentDialogOpen, setConsentDialogOpen] = useState(false);
-  const push = usePushNotificationDevice(marketingOptIn);
+  const push = usePushNotificationDevice(marketingOptIn, menuOpen);
 
   const handleLogout = async () => {
     const supabase = createClient();

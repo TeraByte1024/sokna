@@ -11,13 +11,14 @@ import {
   Ticket,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { SUPABASE_GIGS_TABLE } from "@/lib/supabase/gigs";
+import { getGigRow } from "@/lib/gig-server-data";
 import { getIsAdmin } from "@/lib/auth-admin";
 import { mapGigRow, parseSessionSlots, type Gig, type GigPerformer, type GigRsvp } from "@/lib/gig";
 import { getDDay, formatKoreanDateTime } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ResponsiveImage } from "@/components/ui/responsive-image";
 import { ShareGigButton } from "@/components/gigs/share-gig-button";
 import { PerformerCardGrid } from "@/components/gigs/performer-card-grid";
 import { GigDetailActions } from "@/components/gigs/gig-detail-actions";
@@ -35,25 +36,47 @@ interface GigDetailInnerProps {
 }
 
 export async function GigDetailInner({ gigId }: GigDetailInnerProps) {
-  const supabase = await createClient();
-  const isAdmin = await getIsAdmin();
+  const numericId = Number(gigId);
+  if (isNaN(numericId)) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center gap-4">
+        <p className="text-lg font-medium text-muted-foreground">잘못된 공연 ID입니다.</p>
+        <Button asChild variant="outline">
+          <Link href="/gigs">공연 목록으로 돌아가기</Link>
+        </Button>
+      </div>
+    );
+  }
 
-  // 1. 로그인 유저 확인
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const supabase = await createClient();
+  const [isAdmin, { data: { user } }, { data: gigRow, error: gigError }] = await Promise.all([
+    getIsAdmin(),
+    supabase.auth.getUser(),
+    getGigRow(numericId),
+  ]);
   const isLoggedIn = Boolean(user);
+  if (gigError || !gigRow) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center gap-4">
+        <p className="text-lg font-medium text-muted-foreground">공연 정보를 찾을 수 없습니다.</p>
+        <Button asChild variant="outline">
+          <Link href="/gigs">공연 목록으로 돌아가기</Link>
+        </Button>
+      </div>
+    );
+  }
+
   let isCurrentUserPerformer = false;
 
   // 1-1. 로그인 유저의 프로필 및 본 공연 참가 신청(RSVP) 내역 조회
   let userRsvp: GigRsvp | null = null;
   let userProfile: { name: string | null; part: string | null } | null = null;
-  if (user && !isNaN(Number(gigId))) {
+  if (user) {
     const [{ data: rsvpRow }, { data: profileRow }, { data: performerRow }] = await Promise.all([
       supabase
         .from("gig_rsvps")
         .select("*")
-        .eq("gig_id", Number(gigId))
+        .eq("gig_id", numericId)
         .eq("user_id", user.id)
         .maybeSingle(),
       supabase
@@ -64,7 +87,7 @@ export async function GigDetailInner({ gigId }: GigDetailInnerProps) {
       supabase
         .from("performers")
         .select("id")
-        .eq("gig_id", Number(gigId))
+        .eq("gig_id", numericId)
         .eq("user_id", user.id)
         .maybeSingle(),
     ]);
@@ -83,36 +106,6 @@ export async function GigDetailInner({ gigId }: GigDetailInnerProps) {
     }
     userProfile = profileRow;
     isCurrentUserPerformer = Boolean(performerRow);
-  }
-
-  // 2. 공연 기본 정보 조회
-  const numericId = Number(gigId);
-  if (isNaN(numericId)) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 text-center gap-4">
-        <p className="text-lg font-medium text-muted-foreground">잘못된 공연 ID입니다.</p>
-        <Button asChild variant="outline">
-          <Link href="/gigs">공연 목록으로 돌아가기</Link>
-        </Button>
-      </div>
-    );
-  }
-
-  const { data: gigRow, error: gigError } = await supabase
-    .from(SUPABASE_GIGS_TABLE)
-    .select("*")
-    .eq("id", numericId)
-    .maybeSingle();
-
-  if (gigError || !gigRow) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 text-center gap-4">
-        <p className="text-lg font-medium text-muted-foreground">공연 정보를 찾을 수 없습니다.</p>
-        <Button asChild variant="outline">
-          <Link href="/gigs">공연 목록으로 돌아가기</Link>
-        </Button>
-      </div>
-    );
   }
 
   const gig: Gig = mapGigRow(gigRow as Record<string, unknown>);
@@ -145,7 +138,7 @@ export async function GigDetailInner({ gigId }: GigDetailInnerProps) {
   }
 
   // 3. 참여 공연자 (Performers) 조회 (미연동 더미 포함)
-  const { data: performerRows } = await supabase
+  const performerQuery = supabase
     .from("performers")
     .select(`
       id,
@@ -160,6 +153,18 @@ export async function GigDetailInner({ gigId }: GigDetailInnerProps) {
     `)
     .eq("gig_id", numericId)
     .order("created_at", { ascending: true });
+
+  const setlistQuery = supabase
+    .from("setlists")
+    .select("id, title, artist, session_members, order_num")
+    .eq("gig_id", numericId)
+    .order("order_num", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  const [{ data: performerRows }, { data: setlistRows }] = await Promise.all([
+    performerQuery,
+    setlistQuery,
+  ]);
 
   const performers: GigPerformer[] = (performerRows ?? []).map((row) => {
     const rawUser = row.users as { name: string; generation: number | null } | null;
@@ -178,14 +183,7 @@ export async function GigDetailInner({ gigId }: GigDetailInnerProps) {
     };
   });
 
-  // 4. 셋리스트 (Setlists) 조회 (order_num 오름차순 정렬)
-  const { data: setlistRows } = await supabase
-    .from("setlists")
-    .select("id, title, artist, session_members, order_num")
-    .eq("gig_id", numericId)
-    .order("order_num", { ascending: true })
-    .order("created_at", { ascending: true });
-
+  // 셋리스트 (Setlists)는 참여자와 함께 조회합니다.
   const setlists: DetailSetlistItem[] = (setlistRows ?? []).map((s) => ({
     id: s.id,
     title: s.title,
@@ -228,11 +226,13 @@ export async function GigDetailInner({ gigId }: GigDetailInnerProps) {
         <div className="flex flex-col md:flex-row gap-6 sm:gap-10 items-center md:items-stretch">
           {/* 포스터 이미지 (데스크톱에서 우측 컨텐츠 및 액션 버튼 높이에 맞춰 확장) */}
           {gig.poster_url ? (
-            <div className="w-56 sm:w-72 md:w-80 lg:w-[340px] rounded-2xl overflow-hidden shadow-2xl border border-border/70 shrink-0 bg-muted/20 relative md:self-stretch flex flex-col">
-              <img
+            <div className="w-56 sm:w-72 md:w-80 lg:w-[340px] aspect-[1/1.414] md:aspect-auto md:min-h-[360px] rounded-2xl overflow-hidden shadow-2xl border border-border/70 shrink-0 bg-muted/20 relative md:self-stretch flex flex-col">
+              <ResponsiveImage
                 src={gig.poster_url}
                 alt={gig.title || "공연 포스터"}
                 className="w-full h-full object-cover rounded-2xl block"
+                sizes="(min-width: 768px) 340px, 288px"
+                preload
               />
             </div>
           ) : (

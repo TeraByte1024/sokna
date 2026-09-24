@@ -32,7 +32,6 @@ import {
 	HelpCircle,
 	XCircle,
 	Users,
-	Mic,
 	MessageSquare,
 	Star,
 } from "lucide-react";
@@ -108,24 +107,6 @@ function isMatchingVocal(
 		}
 		return false;
 	});
-}
-
-function isStandardSessionPart(partName: string): boolean {
-	const s = partName.toLowerCase();
-	return (
-		s.includes("보컬") ||
-		s.includes("vocal") ||
-		s.includes("기타") ||
-		s.includes("guitar") ||
-		s.includes("베이스") ||
-		s.includes("bass") ||
-		s.includes("드럼") ||
-		s.includes("drum") ||
-		s.includes("건반") ||
-		s.includes("키보드") ||
-		s.includes("피아노") ||
-		s.includes("신디")
-	);
 }
 
 /**
@@ -212,6 +193,7 @@ export function NominationDrawer({
 	onClose,
 	onSongUpdated,
 }: NominationDrawerProps) {
+	const isOpen = Boolean(song);
 	const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
 	const [activeMediaIdx, setActiveMediaIdx] = useState(0);
 	const [activeSeekTime, setActiveSeekTime] = useState<number | null>(null);
@@ -435,7 +417,7 @@ export function NominationDrawer({
 
 	// 서랍 열림 시 배경(body) 스크롤 고정 및 이중 스크롤바 방지
 	useEffect(() => {
-		if (!song) return;
+		if (!isOpen) return;
 
 		const originalOverflow = document.body.style.overflow;
 		const originalPaddingRight = document.body.style.paddingRight;
@@ -451,11 +433,11 @@ export function NominationDrawer({
 			document.body.style.overflow = originalOverflow;
 			document.body.style.paddingRight = originalPaddingRight;
 		};
-	}, [Boolean(song)]);
+	}, [isOpen]);
 
 	// ESC 키 입력 시 서랍 닫기
 	useEffect(() => {
-		if (!song) return;
+		if (!isOpen) return;
 
 		const handleKeyDown = (e: KeyboardEvent) => {
 			if (e.key === "Escape") {
@@ -467,7 +449,7 @@ export function NominationDrawer({
 		return () => {
 			window.removeEventListener("keydown", handleKeyDown);
 		};
-	}, [Boolean(song), onClose]);
+	}, [isOpen, onClose]);
 
 	// 곡 변경 시 미디어 및 탐색 상태 리셋 (맨 처음 세션 파트 기본 선택)
 	useEffect(() => {
@@ -571,7 +553,7 @@ export function NominationDrawer({
 			if (!error && data) {
 				const userObj = data.users as unknown as { generation?: number | null; name?: string } | null;
 				setUserInfo({
-					name: userObj?.name || (data as any).name || "동아리 부원",
+					name: userObj?.name || data.name || "동아리 부원",
 					generation: userObj?.generation ?? null,
 				});
 			} else {
@@ -1090,5 +1072,3 @@ export function NominationDrawer({
 		</>
 	);
 }
-
-export const SetlistDrawer = NominationDrawer;

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { ResponsiveImage } from "@/components/ui/responsive-image";
 import { Badge } from "@/components/ui/badge";
 import { getIsAdmin } from "@/lib/auth-admin";
 import { mapGigRow, type Gig } from "@/lib/gig";
@@ -146,7 +147,7 @@ export async function GigsInner() {
 						지난 공연 기록이 없습니다.
 					</p>
 				) : (
-					<GigGrid list={pastGigs} isPast />
+					<GigGrid list={pastGigs} isPast preloadFirst={upcomingGigs.length === 0} />
 				)}
 			</section>
 		</div>
@@ -156,13 +157,15 @@ export async function GigsInner() {
 function GigGrid({
 	list,
 	isPast = false,
+	preloadFirst = true,
 }: {
 	list: Gig[];
 	isPast?: boolean;
+	preloadFirst?: boolean;
 }) {
 	return (
 		<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-			{list.map((gig) => {
+			{list.map((gig, index) => {
 				const dDay = !isPast ? getDDay(gig.perform_date) : null;
 
 				return (
@@ -175,10 +178,12 @@ function GigGrid({
 							{/* 1. 포스터 영역 (표준 A-규격 포스터 1:1.414 비율) */}
 							<div className="relative aspect-[1/1.414] w-full overflow-hidden rounded-2xl mb-4 shadow-md ring-1 ring-border/60">
 								{gig.poster_url ? (
-									<img
+									<ResponsiveImage
 										src={gig.poster_url}
 										alt={gig.title || "공연 포스터"}
 										className="w-full h-full object-cover"
+										sizes="(min-width: 1024px) 300px, (min-width: 640px) 50vw, 100vw"
+										preload={preloadFirst && index === 0}
 									/>
 								) : (
 									<div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center bg-gradient-to-br from-indigo-500/15 via-purple-500/10 to-muted">

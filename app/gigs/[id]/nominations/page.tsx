@@ -1,7 +1,7 @@
 import { NominationPanel } from "@/components/nominations/nomination-panel";
 import { SiteLayout } from "@/components/site-layout";
 import { PageContainer } from "@/components/page-container";
-import { Loader2, Lock, ArrowLeft, Users } from "lucide-react";
+import { Lock, ArrowLeft, Users } from "lucide-react";
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
@@ -10,6 +10,8 @@ import { getIsAdmin } from "@/lib/auth-admin";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { LoadingIndicator } from "@/components/ui/loading-indicator";
+import { parseNomination, type RecommendedVocal } from "@/lib/nomination";
 
 interface PageProps {
 	params: Promise<{ id: string }>;
@@ -52,18 +54,19 @@ export async function generateMetadata({
 	}
 }
 
-function NominationsLoadingFallback() {
+export default function NominationsPage({ params }: PageProps) {
 	return (
-		<div className="flex flex-col items-center justify-center py-24 gap-4">
-			<Loader2 className="size-8 animate-spin text-primary" />
-			<p className="text-sm font-medium text-muted-foreground animate-pulse">
-				선곡회의 정보를 불러오는 중입니다...
-			</p>
-		</div>
+		<SiteLayout>
+			<PageContainer className="p-4 sm:p-8 lg:p-10 gap-8">
+				<Suspense fallback={<LoadingIndicator label="선곡회의 정보를 불러오는 중…" />}>
+					<NominationsContent params={params} />
+				</Suspense>
+			</PageContainer>
+		</SiteLayout>
 	);
 }
 
-export default async function NominationsPage({ params }: PageProps) {
+async function NominationsContent({ params }: PageProps) {
 	const { id } = await params;
 	const numericId = Number(id);
 
@@ -83,25 +86,24 @@ export default async function NominationsPage({ params }: PageProps) {
 	}
 
 	// 2. 관리자 권한 및 공연 참여자(Performer) 여부 검증
-	const isAdmin = await getIsAdmin();
-	const { data: performer } = await supabase
-		.from("performers")
-		.select("id, part, name")
-		.eq("gig_id", numericId)
-		.eq("user_id", user.id)
-		.maybeSingle();
+	const [isAdmin, { data: performer }, { data: gig }] = await Promise.all([
+		getIsAdmin(),
+		supabase
+			.from("performers")
+			.select("id, part, name")
+			.eq("gig_id", numericId)
+			.eq("user_id", user.id)
+			.maybeSingle(),
+		supabase
+			.from(SUPABASE_GIGS_TABLE)
+			.select("title, meeting_date, perform_date, location")
+			.eq("id", numericId)
+			.maybeSingle(),
+	]);
 
 	// 참여자가 아니고 관리자도 아닌 경우 접근 차단 안내 화면 표시
 	if (!isAdmin && !performer) {
-		const { data: gig } = await supabase
-			.from(SUPABASE_GIGS_TABLE)
-			.select("title")
-			.eq("id", numericId)
-			.maybeSingle();
-
 		return (
-			<SiteLayout>
-				<PageContainer className="p-4 sm:p-8 lg:p-10">
 					<div className="flex flex-col items-center justify-center py-20 text-center gap-6 max-w-md mx-auto">
 						<div className="size-16 rounded-3xl bg-amber-500/10 text-amber-500 flex items-center justify-center shadow-xs">
 							<Lock className="size-8" />
@@ -134,18 +136,75 @@ export default async function NominationsPage({ params }: PageProps) {
 							</Button>
 						</div>
 					</div>
-				</PageContainer>
-			</SiteLayout>
 		);
 	}
 
-	return (
-		<SiteLayout>
-			<PageContainer className="p-4 sm:p-8 lg:p-10 gap-8">
-				<Suspense fallback={<NominationsLoadingFallback />}>
-					<NominationPanel initialIsAdmin={isAdmin} />
-				</Suspense>
-			</PageContainer>
-		</SiteLayout>
-	);
+	if (!gig) redirect("/gigs");
+
+	const profileLookup = performer
+		? Promise.resolve(null)
+		: supabase.from("users").select("name").eq("id", user.id).maybeSingle();
+	const [nominationRes, performersRes, viewRes, profileRes] = await Promise.all([
+		supabase
+			.from("nominations")
+			.select(`*,
+				created_by:performers (id, user_id, name, part, users (name, generation)),
+				responses:nomination_responses (
+					id, nomination_id, user_id, session_part, status, comment,
+					created_at, updated_at, users (name, generation, part)
+				)`)
+			.eq("gig_id", numericId)
+			.order("created_at", { ascending: true }),
+		supabase
+			.from("performers")
+			.select("id, part, name, user_id, users (name, generation)")
+			.eq("gig_id", numericId)
+			.order("created_at", { ascending: true }),
+		supabase
+			.from("setlist_views")
+			.select("last_viewed_at")
+			.eq("gig_id", numericId)
+			.eq("user_id", user.id)
+			.maybeSingle(),
+		profileLookup,
+	]);
+
+	type PerformerRow = {
+		id: number;
+		part: string;
+		name: string | null;
+		user_id: string | null;
+		users: { name: string; generation: number | null } | null;
+	};
+	const performerRows = (performersRes.data ?? []) as unknown as PerformerRow[];
+	const performers: RecommendedVocal[] = performerRows.map((row) => ({
+		id: row.id,
+		name: row.users?.name || row.name || "익명",
+		generation: row.users?.generation ?? null,
+		part: row.part || "",
+		userId: row.user_id || null,
+	}));
+	const profileName = profileRes?.data?.name || user.user_metadata?.name;
+	const nameMatch = !performer && profileName
+		? performerRows.find((row) => row.name === profileName)
+		: null;
+	const currentPerformer = performer ?? (nameMatch
+		? { id: nameMatch.id, part: nameMatch.part, name: nameMatch.name }
+		: null);
+
+	return <NominationPanel
+		key={numericId}
+		initialIsAdmin={isAdmin}
+		initialSongs={(nominationRes.data ?? []).map(parseNomination)}
+		initialUserId={user.id}
+		initialPerformer={currentPerformer}
+		initialPerformers={performers}
+		initialGigInfo={{
+			title: gig.title || "무제",
+			meetingDate: gig.meeting_date || "",
+			performDate: gig.perform_date || "",
+			location: gig.location || "",
+		}}
+		initialLastViewedTimestamp={viewRes.data?.last_viewed_at ?? null}
+	/>;
 }

@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { updatePerformerPhoto } from "@/app/gigs/actions";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { ResponsiveImage } from "@/components/ui/responsive-image";
 import type { GigPerformer } from "@/lib/gig";
 
 interface PerformerCardGridProps {
@@ -148,10 +149,11 @@ export function PerformerCardGrid({
                 )}
 
                 {p.photo_url ? (
-                  <img
+                  <ResponsiveImage
                     src={p.photo_url}
                     alt={p.user?.name || p.name || "LINEUP"}
                     className="w-full h-full object-cover rounded-xl transition-transform duration-300 group-hover:scale-102"
+                    sizes="(min-width: 1024px) 180px, (min-width: 768px) 25vw, (min-width: 640px) 33vw, 50vw"
                   />
                 ) : (
                   <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground gap-1.5 p-3 text-center">

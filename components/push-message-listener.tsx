@@ -2,24 +2,22 @@
 
 import { useEffect } from "react";
 import { toast } from "@/components/ui/sonner";
-import {
-	isPushNotificationSupported,
-	onForegroundMessage,
-} from "@/lib/firebase/pushNotification";
-
 export function PushMessageListener() {
 	useEffect(() => {
 		let active = true;
+		let started = false;
 		let unsubscribe: (() => void) | undefined;
 
-		void (async () => {
+		const startWhenPermitted = async () => {
+			if (started || !("Notification" in window) || Notification.permission !== "granted") return;
+			started = true;
+			const { isPushNotificationSupported, onForegroundMessage } = await import("@/lib/firebase/pushNotification");
 			if (!(await isPushNotificationSupported())) return;
 
-			if (Notification.permission === "granted") {
-				await navigator.serviceWorker.register("/firebase-messaging-sw.js").catch((error) => {
-					console.error("푸시 서비스 워커 갱신 실패:", error);
-				});
-			}
+			await navigator.serviceWorker.register("/firebase-messaging-sw.js").catch((error) => {
+				console.error("푸시 서비스 워커 갱신 실패:", error);
+			});
+			if (!active) return;
 
 			const result = await onForegroundMessage((payload) => {
 				const title = payload.notification?.title ?? "소크나 알림";
@@ -34,10 +32,19 @@ export function PushMessageListener() {
 			if (!result.data) return;
 			if (active) unsubscribe = result.data;
 			else result.data();
-		})();
+		};
+		const onTokenChange = () => {
+			void startWhenPermitted().catch((error) => {
+				started = false;
+				console.error("푸시 수신기 초기화 실패:", error);
+			});
+		};
+		window.addEventListener("sokna-push-token-change", onTokenChange);
+		onTokenChange();
 
 		return () => {
 			active = false;
+			window.removeEventListener("sokna-push-token-change", onTokenChange);
 			unsubscribe?.();
 		};
 	}, []);

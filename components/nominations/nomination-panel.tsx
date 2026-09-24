@@ -2,17 +2,15 @@
 
 import {
 	useCallback,
-	useRef,
 	useState,
-	useTransition,
 	useEffect,
 	useMemo,
 } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useParams, useRouter } from "next/navigation";
 import {
 	Plus,
-	Loader2,
 	AlarmClock,
 	ArrowLeft,
 	Music2,
@@ -20,44 +18,47 @@ import {
 	Search,
 	X,
 	ChevronRight,
-	Play,
 	Sparkles,
 	Calendar,
 	MapPin,
 	Filter,
 	Lock,
 	CheckCheck,
-	CheckCircle2,
-	XCircle,
 	ChevronDown,
 	RotateCcw,
 } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { LoadingIndicator } from "@/components/ui/loading-indicator";
+import { ResponsiveImage } from "@/components/ui/responsive-image";
 import {
 	type Nomination,
 	type RecommendedVocal,
-	parseNomination,
 	getYouTubeVideoId,
 	getYouTubeThumbnailUrl,
 	isMaleVocalPart,
 	isFemaleVocalPart,
-	extractYouTubeTimestamp,
-	formatSecondsToTime,
 	sortSessionParts,
 } from "@/lib/nomination";
-import { NominationDrawer } from "@/components/nominations/nomination-drawer";
 import {
 	updateNominationViewAction,
 } from "@/app/gigs/[id]/nominations/actions";
 import { toast } from "sonner";
 import { cn, getDDay } from "@/lib/utils";
 
-const DEADLINE_COLUMN = "meeting_date";
-const DEFAULT_REQUIRED_PARTS = ["보컬(남)", "기타", "베이스", "드럼", "건반"];
+const NominationDrawer = dynamic(
+	() => import("@/components/nominations/nomination-drawer").then((module) => module.NominationDrawer),
+	{
+		ssr: false,
+		loading: () => (
+			<div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/70">
+				<LoadingIndicator label="곡 상세 정보를 불러오는 중…" />
+			</div>
+		),
+	},
+);
 const SESSION_FILTER_PARTS = [
 	"보컬(남)",
 	"보컬(여)",
@@ -102,32 +103,44 @@ function formatDateKorean(dateStr?: string | null) {
 }
 
 interface NominationPanelProps {
-	initialIsAdmin?: boolean;
-}
-
-export function NominationPanel({ initialIsAdmin = false }: NominationPanelProps) {
-	const params = useParams();
-	const router = useRouter();
-	const gigId = params.id as string;
-	const supabase = createClient();
-
-	const [songs, setSongs] = useState<Nomination[]>([]);
-	const [selectedSong, setSelectedSong] = useState<Nomination | null>(null);
-	const [currentUser, setCurrentUser] = useState<{ id: string } | null>(null);
-	const [currentPerformer, setCurrentPerformer] = useState<{ id: number; part: string; name?: string | null } | null>(null);
-	const [performers, setPerformers] = useState<RecommendedVocal[]>([]);
-	const [isAdmin, setIsAdmin] = useState(initialIsAdmin);
-	const [gigInfo, setGigInfo] = useState<{
+	initialIsAdmin: boolean;
+	initialSongs: Nomination[];
+	initialUserId: string;
+	initialPerformer: { id: number; part: string; name?: string | null } | null;
+	initialPerformers: RecommendedVocal[];
+	initialGigInfo: {
 		title: string;
 		meetingDate: string;
 		performDate?: string;
 		location?: string;
-	} | null>(null);
-	const [isLoading, setIsLoading] = useState(true);
-	const [timeLeft, setTimeLeft] = useState(getRemainingTime(""));
+	};
+	initialLastViewedTimestamp: string | null;
+}
+
+export function NominationPanel({
+	initialIsAdmin,
+	initialSongs,
+	initialUserId,
+	initialPerformer,
+	initialPerformers,
+	initialGigInfo,
+	initialLastViewedTimestamp,
+}: NominationPanelProps) {
+	const params = useParams();
+	const router = useRouter();
+	const gigId = params.id as string;
+	const [songs, setSongs] = useState<Nomination[]>(initialSongs);
+	const [selectedSong, setSelectedSong] = useState<Nomination | null>(null);
+	const [hasOpenedDrawer, setHasOpenedDrawer] = useState(false);
+	const currentUser = useMemo(() => ({ id: initialUserId }), [initialUserId]);
+	const currentPerformer = initialPerformer;
+	const performers = initialPerformers;
+	const isAdmin = initialIsAdmin;
+	const gigInfo = initialGigInfo;
+	const [timeLeft, setTimeLeft] = useState(() => getRemainingTime(initialGigInfo.meetingDate));
 
 	// 마지막 조회 시점(하이라이트 기준) 및 확인된 곡 목록
-	const [lastViewedTimestamp, setLastViewedTimestamp] = useState<string | null>(null);
+	const [lastViewedTimestamp, setLastViewedTimestamp] = useState<string | null>(initialLastViewedTimestamp);
 	const [viewedSongIds, setViewedSongIds] = useState<Set<number>>(new Set());
 
 	// 검색 및 필터링 상태
@@ -139,156 +152,20 @@ export function NominationPanel({ initialIsAdmin = false }: NominationPanelProps
 	const [onlyChangedFilter, setOnlyChangedFilter] = useState<boolean>(false);
 
 	useEffect(() => {
-		async function init() {
-			setIsLoading(true);
-			try {
-				const numericGigId = Number(gigId);
-				const [gigRes, nominationRes, authUserRes, performersRes] = await Promise.all([
-					supabase
-						.from("gigs")
-						.select(`title, ${DEADLINE_COLUMN}, perform_date, location`)
-						.eq("id", isNaN(numericGigId) ? gigId : numericGigId)
-						.single(),
-					supabase
-						.from("nominations")
-						.select(
-							`*,
-                created_by:performers (
-									id,
-									user_id,
-									name,
-									part,
-									users (
-										name,
-										generation
-									)
-								),
-								responses:nomination_responses (
-									id,
-									nomination_id,
-									user_id,
-									session_part,
-									status,
-									comment,
-									created_at,
-									updated_at,
-									users (
-										name,
-										generation,
-										part
-									)
-								)
-              `,
-						)
-						.eq("gig_id", isNaN(numericGigId) ? gigId : numericGigId)
-						.order("created_at", { ascending: true }),
-					supabase.auth.getUser(),
-					supabase
-						.from("performers")
-						.select(`
-							id,
-							part,
-							name,
-							user_id,
-							users (
-								name,
-								generation
-							)
-						`)
-						.eq("gig_id", isNaN(numericGigId) ? gigId : numericGigId)
-						.order("created_at", { ascending: true }),
-				]);
+		setSongs(initialSongs);
+	}, [initialSongs]);
 
-				if (performersRes.data) {
-					type PerformerRow = {
-						id: number;
-						part: string;
-						name: string | null;
-						user_id: string | null;
-						users: { name: string; generation: number | null } | null;
-					};
-					const mapped: RecommendedVocal[] = (performersRes.data as unknown as PerformerRow[]).map((p) => ({
-						id: p.id,
-						name: p.users?.name || p.name || "익명",
-						generation: p.users?.generation ?? null,
-						part: p.part || "",
-						userId: p.user_id || null,
-					}));
-					setPerformers(mapped);
-				}
-
-				if (authUserRes.data.user) {
-					const uid = authUserRes.data.user.id;
-					const uEmail = authUserRes.data.user.email?.trim() || "";
-					setCurrentUser(authUserRes.data.user);
-					const [{ data: adminRow }, { data: perfRow }, { data: viewRow }] = await Promise.all([
-						supabase
-							.from("admins")
-							.select("id")
-							.or(`id.eq.${uid},email.eq.${uEmail}`)
-							.maybeSingle(),
-						supabase
-							.from("performers")
-							.select("id, part, name")
-							.eq("gig_id", isNaN(numericGigId) ? gigId : numericGigId)
-							.eq("user_id", uid)
-							.maybeSingle(),
-						supabase
-							.from("setlist_views")
-							.select("last_viewed_at")
-							.eq("gig_id", isNaN(numericGigId) ? gigId : numericGigId)
-							.eq("user_id", uid)
-							.maybeSingle(),
-					]);
-					setIsAdmin((prev) => prev || Boolean(adminRow));
-					let activePerformer = perfRow;
-					if (!activePerformer) {
-						// user_id가 미연동된 performer인 경우 유저 프로필 이름으로 fallback 매칭
-						const { data: userProfile } = await supabase
-							.from("users")
-							.select("name")
-							.eq("id", uid)
-							.maybeSingle();
-						const profileName = userProfile?.name || authUserRes.data.user.user_metadata?.name;
-						if (profileName) {
-							const { data: nameMatchPerf } = await supabase
-								.from("performers")
-								.select("id, part, name")
-								.eq("gig_id", isNaN(numericGigId) ? gigId : numericGigId)
-								.eq("name", profileName)
-								.maybeSingle();
-							if (nameMatchPerf) activePerformer = nameMatchPerf;
-						}
-					}
-					if (activePerformer) setCurrentPerformer(activePerformer);
-
-					// 마지막 조회 시점 로드 (DB 우선, fallback: localStorage)
-					let previousTimestamp = viewRow?.last_viewed_at ?? null;
-					if (!previousTimestamp && typeof window !== "undefined") {
-						const localSaved = localStorage.getItem(`sokna_setlist_view_${gigId}_${uid}`);
-						if (localSaved) previousTimestamp = localSaved;
-					}
-
-					setLastViewedTimestamp(previousTimestamp);
-				}
-
-				if (gigRes.data) {
-					const mDate = gigRes.data[DEADLINE_COLUMN] || "";
-					setGigInfo({
-						title: gigRes.data.title || "무제",
-						meetingDate: mDate,
-						performDate: gigRes.data.perform_date || "",
-						location: gigRes.data.location || "",
-					});
-					setTimeLeft(getRemainingTime(mDate));
-				}
-				if (nominationRes.data) setSongs(nominationRes.data.map(parseNomination));
-			} finally {
-				setIsLoading(false);
-			}
+	useEffect(() => {
+		if (initialLastViewedTimestamp) {
+			setLastViewedTimestamp(initialLastViewedTimestamp);
+			return;
 		}
-		init();
-	}, [gigId, supabase]);
+		try {
+			setLastViewedTimestamp(localStorage.getItem(`sokna_setlist_view_${gigId}_${initialUserId}`));
+		} catch {
+			setLastViewedTimestamp(null);
+		}
+	}, [gigId, initialUserId, initialLastViewedTimestamp]);
 
 	// 곡별 하이라이트 상태 판별 ("new" | "updated" | null)
 	const getSongHighlightState = useCallback(
@@ -342,6 +219,7 @@ export function NominationPanel({ initialIsAdmin = false }: NominationPanelProps
 
 	useEffect(() => {
 		if (!gigInfo?.meetingDate) return;
+		setTimeLeft(getRemainingTime(gigInfo.meetingDate));
 		const timer = setInterval(
 			() => setTimeLeft(getRemainingTime(gigInfo.meetingDate)),
 			60000,
@@ -403,17 +281,6 @@ export function NominationPanel({ initialIsAdmin = false }: NominationPanelProps
 		(partFilter !== "all" ? 1 : 0) +
 		(responseFilter !== "all" ? 1 : 0) +
 		(sheetFilter !== "all" ? 1 : 0);
-
-	if (isLoading) {
-		return (
-			<div className="flex flex-col items-center justify-center py-20 gap-4">
-				<Loader2 className="size-8 animate-spin text-primary" />
-				<p className="text-sm text-muted-foreground animate-pulse font-medium">
-					선곡회의 목록을 불러오는 중입니다...
-				</p>
-			</div>
-		);
-	}
 
 	const dDay = gigInfo?.performDate ? getDDay(gigInfo.performDate) : "";
 	const canRecommend = isAdmin || (!timeLeft.isOver && Boolean(currentPerformer));
@@ -890,6 +757,7 @@ export function NominationPanel({ initialIsAdmin = false }: NominationPanelProps
 								onClick={() => {
 									// 상세 서랍 열람 시 해당 곡을 확인 완료로 표시
 									setViewedSongIds((prev) => new Set([...prev, song.id]));
+									setHasOpenedDrawer(true);
 									setSelectedSong(song);
 								}}
 								className="cursor-pointer focus:outline-none"
@@ -898,6 +766,7 @@ export function NominationPanel({ initialIsAdmin = false }: NominationPanelProps
 								onKeyDown={(e) => {
 									if (e.key === "Enter" || e.key === " ") {
 										setViewedSongIds((prev) => new Set([...prev, song.id]));
+										setHasOpenedDrawer(true);
 										setSelectedSong(song);
 									}
 								}}
@@ -945,7 +814,8 @@ export function NominationPanel({ initialIsAdmin = false }: NominationPanelProps
 			)}
 
 			{/* 6. 상세 슬라이드 오버 서랍 */}
-			<NominationDrawer
+			{hasOpenedDrawer && (
+				<NominationDrawer
 				song={selectedSong}
 				currentUserId={currentUser?.id}
 				isAdmin={isAdmin}
@@ -970,7 +840,8 @@ export function NominationPanel({ initialIsAdmin = false }: NominationPanelProps
 						prev.map((s) => (s.id === updatedSong.id ? updatedSong : s)),
 					);
 				}}
-			/>
+				/>
+			)}
 		</div>
 	);
 }
@@ -1062,10 +933,11 @@ function NominationCard({
 				{/* 썸네일 아트워크 영역 (유튜브 16:9 기본 비율 적용) */}
 				<div className="relative shrink-0 w-full sm:w-36 aspect-video rounded-xl overflow-hidden bg-muted/60 border border-border/60 flex items-center justify-center">
 					{thumbnailUrl ? (
-						<img
+						<ResponsiveImage
 							src={thumbnailUrl}
 							alt={song.title}
 							className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+							sizes="(min-width: 640px) 144px, 100vw"
 						/>
 					) : (
 						<div className="w-full h-full bg-gradient-to-br from-primary/10 via-muted to-accent/30 flex flex-col items-center justify-center text-muted-foreground group-hover:text-primary transition-colors">
@@ -1194,6 +1066,3 @@ function NominationCard({
 		</Card>
 	);
 }
-
-export const SetlistPanel = NominationPanel;
-export type SetlistPanelProps = NominationPanelProps;

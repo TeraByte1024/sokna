@@ -1,9 +1,10 @@
 import { Suspense } from "react";
 import { SiteLayout } from "@/components/site-layout";
 import { PageContainer } from "@/components/page-container";
+import { GigDetailSkeleton } from "@/components/gigs/gig-loading-skeleton";
 import { GigDetailInner } from "@/app/gigs/[id]/gig-detail-inner";
 import { createClient } from "@/lib/supabase/server";
-import { SUPABASE_GIGS_TABLE } from "@/lib/supabase/gigs";
+import { getGigRow } from "@/lib/gig-server-data";
 import { getIsAdmin } from "@/lib/auth-admin";
 import type { Metadata } from "next";
 
@@ -22,14 +23,10 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     };
   }
 
-  const supabase = await createClient();
-  const { data: gig } = await supabase
-    .from(SUPABASE_GIGS_TABLE)
-    .select("title, is_public")
-    .eq("id", numericId)
-    .maybeSingle();
+  const { data: gig } = await getGigRow(numericId);
 
   if (gig && !gig.is_public) {
+    const supabase = await createClient();
     const [
       { data: { user } },
       isAdmin,
@@ -63,16 +60,6 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
-function GigDetailFallback() {
-  return (
-    <div className="flex flex-col gap-6 w-full max-w-4xl mx-auto py-10 animate-pulse">
-      <div className="h-6 w-24 bg-muted rounded-md" />
-      <div className="h-48 w-full bg-muted rounded-3xl" />
-      <div className="h-40 w-full bg-muted rounded-2xl" />
-    </div>
-  );
-}
-
 async function GigDetailLoader({ params }: PageProps) {
   const { id } = await params;
   return <GigDetailInner gigId={id} />;
@@ -82,7 +69,7 @@ export default function GigDetailPage({ params }: PageProps) {
   return (
     <SiteLayout>
       <PageContainer>
-        <Suspense fallback={<GigDetailFallback />}>
+        <Suspense fallback={<GigDetailSkeleton />}>
           <GigDetailLoader params={params} />
         </Suspense>
       </PageContainer>

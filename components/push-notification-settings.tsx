@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { BellRing, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
-import { deleteFcmToken, getFcmToken, isPushNotificationSupported, requestNotificationPermission } from "@/lib/firebase/pushNotification";
+import { requestNotificationPermission } from "@/lib/firebase/push-permission";
 import {
 	enableMarketingOptInAction,
 	registerPushTokenAction,
@@ -15,7 +15,7 @@ import {
 const TOKEN_STORAGE_KEY = "sokna-fcm-token";
 const TOKEN_CHANGE_EVENT = "sokna-push-token-change";
 
-export function usePushNotificationDevice(initialMarketingOptIn: boolean) {
+export function usePushNotificationDevice(initialMarketingOptIn: boolean, enabled = true) {
 	const router = useRouter();
 	const [permission, setPermission] = useState<NotificationPermission | "unsupported">("default");
 	const [hasRegisteredToken, setHasRegisteredToken] = useState(false);
@@ -27,8 +27,10 @@ export function usePushNotificationDevice(initialMarketingOptIn: boolean) {
 	}, [initialMarketingOptIn]);
 
 	useEffect(() => {
+		if (!enabled) return;
 		let active = true;
 		const syncTokenState = async () => {
+			const { isPushNotificationSupported } = await import("@/lib/firebase/pushNotification");
 			const supported = await isPushNotificationSupported();
 			if (!active) return;
 			if (!supported) {
@@ -50,11 +52,12 @@ export function usePushNotificationDevice(initialMarketingOptIn: boolean) {
 			active = false;
 			window.removeEventListener(TOKEN_CHANGE_EVENT, onTokenChange);
 		};
-	}, []);
+	}, [enabled]);
 
 	const registerDevice = async () => {
 		const registration = await navigator.serviceWorker.register("/firebase-messaging-sw.js");
 		await navigator.serviceWorker.ready;
+		const { getFcmToken } = await import("@/lib/firebase/pushNotification");
 		const tokenResult = await getFcmToken(registration);
 		if (!tokenResult.data) throw new Error(tokenResult.error ?? "토큰 발급 실패");
 		const result = await registerPushTokenAction(tokenResult.data, navigator.userAgent);
@@ -112,6 +115,7 @@ export function usePushNotificationDevice(initialMarketingOptIn: boolean) {
 				const result = await unregisterPushTokenAction(token);
 				if (!result.ok) throw new Error(result.error);
 			}
+			const { deleteFcmToken } = await import("@/lib/firebase/pushNotification");
 			await deleteFcmToken().catch(() => undefined);
 			window.localStorage.removeItem(TOKEN_STORAGE_KEY);
 			setHasRegisteredToken(false);

@@ -18,7 +18,7 @@
    - **신규 곡**: 에메랄드 뱃지(`[✨ 신규]`), 카드 테두리 에메랄드 글로우/링, 좌측 에메랄드 컬러 바.
    - **수정된 곡**: 앰버 뱃지(`[✏️ 수정됨]`), 카드 테두리 앰버 글로우/링, 좌측 앰버 컬러 바.
 4. **확인 완료(Clear) 인터랙션**:
-   - **개별 확인**: 곡 카드를 클릭하여 상세 서랍(`SetlistDrawer`)을 열람하면 해당 곡의 하이라이트가 즉시 해제됩니다.
+   - **개별 확인**: 곡 카드를 클릭하여 상세 서랍(`NominationDrawer`)을 열람하면 해당 곡의 하이라이트가 즉시 해제됩니다.
    - **모두 확인 완료**: 상단 배너의 `[모두 확인 완료]` 버튼 클릭 시 모든 곡의 하이라이트가 해제되고 현재 시각이 DB `setlist_views` 및 `localStorage`에 즉시 저장됩니다.
    - **빠른 필터**: 변경/신규 곡이 1건 이상 있을 경우 상단 툴바에 `[✨ 변경된 곡 N개]` 원클릭 토글 필터 버튼이 노출되어 변경된 곡들만 모아볼 수 있습니다.
 
@@ -46,7 +46,7 @@
 ---
 
 ## 3. 관련 파일 링크
-- 선곡 패널 컴포넌트: [components/setlists/setlist-panel.tsx](file:///d:/dev/sokna/components/setlists/setlist-panel.tsx)
+- 선곡 패널 컴포넌트: [components/nominations/nomination-panel.tsx](file:///d:/dev/sokna/components/nominations/nomination-panel.tsx)
 - 알림 큐 및 헬퍼: [lib/setlist-notifications.ts](file:///d:/dev/sokna/lib/setlist-notifications.ts)
 - 선곡회의 서버 액션: [app/gigs/[id]/nominations/actions.ts](file:///d:/dev/sokna/app/gigs/[id]/nominations/actions.ts)
 - Cron API 라우트: [app/api/cron/notifications/route.ts](file:///d:/dev/sokna/app/api/cron/notifications/route.ts)

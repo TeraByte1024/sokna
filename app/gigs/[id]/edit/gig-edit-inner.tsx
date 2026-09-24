@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { GigEditForm } from "@/components/gigs/gig-edit-form";
 import { createClient } from "@/lib/supabase/server";
-import { SUPABASE_GIGS_TABLE } from "@/lib/supabase/gigs";
+import { getGigRow } from "@/lib/gig-server-data";
 import { getIsAdmin } from "@/lib/auth-admin";
 import type { Performer } from "@/components/performer-selector";
 
@@ -21,21 +21,17 @@ export async function GigEditInner({ gigId }: GigEditInnerProps) {
     redirect(`/gigs/${numericId}`);
   }
 
-  const supabase = await createClient();
-
-  // 1. 공연 기본 정보 조회
-  const { data: gigRow, error: gigError } = await supabase
-    .from(SUPABASE_GIGS_TABLE)
-    .select("*")
-    .eq("id", numericId)
-    .maybeSingle();
+  const [supabase, { data: gigRow, error: gigError }] = await Promise.all([
+    createClient(),
+    getGigRow(numericId),
+  ]);
 
   if (gigError || !gigRow) {
     notFound();
   }
 
   // 2. 공연 참여자 목록 조회 (미연동 더미 공연자 포함)
-  const { data: performerRows } = await supabase
+  const performerQuery = supabase
     .from("performers")
     .select(`
       id,
@@ -53,6 +49,18 @@ export async function GigEditInner({ gigId }: GigEditInnerProps) {
     `)
     .eq("gig_id", numericId)
     .order("created_at", { ascending: true });
+
+  const setlistQuery = supabase
+    .from("setlists")
+    .select("id, title, artist, session_members, order_num")
+    .eq("gig_id", numericId)
+    .order("order_num", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  const [{ data: performerRows }, { data: setlistRows }] = await Promise.all([
+    performerQuery,
+    setlistQuery,
+  ]);
 
   const initialPerformers: Performer[] = (performerRows ?? []).map((row) => {
     const rawUser = row.users as {
@@ -74,14 +82,6 @@ export async function GigEditInner({ gigId }: GigEditInnerProps) {
       photo_url: row.photo_url ?? undefined,
     };
   });
-
-  // 3. 기존 셋리스트 목록 조회
-  const { data: setlistRows } = await supabase
-    .from("setlists")
-    .select("id, title, artist, session_members, order_num")
-    .eq("gig_id", numericId)
-    .order("order_num", { ascending: true })
-    .order("created_at", { ascending: true });
 
   const initialSetlists = (setlistRows ?? []).map((s) => ({
     id: s.id,
