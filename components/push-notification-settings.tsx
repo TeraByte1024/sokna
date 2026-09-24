@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { BellRing, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
-import { deleteFcmToken, getFcmToken, requestNotificationPermission } from "@/lib/firebase/pushNotification";
+import { deleteFcmToken, getFcmToken, isPushNotificationSupported, requestNotificationPermission } from "@/lib/firebase/pushNotification";
 import {
 	enableMarketingOptInAction,
 	registerPushTokenAction,
@@ -27,22 +27,32 @@ export function usePushNotificationDevice(initialMarketingOptIn: boolean) {
 	}, [initialMarketingOptIn]);
 
 	useEffect(() => {
-		const syncTokenState = () => {
-			if (!("Notification" in window) || !("serviceWorker" in navigator)) {
+		let active = true;
+		const syncTokenState = async () => {
+			const supported = await isPushNotificationSupported();
+			if (!active) return;
+			if (!supported) {
 				setPermission("unsupported");
+				setHasRegisteredToken(false);
 				return;
 			}
 			setPermission(Notification.permission);
-			setHasRegisteredToken(Boolean(window.localStorage.getItem(TOKEN_STORAGE_KEY)));
+			try {
+				setHasRegisteredToken(Boolean(window.localStorage.getItem(TOKEN_STORAGE_KEY)));
+			} catch {
+				setHasRegisteredToken(false);
+			}
 		};
-		syncTokenState();
-		window.addEventListener(TOKEN_CHANGE_EVENT, syncTokenState);
-		return () => window.removeEventListener(TOKEN_CHANGE_EVENT, syncTokenState);
+		const onTokenChange = () => { void syncTokenState(); };
+		void syncTokenState();
+		window.addEventListener(TOKEN_CHANGE_EVENT, onTokenChange);
+		return () => {
+			active = false;
+			window.removeEventListener(TOKEN_CHANGE_EVENT, onTokenChange);
+		};
 	}, []);
 
 	const registerDevice = async () => {
-		const permissionResult = await requestNotificationPermission();
-		if (permissionResult.error) throw new Error(permissionResult.error);
 		const registration = await navigator.serviceWorker.register("/firebase-messaging-sw.js");
 		await navigator.serviceWorker.ready;
 		const tokenResult = await getFcmToken(registration);
@@ -59,6 +69,8 @@ export function usePushNotificationDevice(initialMarketingOptIn: boolean) {
 		if (isPending) return false;
 		setIsPending(true);
 		try {
+			const permissionResult = await requestNotificationPermission();
+			if (permissionResult.error) throw new Error(permissionResult.error);
 			await registerDevice();
 			toast.success("이 기기에서 푸시 알림을 받습니다.");
 			return true;
@@ -74,6 +86,8 @@ export function usePushNotificationDevice(initialMarketingOptIn: boolean) {
 		if (isPending) return false;
 		setIsPending(true);
 		try {
+			const permissionResult = await requestNotificationPermission();
+			if (permissionResult.error) throw new Error(permissionResult.error);
 			const consentResult = await enableMarketingOptInAction();
 			if (!consentResult.ok) throw new Error(consentResult.error);
 			setHasMarketingConsent(true);

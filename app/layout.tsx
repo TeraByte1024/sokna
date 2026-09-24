@@ -16,6 +16,14 @@ export const metadata: Metadata = {
     template: "%s | 소리로 크는 나무",
   },
   description: "동아리 소개와 선곡회의 안내",
+  appleWebApp: {
+    capable: true,
+    title: "소크나",
+    statusBarStyle: "default",
+  },
+  icons: {
+    apple: "/logo_edited.png",
+  },
 };
 
 const geistSans = Geist({

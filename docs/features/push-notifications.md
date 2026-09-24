@@ -14,14 +14,14 @@ FCM Web Push로 모바일/데스크톱 브라우저에 다음 이벤트를 알�
 
 1. 사용자는 `/profile`의 기존 정보 수정 폼에서 `앱 푸시 알림 수신 동의` 여부를 확인하고 변경합니다. 별도의 푸시 설정 카드는 표시하지 않습니다.
 2. 헤더 프로필 팝업에 한 줄로 표시되는 `이 기기에서 알림 받기` 토글을 눌러 브라우저 권한을 허용합니다.
-3. 아직 수신에 동의하지 않은 사용자가 토글을 켜면 먼저 수신 동의 다이얼로그를 표시하고, 사용자가 명시적으로 동의한 경우에만 동의 저장과 기기 토큰 등록을 순서대로 수행합니다.
+3. 아직 수신에 동의하지 않은 사용자가 토글을 켜면 먼저 수신 동의 다이얼로그를 표시합니다. 확인 버튼의 직접적인 탭 동작에서 브라우저 알림 권한을 요청하고, 허용되면 수신 동의 저장과 기기 토큰 등록을 순서대로 수행합니다.
 4. 브라우저가 발급한 FCM 토큰을 `profiles`에 기기별로 저장합니다.
 5. 수신 동의를 철회하면 해당 사용자의 모든 `profiles` 토큰을 즉시 삭제합니다.
 6. 사용자는 프로필 팝업 토글을 꺼서 현재 기기 토큰만 해제할 수 있습니다.
 
 서비스 워커 `/firebase-messaging-sw.js`는 Firebase Messaging SDK를 초기화해 페이지가 닫힌 백그라운드 상태에서도 알림 payload를 표시합니다. 로그아웃 상태에서도 브라우저가 서비스 워커를 갱신할 수 있도록 인증 프록시의 공개 경로로 유지합니다. 로그인 세션은 푸시 수신 조건이 아닙니다.
 
-권한 요청은 브라우저 정책에 맞게 사용자 버튼 클릭에서만 실행합니다. iOS/iPadOS에서는 웹 푸시를 위해 홈 화면에 추가한 웹 앱에서 설정해야 할 수 있습니다.
+권한 요청은 브라우저 정책에 맞게 사용자 버튼 클릭에서 즉시 시작합니다. iOS/iPadOS 16.4 이상에서는 Safari의 공유 메뉴에서 사이트를 홈 화면에 추가한 뒤, 홈 화면 아이콘으로 연 웹 앱에서만 웹 푸시 권한을 요청할 수 있습니다. 일반 Safari 탭에서는 알림 토글을 비활성화합니다.
 
 ## 3. 발송 파이프라인
 
@@ -82,6 +82,15 @@ FCM Web Push로 모바일/데스크톱 브라우저에 다음 이벤트를 알�
 - 발송 및 outbox 처리: `lib/push-notifications.ts`
 - 기기 설정 UI: `components/push-notification-settings.tsx`
 - 서비스 워커: `app/firebase-messaging-sw.js/route.ts`
+- 홈 화면 웹앱 매니페스트 및 메타데이터: `app/manifest.ts`, `app/layout.tsx`
 - cron: `app/api/cron/notifications/route.ts`
 - DB: `supabase/migrations/20260922010000_enable_web_push_delivery.sql`
 - 회원 승인 outbox 트랜잭션: `supabase/migrations/20260922020000_add_member_approval_push_notification.sql`
+
+## 7. 브라우저 호환성 및 실패 격리
+
+- Firebase Messaging은 브라우저 지원 여부를 비동기로 확인한 뒤 초기화합니다. 전역 포그라운드 메시지 리스너도 이 검사를 통과한 경우에만 등록합니다.
+- iOS Safari 일반 탭처럼 Service Worker는 있지만 Web Push API가 없는 환경에서는 푸시 기능만 비활성화하며, 페이지 렌더링은 계속되어야 합니다.
+- 지원 여부 확인 또는 Firebase 메시지 리스너 초기화가 실패해도 예외를 전역으로 전파하지 않습니다.
+- `/manifest.webmanifest`는 로그인 상태와 관계없이 제공하며, `display: standalone`, 고정된 `id`, 시작 URL 및 아이콘을 포함합니다.
+- iPhone 실기기 검증은 홈 화면 앱에서 권한 허용, 토큰 등록, 전경 및 백그라운드 수신, 알림 탭 이동을 각각 확인해야 완료됩니다.

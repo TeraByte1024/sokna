@@ -1,7 +1,7 @@
 "use client";
 
 import { initializeApp } from "firebase/app";
-import { getMessaging, Messaging } from "firebase/messaging";
+import { getMessaging, isSupported, type Messaging } from "firebase/messaging";
 
 // 프로젝트 설정
 const firebaseConfig = {
@@ -16,15 +16,17 @@ const firebaseConfig = {
 // 프로젝트 초기화
 const app = initializeApp(firebaseConfig);
 
-// 푸시 알림 관리 - 브라우저 환경에서만 초기화
-let messaging: Messaging | undefined;
+let messagingPromise: Promise<Messaging | null> | undefined;
 
-if (typeof window !== "undefined") {
-  try {
-    messaging = getMessaging(app);
-  } catch (error) {
-    console.error("Firebase Messaging 초기화 오류:", error);
-  }
+export function getSupportedMessaging(): Promise<Messaging | null> {
+  if (typeof window === "undefined") return Promise.resolve(null);
+
+  messagingPromise ??= isSupported()
+    .then((supported) => (supported ? getMessaging(app) : null))
+    .catch((error) => {
+      console.error("Firebase Messaging 초기화 오류:", error);
+      return null;
+    });
+
+  return messagingPromise;
 }
-
-export { messaging };
