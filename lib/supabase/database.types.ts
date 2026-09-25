@@ -580,6 +580,7 @@ export type Database = {
           generation: number | null
           id: string
           marketing_opt_in: boolean
+          marketing_opted_in_at: string | null
           name: string
           part: string | null
           status: string
@@ -592,6 +593,7 @@ export type Database = {
           generation?: number | null
           id?: string
           marketing_opt_in?: boolean
+          marketing_opted_in_at?: string | null
           name: string
           part?: string | null
           status?: string
@@ -604,6 +606,7 @@ export type Database = {
           generation?: number | null
           id?: string
           marketing_opt_in?: boolean
+          marketing_opted_in_at?: string | null
           name?: string
           part?: string | null
           status?: string

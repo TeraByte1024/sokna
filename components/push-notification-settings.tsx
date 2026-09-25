@@ -133,6 +133,7 @@ export function usePushNotificationDevice(initialMarketingOptIn: boolean, enable
 	return {
 		permission,
 		enabled: hasMarketingConsent && permission === "granted" && hasRegisteredToken,
+		hasRegisteredToken,
 		hasMarketingConsent,
 		isPending,
 		enablePush,

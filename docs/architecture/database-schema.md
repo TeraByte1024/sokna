@@ -22,6 +22,8 @@ erDiagram
         string name
         int generation
         string part
+        boolean marketing_opt_in
+        timestamp marketing_opted_in_at
         timestamp created_at
     }
     gigs ||--o{ performers : "공연 세션 구성"
@@ -119,7 +121,10 @@ erDiagram
 | `applied_at` | `timestamptz` | NO | `now()` | 가입 신청 일시 |
 | `approved_at` | `timestamptz` | YES | null | 관리자 승인 일시 |
 | `marketing_opt_in` | `bool` | NO | `false` | 웹 푸시/행사 소식 수신 선택 동의 여부 |
+| `marketing_opted_in_at` | `timestamptz` | YES | null | 마지막으로 수신 동의가 `false`에서 `true`로 바뀐 시각. 기존 동의자는 과거 시각을 확인할 수 없어 null 유지 |
 | `created_at` | `timestamptz` | NO | `now()` | 레코드 생성 일시 |
+
+> `users_track_marketing_opted_in_at` 트리거가 가입 시 동의, 프로필 저장, 기기 알림 동의 다이얼로그의 동의 전환을 서버 시각으로 기록합니다. 동의 철회 시 null로 지우고, 동의 상태가 변하지 않는 회원 정보 수정에서는 기존 시각을 유지합니다. 새 컬럼을 직접 쓰더라도 트리거가 값을 덮어씁니다. 마이그레이션 이전에 이미 동의한 회원의 시각은 소급 추정하지 않습니다.
 
 ### 2.2 `admins` (관리자 목록)
 공연 생성, 공지 발송 등 관리자 권한을 부여받은 사용자 목록입니다.

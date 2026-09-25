@@ -18,6 +18,11 @@ import { updateMyProfileAction } from "./actions";
 import { toast } from "@/components/ui/sonner";
 import { LeaveConfirmDialog, useUnsavedChangesWarning } from "@/components/ui/leave-confirm-dialog";
 import {
+  MarketingPushConsentDialog,
+  usePushNotificationDevice,
+} from "@/components/push-notification-settings";
+import { cn } from "@/lib/utils";
+import {
   User,
   Mail,
   Sparkles,
@@ -27,6 +32,7 @@ import {
   Loader2,
   CheckCircle2,
   AlertCircle,
+  Bell,
 } from "lucide-react";
 
 const SESSION_PRESETS = [
@@ -49,6 +55,7 @@ export interface ProfileUser {
   applied_at: string;
   approved_at: string | null;
   marketing_opt_in: boolean;
+  marketing_opted_in_label: string | null;
 }
 
 interface ProfileFormProps {
@@ -77,6 +84,8 @@ export function ProfileForm({ user, isAdmin }: ProfileFormProps) {
   const [marketingOptIn, setMarketingOptIn] = useState<boolean>(
     user.marketing_opt_in ?? false
   );
+  const [pushConsentDialogOpen, setPushConsentDialogOpen] = useState(false);
+  const push = usePushNotificationDevice(user.marketing_opt_in);
 
   useEffect(() => {
     setMarketingOptIn(user.marketing_opt_in ?? false);
@@ -121,6 +130,16 @@ export function ProfileForm({ user, isAdmin }: ProfileFormProps) {
     setCustomPart("");
   };
 
+  const handleDevicePushToggle = () => {
+    if (push.enabled) {
+      void push.disablePush();
+    } else if (!push.hasMarketingConsent) {
+      setPushConsentDialogOpen(true);
+    } else {
+      void push.enablePush();
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setMessage(null);
@@ -159,6 +178,9 @@ export function ProfileForm({ user, isAdmin }: ProfileFormProps) {
 
       if (res.ok) {
         markSubmitting();
+        if (user.marketing_opt_in && !marketingOptIn && push.hasRegisteredToken) {
+          await push.disablePush();
+        }
         router.refresh();
         toast.success(res.message || "회원 정보가 성공적으로 수정되었습니다.");
         setMessage({
@@ -436,32 +458,74 @@ export function ProfileForm({ user, isAdmin }: ProfileFormProps) {
                   className="mt-0.5"
                 />
                 <div className="flex-1 space-y-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Label
-                      htmlFor="marketingOptIn"
-                      className="text-xs font-semibold cursor-pointer"
-                    >
-                      앱 푸시 알림 수신 동의 (선택)
-                    </Label>
-                    <Badge
-                      variant={marketingOptIn ? "default" : "outline"}
-                      className="h-5 px-1.5 text-[10px]"
-                    >
-                      {marketingOptIn ? "동의 중" : "미동의"}
-                    </Badge>
-                  </div>
+                  <Label
+                    htmlFor="marketingOptIn"
+                    className="text-xs font-semibold cursor-pointer"
+                  >
+                    앱 푸시 알림 수신 동의 (선택)
+                  </Label>
+                  <p className="text-[11px] font-medium text-muted-foreground">
+                    {marketingOptIn
+                      ? user.marketing_opt_in
+                        ? user.marketing_opted_in_label
+                          ? `${user.marketing_opted_in_label} 동의함`
+                          : "동의함"
+                        : "저장하면 동의 시각이 기록됩니다."
+                      : user.marketing_opt_in
+                        ? "저장하면 수신 동의가 해제됩니다."
+                        : "미동의"}
+                  </p>
                   <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    소크나 공연, 행사, 가입 승인 및 선곡회의 소식을 앱 푸시로 받아봅니다. 기기 등록은 헤더 프로필 메뉴에서 관리합니다.
+                    소크나 공연, 행사, 가입 승인 및 선곡회의 소식을 앱 푸시로 받아봅니다. 아래 토글이나 헤더 프로필 메뉴에서 이 기기의 알림을 관리할 수 있습니다.
                   </p>
                 </div>
               </div>
+              <div className="mt-4 flex min-h-12 items-center gap-3">
+                <Bell aria-hidden="true" className="size-5 shrink-0 text-foreground" strokeWidth={1.8} />
+                <span id="devicePushLabel" className="min-w-0 flex-1 text-sm font-semibold text-foreground">
+                  이 기기에서 알림 받기
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={push.enabled}
+                  aria-labelledby="devicePushLabel"
+                  aria-describedby={push.permission === "unsupported" || push.permission === "denied" ? "devicePushDescription" : undefined}
+                  title={push.enabled ? "이 기기 알림 끄기" : "이 기기 알림 켜기"}
+                  disabled={isPending || push.isPending || push.permission === "unsupported" || push.permission === "denied"}
+                  onClick={handleDevicePushToggle}
+                  className="inline-flex h-11 w-14 shrink-0 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      "relative h-7 w-[54px] rounded-full transition-colors",
+                      push.enabled ? "bg-foreground" : "bg-muted-foreground/30",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "absolute left-0.5 top-0.5 size-6 rounded-full bg-background shadow-sm transition-transform",
+                        push.enabled && "translate-x-[26px]",
+                      )}
+                    />
+                  </span>
+                </button>
+              </div>
+              {(push.permission === "unsupported" || push.permission === "denied") && (
+                <p id="devicePushDescription" className="text-[11px] leading-relaxed text-muted-foreground">
+                  {push.permission === "unsupported"
+                    ? "이 브라우저에서는 기기 알림을 사용할 수 없습니다."
+                    : "브라우저 설정에서 알림 권한을 허용해 주세요."}
+                </p>
+              )}
             </div>
 
             {/* 저장 버튼 */}
             <div className="pt-4 flex items-center justify-end">
               <Button
                 type="submit"
-                disabled={isPending}
+                disabled={isPending || push.isPending}
                 className="w-full sm:w-auto min-w-32 h-10 bg-primary text-primary-foreground font-semibold shadow-sm"
               >
                 {isPending ? (
@@ -477,6 +541,17 @@ export function ProfileForm({ user, isAdmin }: ProfileFormProps) {
           </form>
         </CardContent>
       </Card>
+
+      <MarketingPushConsentDialog
+        isOpen={pushConsentDialogOpen}
+        isPending={push.isPending}
+        onClose={() => setPushConsentDialogOpen(false)}
+        onConfirm={() => {
+          void push.consentAndEnablePush().then((ok) => {
+            if (ok) setPushConsentDialogOpen(false);
+          });
+        }}
+      />
 
       <LeaveConfirmDialog
         isOpen={showLeaveModal}
