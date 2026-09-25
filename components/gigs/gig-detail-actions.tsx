@@ -26,17 +26,17 @@ export function GigDetailActions({
   const [isJoinDialogOpen, setIsJoinDialogOpen] = useState(false);
   const searchParams = useSearchParams();
 
+  // URL 쿼리에 ?join=true 가 있으면 자동으로 다이얼로그 팝업
+  useEffect(() => {
+    if (isLoggedIn && searchParams.get("join") === "true") {
+      setIsJoinDialogOpen(true);
+    }
+  }, [isLoggedIn, searchParams]);
+
   // 비회원일 경우 렌더링하지 않음
   if (!isLoggedIn) {
     return null;
   }
-
-  // URL 쿼리에 ?join=true 가 있으면 자동으로 다이얼로그 팝업
-  useEffect(() => {
-    if (searchParams.get("join") === "true") {
-      setIsJoinDialogOpen(true);
-    }
-  }, [searchParams]);
 
   // 내 참여 여부(RSVP)에 따른 아이콘
   const renderStatusIcon = (sizeClass = "size-4") => {
@@ -88,7 +88,7 @@ export function GigDetailActions({
       </div>
 
       {/* 2. 모바일 하단 플로팅 바 (Sticky Bottom Action Bar) */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] bg-background/90 backdrop-blur-md border-t border-border/60 sm:hidden shadow-[0_-4px_16px_rgba(0,0,0,0.08)]">
+      <div className="fixed bottom-[calc(4rem+env(safe-area-inset-bottom,0px))] left-0 right-0 z-40 border-t border-border/60 bg-background/90 p-3 shadow-[0_-4px_16px_rgba(0,0,0,0.08)] backdrop-blur-md sm:hidden">
         <div className="flex items-center gap-2.5 max-w-md mx-auto">
           <Button
             type="button"

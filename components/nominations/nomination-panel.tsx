@@ -789,7 +789,7 @@ export function NominationPanel({
 				<Button
 					asChild
 					size="icon"
-					className="fixed right-4 bottom-[calc(1rem+env(safe-area-inset-bottom,0px))] z-40 size-14 rounded-full shadow-xl sm:hidden"
+					className="fixed right-4 bottom-[calc(5rem+env(safe-area-inset-bottom,0px))] z-40 size-14 rounded-full shadow-xl sm:hidden"
 				>
 					<Link
 						href={`/gigs/${gigId}/nominations/new`}
@@ -807,7 +807,7 @@ export function NominationPanel({
 					disabled
 					aria-label={recommendationTitle}
 					title={recommendationTitle}
-					className="fixed right-4 bottom-[calc(1rem+env(safe-area-inset-bottom,0px))] z-40 size-14 rounded-full shadow-xl sm:hidden"
+					className="fixed right-4 bottom-[calc(5rem+env(safe-area-inset-bottom,0px))] z-40 size-14 rounded-full shadow-xl sm:hidden"
 				>
 					<Plus className="size-6" />
 				</Button>

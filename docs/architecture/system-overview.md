@@ -44,7 +44,8 @@ c:\dev\sokna\
 │   ├── ui/                        # Radix UI 기반 atomic 컴포넌트 (button, dialog, input 등)
 │   ├── gigs/                      # 공연 관련 전용 컴포넌트
 │   ├── nominations/              # 선곡회의 후보곡 관련 전용 컴포넌트
-│   ├── site-header.tsx            # 공통 상단 네비게이션 헤더
+│   ├── site-header.tsx            # 공통 상단 헤더
+│   ├── site-header-client.tsx     # 데스크톱 메뉴와 모바일 하단 네비게이션
 │   ├── site-footer.tsx            # 공통 푸터
 │   └── landing.tsx                # 랜딩 페이지 섹션 컴포넌트
 ├── lib/                           # 핵심 비즈니스 로직 및 외부 연동 클라이언트
