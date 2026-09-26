@@ -442,6 +442,12 @@ export async function submitGigRsvp(formData: FormData): Promise<{ ok: true } | 
     supabase.from("performers").select("id").eq("gig_id", gigId).eq("user_id", user.id).limit(1).maybeSingle(),
   ]);
   if (gigError || performerError || !gig) {
+    if (gigError || performerError) {
+      console.error("RSVP 공연/참여자 조회 실패:", { gigId, gigError, performerError });
+    }
+    if (gigError?.code === "42703" || gigError?.code === "PGRST204") {
+      return { ok: false, error: "공연 참가 신청에 필요한 서버 설정이 누락되었습니다. 관리자에게 문의해 주세요." };
+    }
     return { ok: false, error: "공연 정보를 확인할 수 없습니다." };
   }
   if (performer) {

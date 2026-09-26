@@ -46,7 +46,7 @@ function actionsFixture(options = {}) {
           data: table === "gigs"
             ? options.gig ?? { visibility: options.privateGig ? "private" : "public", is_public: !options.privateGig }
             : options.performer ?? null,
-          error: null,
+          error: table === "gigs" ? options.gigError ?? null : options.performerError ?? null,
         }),
         upsert: async (payload) => { writes.push({ table, payload }); return { error: null }; },
       };
@@ -240,4 +240,30 @@ test("admin table shows gig details on one row, omits undecided responses and pe
   assert.match(rows[1], /가을 공연.*참여자.*39기.*어쿠스틱 기타.*늦게 도착/);
   assert.match(rows[1], /href="\/gigs\/1"/);
   assert.match(rows[2], /href="\/gigs\/2"/);
+});
+
+
+test("RSVP schema failures report missing setup and never write", async (context) => {
+  const log = context.mock.method(console, "error", () => {});
+  for (const code of ["42703", "PGRST204"]) {
+    const fixture = actionsFixture({ gigError: { code } });
+    const result = await fixture.actions.submitGigRsvp(form());
+    assert.equal(result.ok, false);
+    assert.match(result.error, /서버 설정이 누락/);
+    assert.deepEqual(fixture.writes, []);
+    assert.deepEqual(fixture.invalidations, []);
+  }
+  assert.equal(log.mock.callCount(), 2);
+});
+
+test("RSVP query failures block saving without misreporting schema setup", async (context) => {
+  context.mock.method(console, "error", () => {});
+  for (const options of [{ gigError: { code: "42501" } }, { performerError: { code: "42501" } }]) {
+    const fixture = actionsFixture(options);
+    const result = await fixture.actions.submitGigRsvp(form());
+    assert.equal(result.ok, false);
+    assert.match(result.error, /공연 정보를 확인할 수 없습니다/);
+    assert.deepEqual(fixture.writes, []);
+    assert.deepEqual(fixture.invalidations, []);
+  }
 });

@@ -155,9 +155,11 @@ erDiagram
 | `poster_url` | `text` | YES | null | 공연 공식 포스터 이미지 공개 URL (Supabase Storage: gigs/posters) |
 | `visibility` | `text` | NO | `'members'` | 공개 범위: `private`(관리자만), `members`(로그인 회원), `public`(모든 방문자), CHECK 제약 적용 |
 | `is_public` | `bool` | NO | `false` | 호환용 전체 공개 여부. 트리거가 `visibility = 'public'`과 동기화 |
-
-> `20260926003000_add_gig_visibility_levels.sql`은 기존 `is_public=false`를 `members`, `true`를 `public`으로 전환합니다. `gigs` SELECT에는 공개 범위별 허용형·제한형 RLS를 적용하고, 관리자 관리 정책을 제공합니다. 공연자·확정 셋리스트·후보곡·응답의 SELECT에는 상위 공연 조회 권한을 추가로 검사합니다. 세부 규칙과 적용 순서는 [공연 공개 범위 명세](../features/gig-visibility.md)를 참고하십시오.
 | `created_at` | `timestamptz` | NO | `now()` | 생성 일시 |
+
+> `20260926083828_add_gig_visibility_levels.sql`은 기존 `is_public=false`를 `members`, `true`를 `public`으로 전환합니다. `gigs` SELECT에는 공개 범위별 허용형·제한형 RLS를 적용하고, 관리자 관리 정책을 제공합니다. 공연자·확정 셋리스트·후보곡·응답의 SELECT에는 상위 공연 조회 권한을 추가로 검사합니다. 세부 규칙과 적용 순서는 [공연 공개 범위 명세](../features/gig-visibility.md)를 참고하십시오.
+
+> 2026-09-26 운영 DB 적용 및 REST API 컬럼 인식 확인 완료. 기존 공연 4개의 공개 범위를 보존했고, 비로그인·회원·관리자 조회 권한을 검증했습니다.
 
 ### 2.4 `gig_rsvps` (공연 참가 신청/수요 조사)
 동아리 회원이 참가 신청 링크(`/gigs/:id/join`)를 통해 제출한 공연 참가 여부 및 희망 파트 응답입니다.
