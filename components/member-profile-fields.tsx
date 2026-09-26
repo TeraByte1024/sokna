@@ -3,18 +3,7 @@
 import { useId } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { cn } from "@/lib/utils";
-
-const SESSION_PRESETS = [
-  "보컬(남)",
-  "보컬(여)",
-  "기타",
-  "베이스",
-  "드럼",
-  "건반",
-  "창작",
-  "직접 입력",
-] as const;
+import { MemberSessionField } from "@/components/member-session-field";
 
 type MemberProfileFieldsProps = {
   name: string;
@@ -82,52 +71,13 @@ export function MemberProfileFields({
         </div>
       </div>
 
-      <fieldset disabled={disabled} className="min-w-0 space-y-2.5 pt-1" aria-describedby={`${id}-session-help`}>
-        <legend className="flex items-center gap-1 text-xs font-semibold">
-          세션 (파트) <span className="text-destructive">*</span>
-        </legend>
-        <div className="flex flex-wrap gap-2">
-          {SESSION_PRESETS.map((preset) => {
-            const isSelected = selectedPreset === preset;
-            return (
-              <button
-                key={preset}
-                type="button"
-                disabled={disabled}
-                aria-pressed={isSelected}
-                onClick={() => onPresetChange(preset)}
-                className={cn(
-                  "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
-                  isSelected
-                    ? "border-primary bg-primary text-primary-foreground shadow-xs"
-                    : "border-border/60 bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground",
-                )}
-              >
-                {preset}
-              </button>
-            );
-          })}
-        </div>
-        {selectedPreset === "직접 입력" && (
-          <div className="pt-1">
-            <Label htmlFor={`${id}-custom-part`} className="sr-only">세션 직접 입력</Label>
-            <Input
-              id={`${id}-custom-part`}
-              type="text"
-              placeholder="예: 색소폰, 바이올린"
-              value={customPart}
-              onChange={(event) => onCustomPartChange(event.target.value)}
-              className="h-10"
-              required
-              disabled={disabled}
-              autoFocus
-            />
-          </div>
-        )}
-        <p id={`${id}-session-help`} className="text-[11px] text-muted-foreground">
-          주로 담당하는 악기 또는 포지션을 선택해 주세요. 목록에 없으면 직접 입력할 수 있습니다.
-        </p>
-      </fieldset>
+      <MemberSessionField
+        selectedPreset={selectedPreset}
+        customPart={customPart}
+        onPresetChange={onPresetChange}
+        onCustomPartChange={onCustomPartChange}
+        disabled={disabled}
+      />
     </div>
   );
 }

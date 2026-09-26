@@ -43,6 +43,8 @@ SOKNA 애플리케이션은 **Supabase Auth**와 `@supabase/ssr`을 결합하여
 
 - 이메일 회원가입과 소셜 로그인 후 부원 정보 등록은 `components/member-profile-fields.tsx`를 공유하여 이름, 기수, 담당 세션의 디자인과 입력 동작을 통일합니다.
 - 프로필 수정 폼과 동일하게 작은 라벨(`text-xs font-semibold`)과 `h-10` 입력 필드를 사용하며, 이름·기수는 모바일에서 세로로, `sm` 이상에서는 두 열로 배치합니다. 폼 카드는 `border-border/60 shadow-sm`, 제목은 `text-lg`, 설명은 `text-xs`를 사용합니다.
+- 세션 선택 UI와 프리셋 목록은 `components/member-session-field.tsx`에서 관리하고, 가입 부원 정보 입력과 프로필 수정 폼이 함께 사용합니다.
+- 세션은 `라벨 → 설명 → 선택 버튼` 순서로 배치하며, 라벨과 설명 사이 4px, 설명과 선택 버튼 사이 8px 간격을 유지합니다. 설명은 `components/ui/field-description.tsx`의 `FieldDescription`으로 11px·`leading-relaxed`·`text-muted-foreground` 스타일을 통일하고 `aria-describedby`로 필드와 연결합니다. 프로필의 이메일·기수 설명도 같은 배치 규칙을 사용합니다.
 - 세션 선택은 `rounded-lg text-xs` 버튼을 사용하며 선택 상태는 `primary`, 기본 상태는 `muted` 색상으로 표시합니다. 키보드 포커스를 표시하고 `aria-pressed`로 각 버튼의 선택 여부를 제공합니다.
 - 가입 세션은 필수 단일 선택이며 `보컬(남)`·`보컬(여)` 프리셋을 유지합니다. `직접 입력` 선택 시 아래의 `h-10` 필드에 세션명을 입력하며, 기존 선택 전환과 입력값 처리 규칙은 유지합니다.
 
@@ -53,6 +55,7 @@ SOKNA 애플리케이션은 **Supabase Auth**와 `@supabase/ssr`을 결합하여
    - 기기 토글은 현재 계정의 서버 연결·수신 동의와 브라우저 토큰을 검증한 뒤 ON으로 표시합니다. 계정 변경 시 동일 기기의 연결을 새 계정으로 바꾸고 새 계정의 수신 동의를 확인합니다. 자동 갱신은 기존 등록만 수정하며, 동의 철회로 삭제된 등록은 사용자가 직접 켜야 복구됩니다. 상세 규칙은 [웹 푸시 알림 명세](./push-notifications.md)를 따릅니다.
    - 수신 동의 여부는 `/profile`의 기존 정보 수정 폼 안에서 확인·변경하며, 동의 시각은 `users.marketing_opted_in_at`에 기록합니다. 기존 동의자의 null 시각은 소급하지 않습니다. 별도의 앱 푸시 설정 카드는 표시하지 않습니다.
    - 수정 가능한 정보: 실명(이름), 입부 기수(1 이상 숫자), 세션/파트(선택 사항), 마케팅/행사 소식 수신 동의.
+   - 세션은 가입과 같은 `MemberSessionField`로 `보컬(남)`·`보컬(여)` 등의 프리셋과 직접 입력을 지원합니다. 프로필에서는 선택된 항목을 다시 눌러 해제한 뒤 미지정(`null`) 저장이 가능합니다. 기존 `보컬` 및 프리셋에 없는 값은 직접 입력란에 그대로 표시합니다.
    - 로그인 계정 이메일 및 승인 상태(`status`), 관리자 권한(`admins`)은 일반 회원이 임의로 변조할 수 없도록 서버 액션(`app/profile/actions.ts`)에서 격리 보호됩니다.
    - 관리자가 본인의 이름을 변경할 경우 `admins` 테이블의 이름도 자동으로 동기화됩니다.
    - 마케팅 알림 수신 동의를 철회하면 등록된 모든 FCM 기기 토큰이 즉시 삭제되어 이후 푸시 대상에서 제외됩니다.
@@ -89,6 +92,8 @@ SOKNA 애플리케이션은 **Supabase Auth**와 `@supabase/ssr`을 결합하여
 - 로그인 폼 컴포넌트: [components/login-form.tsx](file:///c:/dev/sokna/components/login-form.tsx)
 - 회원가입 폼 컴포넌트: [components/sign-up-form.tsx](file:///c:/dev/sokna/components/sign-up-form.tsx)
 - 공통 부원 정보 입력 필드: [components/member-profile-fields.tsx](../../components/member-profile-fields.tsx)
+- 공통 세션 선택 필드: [components/member-session-field.tsx](../../components/member-session-field.tsx)
+- 공통 필드 설명: [components/ui/field-description.tsx](../../components/ui/field-description.tsx)
 - 소셜 로그인 부원 정보 등록 폼: [app/auth/complete-profile/complete-profile-form.tsx](../../app/auth/complete-profile/complete-profile-form.tsx)
 - 내 정보 페이지: [app/profile/page.tsx](file:///c:/dev/sokna/app/profile/page.tsx)
 - 회원 관리(관리자): [app/admin/members/page.tsx](file:///c:/dev/sokna/app/admin/members/page.tsx)

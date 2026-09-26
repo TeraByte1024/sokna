@@ -5,12 +5,13 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { FieldDescription } from "@/components/ui/field-description";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { MemberSessionField, SESSION_PRESETS } from "@/components/member-session-field";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -35,16 +36,6 @@ import {
   AlertCircle,
   Bell,
 } from "lucide-react";
-
-const SESSION_PRESETS = [
-  "보컬",
-  "기타",
-  "베이스",
-  "드럼",
-  "건반",
-  "창작",
-  "직접 입력",
-] as const;
 
 export interface ProfileUser {
   id: string;
@@ -72,9 +63,7 @@ export function ProfileForm({ user, isAdmin }: ProfileFormProps) {
   );
 
   const initialPart = user.part?.trim() || "";
-  const isInitialPreset = (SESSION_PRESETS.slice(0, 6) as readonly string[]).includes(
-    initialPart
-  );
+  const isInitialPreset = SESSION_PRESETS.some((preset) => preset === initialPart);
 
   const [selectedPreset, setSelectedPreset] = useState<string>(
     initialPart ? (isInitialPreset ? initialPart : "직접 입력") : ""
@@ -304,14 +293,12 @@ export function ProfileForm({ user, isAdmin }: ProfileFormProps) {
             <Sparkles className="w-4 h-4 text-primary" />
             내 정보 수정
           </CardTitle>
-          <CardDescription className="text-xs">
-            동아리 활동 및 부원 명부에 반영되는 본인의 기본 정보를 수정할 수 있습니다.
-          </CardDescription>
         </CardHeader>
 
         <CardContent>
           <fieldset disabled={isDeleting} className="min-w-0">
           <form
+            id="profile-update-form"
             onSubmit={handleSubmit}
             className="space-y-5"
             onKeyDown={(e) => {
@@ -345,19 +332,22 @@ export function ProfileForm({ user, isAdmin }: ProfileFormProps) {
             )}
 
             {/* 계정 이메일 (읽기 전용) */}
-            <div className="space-y-1.5">
-              <Label htmlFor="userEmail" className="text-xs text-muted-foreground">
-                로그인 계정 이메일
-              </Label>
+            <div className="space-y-2">
+              <div className="space-y-1">
+                <Label htmlFor="userEmail" className="block text-xs font-semibold leading-4">
+                  계정 이메일
+                </Label>
+                <FieldDescription id="userEmail-help">
+                  계정 이메일은 보안상 직접 변경할 수 없습니다.
+                </FieldDescription>
+              </div>
               <Input
                 id="userEmail"
                 value={user.email || "이메일 정보 없음"}
                 disabled
+                aria-describedby="userEmail-help"
                 className="bg-muted/40 text-muted-foreground text-xs font-mono h-9 cursor-not-allowed"
               />
-              <p className="text-[11px] text-muted-foreground/80">
-                ※ 로그인 계정 이메일은 보안상 직접 변경할 수 없습니다.
-              </p>
             </div>
 
             {/* 이름(실명) */}
@@ -376,13 +366,19 @@ export function ProfileForm({ user, isAdmin }: ProfileFormProps) {
             </div>
 
             {/* 기수 */}
-            <div className="space-y-1.5">
-              <Label htmlFor="userGen" className="text-xs font-semibold flex items-center gap-1">
-                기수 <span className="text-destructive">*</span>
-              </Label>
+            <div className="space-y-2">
+              <div className="space-y-1">
+                <Label htmlFor="userGen" className="flex items-center gap-1 text-xs font-semibold leading-4">
+                  기수 <span className="text-destructive">*</span>
+                </Label>
+                <FieldDescription id="userGen-help">
+                  소크나 입부 기수를 입력해 주세요.
+                </FieldDescription>
+              </div>
               <div className="flex items-center gap-2">
                 <Input
                   id="userGen"
+                  aria-describedby="userGen-help"
                   type="number"
                   min="1"
                   value={generation}
@@ -393,71 +389,24 @@ export function ProfileForm({ user, isAdmin }: ProfileFormProps) {
                 />
                 <span className="text-sm font-medium text-muted-foreground">기</span>
               </div>
-              <p className="text-[11px] text-muted-foreground">
-                소크나 입부 기수를 1 이상의 숫자로 입력해 주세요.
-              </p>
             </div>
 
-            {/* 세션(파트) - 선택 사항 */}
-            <div className="space-y-2.5 pt-1">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs font-semibold flex items-center gap-1">
-                  세션 (파트) <span className="text-xs font-normal text-muted-foreground">(선택 사항)</span>
-                </Label>
-                {selectedPreset && (
-                  <button
-                    type="button"
-                    onClick={handleClearSession}
-                    className="text-[11px] text-muted-foreground hover:text-destructive transition-colors"
-                  >
-                    선택 해제 (미지정)
-                  </button>
-                )}
-              </div>
-
-              {/* 세션 프리셋 뱃지 칩 */}
-              <div className="flex flex-wrap gap-2">
-                {SESSION_PRESETS.map((preset) => {
-                  const isSelected = selectedPreset === preset;
-                  return (
-                    <button
-                      key={preset}
-                      type="button"
-                      onClick={() => handlePresetSelect(preset)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
-                        isSelected
-                          ? "bg-primary text-primary-foreground border-primary shadow-xs"
-                          : "bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground border-border/60"
-                      }`}
-                    >
-                      {preset}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* 직접 입력 선택 시 노출 */}
-              {selectedPreset === "직접 입력" && (
-                <div className="pt-1">
-                  <Input
-                    value={customPart}
-                    onChange={(e) => setCustomPart(e.target.value)}
-                    placeholder="세션명을 직접 입력해 주세요 (예: 퍼커션, 신디사이저, 브라스 등)"
-                    className="h-10 text-sm"
-                    autoFocus
-                  />
-                </div>
-              )}
-              <p className="text-[11px] text-muted-foreground">
-                주로 담당하는 악기 또는 포지션을 선택해 주세요. 세션은 필수 입력 항목이 아닙니다.
-              </p>
-            </div>
+            <MemberSessionField
+              selectedPreset={selectedPreset}
+              customPart={customPart}
+              onPresetChange={handlePresetSelect}
+              onCustomPartChange={setCustomPart}
+              onClear={handleClearSession}
+              required={false}
+              disabled={isDeleting}
+            />
 
             {/* 앱 푸시 알림 수신 동의 */}
             <div className="pt-3 border-t border-border/40">
               <div className="flex items-start space-x-2.5">
                 <Checkbox
                   id="marketingOptIn"
+                  aria-describedby="marketingPushDescription"
                   checked={marketingOptIn}
                   onCheckedChange={(checked) => setMarketingOptIn(Boolean(checked))}
                   className="mt-0.5"
@@ -480,9 +429,9 @@ export function ProfileForm({ user, isAdmin }: ProfileFormProps) {
                         ? "저장하면 수신 동의가 해제됩니다."
                         : "미동의"}
                   </p>
-                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  <FieldDescription id="marketingPushDescription">
                     소크나 공연, 행사, 가입 승인 및 선곡회의 소식을 앱 푸시로 받아봅니다. 아래 토글이나 헤더 프로필 메뉴에서 이 기기의 알림을 관리할 수 있습니다.
-                  </p>
+                  </FieldDescription>
                 </div>
               </div>
               <div className="mt-4 flex min-h-12 items-center gap-3">
@@ -518,41 +467,40 @@ export function ProfileForm({ user, isAdmin }: ProfileFormProps) {
                 </button>
               </div>
               {(push.permission === "unsupported" || push.permission === "denied") && (
-                <p id="devicePushDescription" className="text-[11px] leading-relaxed text-muted-foreground">
+                <FieldDescription id="devicePushDescription">
                   {push.permission === "unsupported"
                     ? "이 브라우저에서는 기기 알림을 사용할 수 없습니다."
                     : "브라우저 설정에서 알림 권한을 허용해 주세요."}
-                </p>
+                </FieldDescription>
               )}
-            </div>
-
-            {/* 저장 버튼 */}
-            <div className="pt-4 flex items-center justify-end">
-              <Button
-                type="submit"
-                disabled={isPending || push.isPending || isDeleting}
-                className="w-full sm:w-auto min-w-32 h-10 bg-primary text-primary-foreground font-semibold shadow-sm"
-              >
-                {isPending ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    저장 중...
-                  </>
-                ) : (
-                  "변경사항 저장하기"
-                )}
-              </Button>
             </div>
           </form>
           </fieldset>
+
+          <div className="flex flex-wrap items-center justify-between gap-x-8 gap-y-6 pt-6">
+            <DeleteAccountSection
+              disabled={isPending || push.isPending || pushConsentDialogOpen}
+              onPendingChange={setIsDeleting}
+              onDeleted={markSubmitting}
+            />
+            <Button
+              type="submit"
+              form="profile-update-form"
+              disabled={isPending || push.isPending || isDeleting}
+              className="ml-auto h-10 w-auto min-w-32 bg-primary text-primary-foreground font-semibold shadow-sm"
+            >
+              {isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  저장 중...
+                </>
+              ) : (
+                "변경사항 저장하기"
+              )}
+            </Button>
+          </div>
         </CardContent>
       </Card>
-
-      <DeleteAccountSection
-        disabled={isPending || push.isPending || pushConsentDialogOpen}
-        onPendingChange={setIsDeleting}
-        onDeleted={markSubmitting}
-      />
 
       <MarketingPushConsentDialog
         isOpen={pushConsentDialogOpen}

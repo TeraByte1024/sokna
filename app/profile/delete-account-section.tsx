@@ -3,7 +3,6 @@
 import { useRef, useState, type FormEvent } from "react";
 import { AlertTriangle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createClient } from "@/lib/supabase/client";
@@ -104,28 +103,22 @@ export function DeleteAccountSection({
 
   return (
     <>
-      <Card className="border-destructive/20 shadow-sm">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base font-bold">회원 탈퇴</CardTitle>
-          <CardDescription className="text-xs leading-relaxed">
-            탈퇴하면 계정과 개인 알림·신청 정보가 삭제되며 복구할 수 없습니다.
-            공연·선곡 등 함께 만든 기록은 남을 수 있습니다.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex justify-end">
-          <Button
-            type="button"
-            variant="outline"
-            className="border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
-            disabled={disabled || isPending}
-            onClick={openDialog}
-          >
-            회원 탈퇴
-          </Button>
-        </CardContent>
-      </Card>
+      <div className="shrink-0">
+        <Button
+          type="button"
+          variant="outline"
+          className="h-10 border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
+          disabled={disabled || isPending}
+          aria-haspopup="dialog"
+          aria-controls="delete-account-dialog"
+          onClick={openDialog}
+        >
+          회원 탈퇴하기
+        </Button>
+      </div>
 
       <dialog
+        id="delete-account-dialog"
         ref={dialogRef}
         aria-labelledby="delete-account-title"
         aria-describedby="delete-account-description"

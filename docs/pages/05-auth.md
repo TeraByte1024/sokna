@@ -43,6 +43,7 @@
 - 이름과 기수는 모바일에서 세로로 배치하고, `sm` 이상 화면에서는 두 열로 나란히 배치합니다. 라벨은 `text-xs font-semibold`, 입력 필드는 `h-10`으로 통일합니다.
 - 담당 세션은 `rounded-lg` 모서리와 `text-xs` 크기의 버튼으로 표시합니다. 선택한 버튼은 기본 강조색(`primary`), 나머지는 옅은 배경(`muted`)을 사용하며, 키보드 포커스와 `aria-pressed`로 선택 상태를 구분합니다.
 - 세션은 필수 단일 선택이며 `보컬(남)`, `보컬(여)` 구분을 유지합니다. `직접 입력`을 선택하면 버튼 아래에 `h-10` 입력 필드를 표시하여 세션명을 입력받습니다.
+- 세션은 `라벨 → 설명 → 선택 버튼` 순서로 세로 배치합니다. 라벨과 설명 사이 4px, 설명과 선택 버튼 사이 8px 간격을 두고, 설명은 프로필과 같은 `FieldDescription`의 11px·`leading-relaxed`·`text-muted-foreground` 스타일을 사용합니다. `aria-describedby`로 설명과 필드를 연결합니다.
 
 ---
 
@@ -98,6 +99,7 @@
 - 회원가입 페이지: [app/auth/sign-up/page.tsx](file:///c:/dev/sokna/app/auth/sign-up/page.tsx)
 - 회원가입 폼 컴포넌트: [components/sign-up-form.tsx](file:///c:/dev/sokna/components/sign-up-form.tsx)
 - 공통 부원 정보 입력 필드: [components/member-profile-fields.tsx](../../components/member-profile-fields.tsx)
+- 공통 필드 설명: [components/ui/field-description.tsx](../../components/ui/field-description.tsx)
 - 소셜 로그인 부원 정보 등록 폼: [app/auth/complete-profile/complete-profile-form.tsx](../../app/auth/complete-profile/complete-profile-form.tsx)
 - 비밀번호 찾기: [components/forgot-password-form.tsx](file:///c:/dev/sokna/components/forgot-password-form.tsx)
 - 비밀번호 변경: [components/update-password-form.tsx](file:///c:/dev/sokna/components/update-password-form.tsx)
