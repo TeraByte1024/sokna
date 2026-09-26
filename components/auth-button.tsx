@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getIsAdmin } from "@/lib/auth-admin";
 import { getPendingMemberApplications, hasCompletedMemberProfile } from "@/lib/member-application";
 import { UserProfileMenu } from "./user-profile-menu";
+import { NotificationMenu } from "./notification-menu";
+import { getUnreadNotificationCount } from "@/lib/notifications";
 import { ShieldAlert, ShieldCheck, Clock } from "lucide-react";
 
 export async function AuthButton() {
@@ -21,7 +23,10 @@ export async function AuthButton() {
     );
   }
 
-  const isAdmin = await getIsAdmin();
+  const [isAdmin, unreadNotificationCount] = await Promise.all([
+    getIsAdmin(),
+    getUnreadNotificationCount(user.sub),
+  ]);
   let pendingCount = 0;
   let userStatus: string | null = null;
   let hasCompletedProfile = false;
@@ -85,6 +90,7 @@ export async function AuthButton() {
       )}
 
       {/* 프로필 아이콘 클릭 시 float 메뉴 (내 정보 | 로그아웃) */}
+      <NotificationMenu key={user.sub} userId={user.sub} initialUnreadCount={unreadNotificationCount} />
       <UserProfileMenu
         userName={userName}
         userEmail={user.email}

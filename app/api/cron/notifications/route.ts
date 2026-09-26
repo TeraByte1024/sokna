@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { processNotificationQueue } from "@/lib/nomination-notifications";
 import { processPendingPushNotifications } from "@/lib/push-notifications";
 
 function isAuthorized(request: NextRequest) {
@@ -14,16 +13,14 @@ export async function GET(request: NextRequest) {
 	}
 
 	try {
-		const nominationQueues = await processNotificationQueue();
 		const pendingPush = await processPendingPushNotifications();
 		return NextResponse.json({
 			ok: true,
-			nominationQueues,
 			pendingPush,
 			timestamp: new Date().toISOString(),
 		});
 	} catch (error: unknown) {
-		console.error("Cron notification queue error:", error);
+		console.error("Cron push notification error:", error);
 		const message = error instanceof Error ? error.message : "Internal server error";
 		return NextResponse.json(
 			{ ok: false, error: message },

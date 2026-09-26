@@ -60,54 +60,6 @@ export type Database = {
         }
         Relationships: []
       }
-      gig_notification_queue: {
-        Row: {
-          created_at: string
-          gig_id: number
-          id: number
-          scheduled_at: string
-          sent_at: string | null
-          song_ids: number[]
-          status: string
-          triggered_by: string | null
-        }
-        Insert: {
-          created_at?: string
-          gig_id: number
-          id?: never
-          scheduled_at: string
-          sent_at?: string | null
-          song_ids?: number[]
-          status?: string
-          triggered_by?: string | null
-        }
-        Update: {
-          created_at?: string
-          gig_id?: number
-          id?: never
-          scheduled_at?: string
-          sent_at?: string | null
-          song_ids?: number[]
-          status?: string
-          triggered_by?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "gig_notification_queue_gig_id_fkey"
-            columns: ["gig_id"]
-            isOneToOne: false
-            referencedRelation: "gigs"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "gig_notification_queue_triggered_by_fkey"
-            columns: ["triggered_by"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       gig_rsvps: {
         Row: {
           created_at: string
@@ -323,41 +275,56 @@ export type Database = {
       }
       notifications: {
         Row: {
+          event_key: string
+          event_type: string
+          push_attempts: number
+          push_next_attempt_at: string
+          push_progress: Json
           body: string | null
           created_at: string
           id: string
           link: string | null
           push_attempted_at: string | null
-          push_eligible: boolean
           push_error: string | null
           push_sent_at: string | null
           push_status: string
+          read_at: string | null
           title: string | null
           user_id: string | null
         }
         Insert: {
+          event_key?: string
+          event_type?: string
+          push_attempts?: number
+          push_next_attempt_at?: string
+          push_progress?: Json
           body?: string | null
           created_at?: string
           id?: string
           link?: string | null
           push_attempted_at?: string | null
-          push_eligible?: boolean
           push_error?: string | null
           push_sent_at?: string | null
           push_status?: string
+          read_at?: string | null
           title?: string | null
           user_id?: string | null
         }
         Update: {
+          event_key?: string
+          event_type?: string
+          push_attempts?: number
+          push_next_attempt_at?: string
+          push_progress?: Json
           body?: string | null
           created_at?: string
           id?: string
           link?: string | null
           push_attempted_at?: string | null
-          push_eligible?: boolean
           push_error?: string | null
           push_sent_at?: string | null
           push_status?: string
+          read_at?: string | null
           title?: string | null
           user_id?: string | null
         }
@@ -621,6 +588,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_app_notification: {
+        Args: {
+          p_user_id: string
+          p_event_type: string
+          p_event_key: string
+          p_context: Json
+          p_notification_id?: string
+        }
+        Returns: string
+      }
       approve_member_with_notification: {
         Args: { p_user_id: string }
         Returns: boolean

@@ -89,9 +89,11 @@ function fixture(rows, { isAdmin = true, userId = "admin", queryError = null, sa
     "@/lib/supabase/server": { createClient: async () => client },
     "@/lib/supabase/service": { createServiceClient: () => client },
     "@/lib/push-notifications": {
-      processPendingPushNotificationsByIds: async (ids) => pushBatches.push(ids),
+      processPendingPushNotifications: async (options) => pushBatches.push(options),
     },
     "./user-profile-menu": { UserProfileMenu: () => null },
+    "./notification-menu": { NotificationMenu: () => null },
+    "@/lib/notifications": { getUnreadNotificationCount: async () => 0 },
     "@/components/site-layout": { SiteLayout: fragment },
     "@/components/page-container": { PageContainer: fragment },
     "./admin-members-client": {
@@ -135,14 +137,14 @@ test("social login alone produces no admin count or applicant pending badge", as
   }
 });
 
-test("submitting a valid social application adds the row, badge, and notification", async () => {
+test("submitting a valid social application saves the profile and dispatches its database-created notifications", async () => {
   const rows = [draft()];
   const applicant = fixture(rows, { isAdmin: false, userId: "social-draft" });
   const result = await applicant.load("app/auth/complete-profile/actions.ts").completeProfileAction("Applicant", 40, " 바이올린 ", false);
   assert.equal(result.ok, true);
   assert.equal(rows[0].part, "바이올린");
-  assert.equal(applicant.notifications.length, 1);
-  assert.deepEqual(applicant.pushBatches, [[1]]);
+  assert.equal(applicant.notifications.length, 0); // The database trigger owns insertion.
+  assert.deepEqual(applicant.pushBatches, [{ eventType: "member_approval_requested", eventKey: `member-application:social-draft:${rows[0].applied_at}` }]);
   assert.ok(applicant.invalidations.some(([url, type]) => url === "/" && type === "layout"));
   const html = renderToStaticMarkup(await applicant.load("components/auth-button.tsx").AuthButton());
   assert.match(html, /승인 대기 중/);

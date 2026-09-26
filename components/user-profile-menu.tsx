@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Bell, BellOff, Loader2, User, LogOut } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { signOutWithPushSession } from "@/lib/supabase/logout";
+import { toast } from "@/components/ui/sonner";
 import {
   MarketingPushConsentDialog,
   usePushNotificationDevice,
@@ -28,13 +29,21 @@ export function UserProfileMenu({ userName, userEmail, marketingOptIn }: UserPro
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const [consentDialogOpen, setConsentDialogOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const push = usePushNotificationDevice(marketingOptIn, menuOpen);
 
   const handleLogout = async () => {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push("/auth/login");
-    router.refresh();
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    try {
+      await signOutWithPushSession();
+      router.push("/auth/login");
+      router.refresh();
+    } catch {
+      toast.error("로그아웃에 실패했습니다. 다시 시도해 주세요.");
+    } finally {
+      setIsLoggingOut(false);
+    }
   };
 
   return (
@@ -129,6 +138,7 @@ export function UserProfileMenu({ userName, userEmail, marketingOptIn }: UserPro
 
         <DropdownMenuItem
           onClick={handleLogout}
+          disabled={isLoggingOut}
           className="flex items-center gap-2 cursor-pointer text-destructive focus:text-destructive focus:bg-destructive/10 font-medium text-xs sm:text-sm py-2 w-full"
         >
           <LogOut className="w-4 h-4 shrink-0" />

@@ -2,6 +2,7 @@
 
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
+import { signOutWithPushSession } from "@/lib/supabase/logout";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -52,7 +53,7 @@ export function LoginForm({
           .maybeSingle();
 
         if (profile?.status === "rejected") {
-          await supabase.auth.signOut();
+          await signOutWithPushSession();
           setError("가입 승인이 거절된 계정입니다. 동아리 운영진에게 문의해 주세요.");
           setIsLoading(false);
           return;

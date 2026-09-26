@@ -20,6 +20,11 @@ export async function getFcmToken(serviceWorkerRegistration?: ServiceWorkerRegis
 export async function deleteFcmToken() {
 	const messaging = await getSupportedMessaging();
 	if (!messaging) return { data: null, error: "Firebase Messaging이 초기화되지 않았습니다." };
+	// A fresh Messaging instance may still point at Firebase's default worker scope.
+	// Unsubscribe our custom root worker through the public browser API as well.
+	const registration = await navigator.serviceWorker.getRegistration("/");
+	const subscription = await registration?.pushManager.getSubscription();
+	if (subscription) await subscription.unsubscribe();
 	const deleted = await deleteToken(messaging);
 	return deleted ? { data: true, error: null } : { data: null, error: "브라우저 토큰 삭제에 실패했습니다." };
 }

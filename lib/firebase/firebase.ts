@@ -23,8 +23,13 @@ export function getSupportedMessaging(): Promise<Messaging | null> {
 
   messagingPromise ??= isSupported()
     .then((supported) => (supported ? getMessaging(app) : null))
+    .then((messaging) => {
+      if (!messaging) messagingPromise = undefined;
+      return messaging;
+    })
     .catch((error) => {
       console.error("Firebase Messaging 초기화 오류:", error);
+      messagingPromise = undefined;
       return null;
     });
 

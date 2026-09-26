@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getIsAdmin } from "@/lib/auth-admin";
 import { getPendingMemberApplications } from "@/lib/member-application";
-import { processPendingApprovalPushNotification } from "@/lib/push-notifications";
+import { processPendingPushNotifications } from "@/lib/push-notifications";
 
 export type AdminMember = {
   id: string;
@@ -82,7 +82,7 @@ export async function approveMemberAction(
     }
 
     try {
-      await processPendingApprovalPushNotification(userId);
+      await processPendingPushNotifications({ eventType: "member_approved", userId });
     } catch (pushError) {
       // 승인은 이미 DB 트랜잭션으로 완료됐으므로 성공을 유지합니다.
       // pending outbox는 cron이 복구합니다.

@@ -116,7 +116,7 @@ export function SignUpForm({
 
     try {
       const supabase = createClient();
-      const { error: signUpError } = await supabase.auth.signUp({
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -134,7 +134,7 @@ export function SignUpForm({
 
       // DB 트리거가 만든 관리자용 가입 요청 outbox를 즉시 발송합니다.
       // 실패하더라도 가입은 유지되고 cron이 남은 pending 레코드를 복구합니다.
-      await dispatchSignupPushNotificationsAction();
+      await dispatchSignupPushNotificationsAction(signUpData.user?.id);
       
       markSubmitting();
       router.push("/auth/sign-up-success");

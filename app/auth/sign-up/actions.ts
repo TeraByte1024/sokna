@@ -1,16 +1,33 @@
 "use server";
 
-import { processPendingSignupPushNotifications } from "@/lib/push-notifications";
+import { processPendingPushNotifications } from "@/lib/push-notifications";
+import { createServiceClient } from "@/lib/supabase/service";
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * 이메일 가입은 auth.users DB 트리거가 관리자 outbox를 생성합니다.
- * 가입 요청 직후 이 액션이 가입 관련 pending 레코드만 즉시 소진하며,
- * 실패 시 레코드는 cron 복구 경로에 남습니다.
+ * Email confirmation can leave a successful signup without a login session.
+ * Wake only that application's durable outbox, using the database timestamp;
+ * never expose whether a supplied account exists or how many admins received it.
  */
-export async function dispatchSignupPushNotificationsAction() {
+export async function dispatchSignupPushNotificationsAction(applicantId?: string | null) {
+	if (typeof applicantId !== "string" || !UUID_PATTERN.test(applicantId)) {
+		return { ok: true as const };
+	}
 	try {
-		const result = await processPendingSignupPushNotifications();
-		return { ok: true as const, ...result };
+		const userId = applicantId.toLowerCase();
+		const supabase = createServiceClient();
+		const { data: applicant, error } = await supabase.from("users")
+			.select("applied_at").eq("id", userId).maybeSingle();
+		if (error) throw error;
+		if (!applicant) return { ok: true as const };
+
+		const appliedAt = new Date(applicant.applied_at).toISOString();
+		await processPendingPushNotifications({
+			eventType: "member_approval_requested",
+			eventKey: `member-application:${userId}:${appliedAt}`,
+		});
+		return { ok: true as const };
 	} catch (error) {
 		console.error("가입 승인 요청 즉시 푸시 실패:", error);
 		return { ok: false as const, error: "가입 요청은 완료됐지만 관리자 푸시 발송이 지연되고 있습니다." };

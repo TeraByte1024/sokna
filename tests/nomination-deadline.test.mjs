@@ -125,10 +125,9 @@ function nominationFixture(options = {}) {
     "next/cache": { revalidatePath: (value) => invalidations.push(value) },
     "@/lib/auth-admin": { getIsAdmin: async () => Boolean(options.admin) },
     "@/lib/supabase/server": { createClient: async () => client },
-    "@/lib/nomination-notifications": {
-      enqueueSongNotification: async (...args) => { notifications.push(args); return 9; },
-      processNotificationQueue: async () => ({ processedCount: 1 }),
-      recordLastViewedNomination() {},
+    "@/lib/nomination-views": { recordLastViewedNomination() {} },
+    "@/lib/push-notifications": {
+      processPendingPushNotifications: async (options) => { notifications.push(options); return { processedCount: 1 }; },
     },
     "next/navigation": { redirect: (destination) => { throw new Error(`REDIRECT:${destination}`); } },
     "next/link": linkMock,
@@ -180,7 +179,7 @@ test("server action allows members before closing and administrators after closi
     assert.equal(fixture.writes[0].table, "nominations");
     assert.equal(fixture.writes[0].payload.gig_id, 1);
     assert.equal(fixture.writes[0].payload.created_by, options.nonPerformer ? null : 3);
-    assert.equal(fixture.notifications.length, 1);
+    assert.deepEqual(fixture.notifications, [{ eventType: "nomination_added", eventKey: "nomination:7" }]);
     assert.ok(fixture.invalidations.includes("/gigs/1/nominations"));
   }
 });

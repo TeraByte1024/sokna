@@ -17,7 +17,7 @@ SOKNA 애플리케이션은 **Supabase Auth**와 `@supabase/ssr`을 결합하여
    - OAuth 콜백(`app/auth/callback/route.ts`)에서 세션을 교환하며, 기수/세션 정보가 없는 신규 소셜 가입자는 프로필 등록 화면(`/auth/complete-profile`)으로 자동 안내됩니다.
    - 클라이언트는 현재 origin의 `/auth/callback`을 `redirectTo`로 전달합니다. 따라서 로컬 테스트 시 Supabase Auth Redirect URLs에 `http://localhost:3000/auth/callback`이 반드시 허용되어야 하며, 누락 시 운영 Site URL로 fallback될 수 있습니다.
    - 프로필 입력 화면에서도 세션 프리셋의 보컬을 `보컬(남)`과 `보컬(여)`로 구분하여 입력받습니다.
-   - 프로필 입력 완료 시 관리자 승인 대기(`pending`) 상태로 전환되며, 관리자에게 알림이 발송됩니다.
+   - 프로필 입력 완료 시 관리자 승인 대기(`pending`) 상태로 전환되며, users 트리거가 같은 트랜잭션으로 관리자 알림을 만들고 해당 이벤트를 즉시 발송합니다. 이미 완성된 pending 신청의 프로필 재저장에는 알림을 중복 생성하지 않습니다.
    - OAuth 최초 로그인으로 생성된 `public.users` 레코드도 DB 기본값은 `pending`이지만, **가입 신청 전 계정**으로 취급합니다. 기수(1 이상의 정수)와 공백이 아닌 세션이 저장되기 전에는 관리자 승인 대기 명단·헤더 알림 건수·본인의 승인 대기 배지에서 제외합니다.
    - `hasCompletedMemberProfile()`로 프로필 등록 화면 진입과 신청 완료 여부를 공통 판별합니다. 미작성 계정의 `/profile` 접근은 `/auth/complete-profile`로 안내하며, 등록 완료 후 관리자 페이지와 공통 레이아웃을 갱신합니다.
 3. **관리자 승인 (`/admin/members`)**:
@@ -34,6 +34,10 @@ SOKNA 애플리케이션은 **Supabase Auth**와 `@supabase/ssr`을 결합하여
    - 정적 리소스(`_next/static`, 이미지 파일, 파비콘 등)는 프록시 대상에서 제외됩니다.
 6. **비밀번호 재설정 (`/auth/forgot-password`, `/auth/update-password`)**:
    - 이메일 재설정 링크 발송 및 토큰 검증 후 새로운 비밀번호로 변경합니다.
+7. **로그아웃과 기기 알림 수신 계정**:
+   - `signOutWithPushSession()`으로 현재 기기의 수신 계정 연결만 정지한 뒤 `signOut({ scope: "local" })`을 실행합니다. 기기 토큰과 푸시 구독은 보존하고 다른 기기의 로그인은 유지합니다.
+   - 다음 사용자가 로그인하면 서버가 기기 증명 쿠키를 검증하여 동일 기기를 새 계정에 연결합니다. 로그인 계정의 수신 동의를 적용하며, 알림 표시와 클릭 직전에 세션을 다시 검사하므로 이전 계정의 지연 알림은 차단합니다.
+   - 연결 정지 오류가 로그아웃을 막지는 않습니다. 세션 종료 자체가 실패하면 기기 연결 확인을 재개하고 사용자에게 오류를 알립니다.
 
 #### 가입 부원 정보 입력 UI
 
@@ -46,6 +50,7 @@ SOKNA 애플리케이션은 **Supabase Auth**와 `@supabase/ssr`을 결합하여
 1. **회원 본인의 정보 수정 (`/profile`)**:
    - 로그인한 모든 회원(일반 회원 및 관리자)은 상단 헤더의 `[내 정보]` 버튼을 통해 자신의 프로필 관리 화면에 접근할 수 있습니다.
    - 헤더 프로필 팝업과 `/profile`의 수신 동의 체크박스 아래에서 현재 브라우저의 `이 기기에서 알림 받기` 토글을 켜거나 끌 수 있습니다. 팝업은 해당 항목이 한 줄로 표시되는 너비를 유지하며, 미동의 상태에서 켜면 수신 동의 다이얼로그를 먼저 표시합니다.
+   - 기기 토글은 현재 계정의 서버 연결·수신 동의와 브라우저 토큰을 검증한 뒤 ON으로 표시합니다. 계정 변경 시 동일 기기의 연결을 새 계정으로 바꾸고 새 계정의 수신 동의를 확인합니다. 자동 갱신은 기존 등록만 수정하며, 동의 철회로 삭제된 등록은 사용자가 직접 켜야 복구됩니다. 상세 규칙은 [웹 푸시 알림 명세](./push-notifications.md)를 따릅니다.
    - 수신 동의 여부는 `/profile`의 기존 정보 수정 폼 안에서 확인·변경하며, 동의 시각은 `users.marketing_opted_in_at`에 기록합니다. 기존 동의자의 null 시각은 소급하지 않습니다. 별도의 앱 푸시 설정 카드는 표시하지 않습니다.
    - 수정 가능한 정보: 실명(이름), 입부 기수(1 이상 숫자), 세션/파트(선택 사항), 마케팅/행사 소식 수신 동의.
    - 로그인 계정 이메일 및 승인 상태(`status`), 관리자 권한(`admins`)은 일반 회원이 임의로 변조할 수 없도록 서버 액션(`app/profile/actions.ts`)에서 격리 보호됩니다.
@@ -87,3 +92,6 @@ SOKNA 애플리케이션은 **Supabase Auth**와 `@supabase/ssr`을 결합하여
 - 소셜 로그인 부원 정보 등록 폼: [app/auth/complete-profile/complete-profile-form.tsx](../../app/auth/complete-profile/complete-profile-form.tsx)
 - 내 정보 페이지: [app/profile/page.tsx](file:///c:/dev/sokna/app/profile/page.tsx)
 - 회원 관리(관리자): [app/admin/members/page.tsx](file:///c:/dev/sokna/app/admin/members/page.tsx)
+
+### 알림 생성 구조 전환 (2026-09-27)
+가입 신청의 users 트리거와 승인 RPC는 공통 내부 함수 `create_app_notification`으로 문구와 수신자별 `notifications`를 생성합니다. 이메일 가입의 auth 트리거는 users 생성만 담당하며 완성된 신청에만 관리자 알림이 생깁니다. 즉시 전송과 cron은 동일 outbox 처리 함수를 사용합니다. 공유 운영 DB에는 이 구조를 아직 적용하지 않았으며 [알림 outbox 전환 명세](./notification-outbox.md)에 따라 새 코드와 함께 적용해야 합니다.

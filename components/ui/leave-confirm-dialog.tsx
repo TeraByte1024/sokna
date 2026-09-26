@@ -4,6 +4,11 @@ import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  captureLinkNavigation,
+  dispatchConfirmedLinkNavigation,
+  type ConfirmedLinkNavigation,
+} from "@/lib/confirmed-navigation";
 
 export interface LeaveConfirmDialogProps {
   isOpen: boolean;
@@ -99,6 +104,7 @@ export function useUnsavedChangesWarning({
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [pendingNavUrl, setPendingNavUrl] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
+  const [pendingLink, setPendingLink] = useState<ConfirmedLinkNavigation | null>(null);
 
   // 1. 브라우저 탭 닫기 / 새로고침 차단
   useEffect(() => {
@@ -144,6 +150,7 @@ export function useUnsavedChangesWarning({
       e.stopImmediatePropagation();
       setPendingNavUrl(anchor.href);
       setPendingAction(null);
+      setPendingLink(captureLinkNavigation(anchor));
       setShowLeaveModal(true);
     };
 
@@ -179,11 +186,14 @@ export function useUnsavedChangesWarning({
       pendingAction();
       setPendingAction(null);
       setPendingNavUrl(null);
+      setPendingLink(null);
       return;
     }
 
     const target = pendingNavUrl || defaultBackLink;
     if (target) {
+      if (pendingLink) dispatchConfirmedLinkNavigation(pendingLink);
+      setPendingLink(null);
       if (target.startsWith(window.location.origin)) {
         const path = target.slice(window.location.origin.length);
         router.push(path);
@@ -201,12 +211,14 @@ export function useUnsavedChangesWarning({
     setShowLeaveModal(false);
     setPendingNavUrl(null);
     setPendingAction(null);
+    setPendingLink(null);
   };
 
   const handleInterceptedNavigation = (targetUrl?: string) => {
     if (isDirty) {
       setPendingNavUrl(targetUrl || defaultBackLink || null);
       setPendingAction(null);
+      setPendingLink(null);
       setShowLeaveModal(true);
     } else if (targetUrl) {
       router.push(targetUrl);
@@ -220,6 +232,7 @@ export function useUnsavedChangesWarning({
   const triggerConfirm = (action: () => void) => {
     if (isDirty) {
       setPendingAction(() => action);
+      setPendingLink(null);
       setShowLeaveModal(true);
     } else {
       action();

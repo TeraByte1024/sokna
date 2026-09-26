@@ -96,6 +96,10 @@ erDiagram
     notifications {
         uuid id PK
         uuid user_id FK
+        string event_type
+        string event_key
+        string push_status
+        timestamp push_next_attempt_at
         string title
         string body
         string link
@@ -250,20 +254,6 @@ erDiagram
 > **기본키**: `PRIMARY KEY (user_id, gig_id)`  
 > **RLS**: 본인(`auth.uid() = user_id`)만 조회/등록/수정 가능
 
-### 2.9 `gig_notification_queue` (새 곡 즉시 알림 대기열)
-새 후보곡 등록 이벤트를 기록하고 중복 처리를 방지하며, 등록 요청 안에서 즉시 알림을 발송하기 위한 대기열입니다. 현재 기존 15분 디바운스는 비활성화되어 `scheduled_at = now()`를 사용합니다.
-
-| 컬럼명 | 데이터 타입 | Nullable | 기본값 | 설명 및 관계 |
-| :--- | :--- | :--- | :--- | :--- |
-| `id` | `int8` (Identity) | NO | 자동증가 | 대기열 고유 식별자 |
-| `gig_id` | `int8` | NO | - | FK → `gigs(id)` (ON DELETE CASCADE) |
-| `triggered_by` | `uuid` | YES | null | FK → `users(id)` (등록자 제외용) |
-| `song_ids` | `int8[]` | NO | `'{}'` | 누적 등록된 후보곡 ID 배열 |
-| `scheduled_at` | `timestamptz` | NO | - | 알림 처리 가능 일시 (현재 즉시 처리를 위해 생성 시각과 동일) |
-| `status` | `text` | NO | `'pending'` | 상태 (`'pending'`, `'processing'`, `'sent'`, `'cancelled'`) |
-| `created_at` | `timestamptz` | NO | `now()` | 큐 생성 일시 |
-| `sent_at` | `timestamptz` | YES | null | 발송 완료 일시 |
-
 ### 2.10 `nomination_responses` (선곡회의 세션 참여 응답 및 메모)
 공연 참여자들이 각 후보곡에 대해 본인의 연주/보컬 참여 가능 여부와 관련 메모를 세션별로 기록하는 테이블입니다.
 
@@ -286,39 +276,51 @@ erDiagram
 
 
 ### 2.7 `profiles` (기기 및 푸시 토큰)
-사용자별 기기 정보 및 Firebase FCM 토큰을 저장합니다.
+기기 정보 및 Firebase FCM 토큰을 저장하고 현재 로그인한 수신 계정을 연결합니다.
 
 | 컬럼명 | 데이터 타입 | Nullable | 기본값 | 설명 |
 | :--- | :--- | :--- | :--- | :--- |
 | `id` | `uuid` | NO | - | 프로필 식별자 |
-| `user_id` | `uuid` | YES | null | FK → `users(id)` |
+| `user_id` | `uuid` | YES | null | FK → `users(id)`. 현재 기기의 수신 계정이며 로그아웃 시 null |
 | `fcm_token` | `text` | NO | - | 웹 푸시용 FCM 토큰 |
 | `device_name` | `text` | YES | null | 접속 브라우저/기기 명칭 |
 | `created_at` | `timestamptz` | NO | `now()` | 생성 일시 |
 | `updated_at` | `timestamptz` | NO | `now()` | 수정 일시 |
 
-### 2.7 `notifications` (인앱 알림 로그)
-회원에게 전달된 알림 내역입니다.
+로그아웃/계정 전환은 기기 행과 토큰을 보존하고 `user_id`만 변경합니다. 기기 증명 쿠키와 서버 세션을 확인한 서버 액션만 이 연결을 바꿀 수 있습니다. 클라이언트가 제출한 토큰만으로 타계정 또는 연결 해제된 행을 재할당하지 않습니다. 기존 nullable 컬럼을 사용하므로 스키마 변경은 없습니다. 기기 OFF/동의 철회/탈퇴 시 삭제 정책은 유지합니다.
+
+### 2.7 `notifications` (계정 알림함 및 푸시 발송 대기)
+회원별 인앱 알림과 푸시 발송 상태를 한 행에서 관리합니다. 아래 구조는 `20260927000000_simplify_notification_outbox.sql` 적용 후 기준이며, 공유 운영 DB에는 아직 적용하지 않았습니다. 새 서버 코드와 함께 전환해야 합니다.
 
 | 컬럼명 | 데이터 타입 | Nullable | 기본값 | 설명 |
 | :--- | :--- | :--- | :--- | :--- |
-| `id` | `uuid` | NO | - | 알림 식별자 |
-| `user_id` | `uuid` | YES | null | FK → `users(id)` (수신 대상, 사용자 삭제 시 `ON DELETE SET NULL`) |
-| `title` | `text` | YES | null | 알림 제목 |
-| `body` | `text` | YES | null | 알림 내용 |
-| `link` | `text` | YES | null | 클릭 시 이동할 URL 경로 |
-| `created_at` | `timestamptz` | NO | `now()` | 발송 일시 |
-| `push_eligible` | `bool` | NO | `false` | FCM 푸시 발송 대상 이벤트 여부 |
-| `push_status` | `text` | NO | `'pending'` | `pending`, `processing`, `sent`, `skipped`, `failed` |
-| `push_attempted_at` | `timestamptz` | YES | null | 마지막 발송 시도 시각 |
-| `push_sent_at` | `timestamptz` | YES | null | FCM 발송 성공 시각 |
-| `push_error` | `text` | YES | null | 미발송 또는 실패 사유 |
+| `id` | `uuid` | NO | `gen_random_uuid()` | 알림 식별자 |
+| `user_id` | `uuid` | YES | `auth.uid()` | FK → users(id), 삭제 시 SET NULL |
+| `event_type` | `text` | NO | `'legacy'` | member_approval_requested, member_approved, nomination_added, legacy |
+| `event_key` | `text` | NO | 임의 UUID 문자열 | 이벤트 식별자. 공통 생성 함수는 업무 이벤트 키를 명시 |
+| `title`, `body`, `link` | `text` | YES | null | 생성 시 확정한 제목·본문·내부 이동 경로 |
+| `created_at` | `timestamptz` | NO | `now()` | 인앱 알림 생성 일시 |
+| `read_at` | `timestamptz` | YES | null | 최초 읽음 시각. null은 미확인 |
+| `push_status` | `text` | NO | `'skipped'` | pending, accepted, skipped, failed. 공통 생성 함수가 동의자를 pending으로 지정 |
+| `push_attempts` | `integer` | NO | 0 | 발송 선점 횟수 |
+| `push_next_attempt_at` | `timestamptz` | NO | `now()` | 다음 처리 시각. 선점 중에는 5분 뒤 만료 시각 |
+| `push_attempted_at` | `timestamptz` | YES | null | 마지막 발송 시도/선점 시각 |
+| `push_sent_at` | `timestamptz` | YES | null | 하나 이상 기기의 마지막 FCM 접수 시각(부분 성공 포함) |
+| `push_progress` | `jsonb` | NO | 두 빈 배열을 가진 객체 | successfulProfileIds 및 failures(profileId, code, retryable) |
+| `push_error` | `text` | YES | null | 짧은 미발송/실패 사유 코드 |
 
-> **푸시 수신 제한**: 실제 FCM 발송 직전 `users.marketing_opt_in = true`를 서버에서 재검증합니다. `profiles.fcm_token`은 전역 고유하며 사용자는 본인의 토큰만 조회/등록/삭제할 수 있습니다.
+- `UNIQUE(user_id, event_type, event_key)`로 수신자별 중복 생성을 막습니다. 메시지 템플릿 변경은 이미 저장된 내용과 읽음 상태를 바꾸지 않습니다.
+- 대기 행만 포함하는 `notifications_push_due_idx(push_next_attempt_at, created_at, id)`로 처리할 행을 제한합니다. processing 상태와 별도 선점 회수 작업은 제거하고 pending의 다음 시각을 5분 뒤로 옮깁니다. 완료 저장도 선점 시각을 비교합니다.
+- 일시 오류는 생성 후 24시간까지 pending에서 재시도하며 성공·영구 실패 기기는 제외합니다. accepted는 FCM 접수 완료이고, 화면 표시나 읽음을 보증하지 않습니다. skipped는 동의/현재 기기 없음, failed는 영구 오류/기한 만료입니다.
+- `push_progress`에는 기기 ID와 오류 코드만 보관하며 토큰·제공자 상세 오류 메시지는 저장하지 않습니다. `push_error`의 이전 JSON 체크포인트는 마이그레이션에서 새 컬럼으로 이관합니다.
 
-> **사용자 삭제**: `notifications` 로그는 보존하되 사용자 삭제를 막지 않도록, `users` 레코드가 삭제되면 해당 알림의 `user_id`만 외래키 `ON DELETE SET NULL`로 해제됩니다.
+읽음 상태는 푸시 발송 상태와 독립적입니다. 본인 알림은 수신 동의와 관계없이 알림함에 표시하며, `(user_id, created_at DESC, id DESC)` 목록 인덱스와 미확인 행의 `user_id` 부분 인덱스를 사용합니다. 기존 RLS와 GRANT는 변경하지 않습니다. 읽음 서버 액션은 로그인 계정과 요청 계정을 대조한 후 본인의 미확인 행에서 `read_at`만 수정합니다. 모두 읽음은 목록의 기준 시각까지로 제한합니다. [알림함 명세](../features/notification-inbox.md)를 참고하십시오.
 
-회원 승인에는 `approve_member_with_notification(p_user_id uuid)` DB 함수를 사용합니다. 이 함수는 관리자 권한을 확인하고 `pending → approved` 상태 변경과 승인 완료 푸시 outbox 생성을 단일 트랜잭션으로 처리하며, 이미 처리된 사용자는 `false`를 반환합니다.
+**공통 생성 경로**: 내부 DB 함수 `create_app_notification(user_id, event_type, event_key, context, notification_id?)`가 이벤트별 문구를 생성합니다. PUBLIC/anon/authenticated 직접 실행 권한은 없습니다. 완성된 가입 신청의 users 트리거, 후보곡 INSERT의 nominations 트리거, 관리자 전용 `approve_member_with_notification` RPC가 호출하여 업무 변경과 알림 생성을 같은 트랜잭션으로 저장합니다. 승인 RPC는 이미 처리된 사용자의 경우 false를 반환합니다.
+
+**큐 이관**: `gig_notification_queue`와 `push_eligible`을 제거합니다. 미처리 큐는 이전 UUIDv5와 같은 ID로 이관해 기존 알림을 덮어쓰지 않습니다. 기존 sent는 accepted가 됩니다. 24시간 이상 지난 큐에서 신규 생성한 알림은 인앱에 보존하되 동의자의 푸시는 failed/retry_window_expired로 종결합니다. [전환 및 처리 명세](../features/notification-outbox.md)를 참고하십시오.
+
+**수신 제한**: FCM 발송 직전 수신 동의와 현재 계정에 연결된 profiles를 조회합니다. 표시/클릭 직전에도 현재 로그인 세션·기기 연결·동의를 확인합니다. 일반 users 삭제 시 알림은 보존하고 user_id만 해제하며, 본인 탈퇴는 수신 알림을 명시적으로 삭제합니다.
 
 ### 2.8 `photos` (갤러리 사진첩)
 동아리 정기 공연 및 연습 활동 사진을 관리합니다.
@@ -341,7 +343,7 @@ erDiagram
 - 관리자 테이블 잠금으로 동시 탈퇴를 직렬화하고, 다른 실제 인증 계정에 연결된 관리자가 없는 경우 관리자 탈퇴를 거부합니다.
 - ID/이메일에 대응하는 관리자 권한, 본인 `profiles`·`notifications`, `public.users`, `auth.users`를 한 트랜잭션으로 삭제합니다. `public.users`와 `auth.users` 사이에는 외래키가 없으므로 둘 다 명시적으로 삭제합니다.
 - `performers`는 삭제하지 않고 `user_id = null`, 이름 `탈퇴 회원`, `photo_url = null`로 변경합니다. 이로써 `setlists.created_by`와 `nominations.created_by` 등 공유 기록을 보존합니다.
-- `gig_rsvps`, `nomination_responses`, `setlist_views`는 기존 CASCADE로 삭제되고 `gig_notification_queue.triggered_by`는 기존 SET NULL로 해제됩니다.
+- `gig_rsvps`, `nomination_responses`, `setlist_views`는 기존 CASCADE로 삭제됩니다. 알림 큐는 outbox 통합 마이그레이션에서 제거됩니다.
 - 일반적인 `users` 삭제에서는 알림 로그가 유지되지만, **본인 탈퇴에서는 수신 알림을 먼저 명시적으로 삭제**합니다. 공유 콘텐츠의 이름/사진 스냅샷과 Storage 파일은 일괄 삭제하지 않습니다.
 - 상세 정책: [회원 탈퇴 명세](../features/account-withdrawal.md).
 

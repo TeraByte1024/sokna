@@ -2,8 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { createServiceClient } from "@/lib/supabase/service";
-import { processPendingPushNotificationsByIds } from "@/lib/push-notifications";
+import { processPendingPushNotifications } from "@/lib/push-notifications";
 
 export type CompleteProfileResult =
   | { ok: true }
@@ -39,7 +38,8 @@ export async function completeProfileAction(
       return { ok: false, error: "세션(파트)을 입력해 주세요." };
     }
 
-    // public.users 테이블에 업데이트 (또는 신규 등록)
+    const appliedAt = new Date().toISOString();
+    // 신청과 관리자 알림을 DB 트리거가 같은 트랜잭션으로 저장합니다.
     const { error: upsertError } = await supabase.from("users").upsert({
       id: user.id,
       email: user.email ?? null,
@@ -48,7 +48,7 @@ export async function completeProfileAction(
       part: trimmedPart,
       status: "pending",
       marketing_opt_in: marketingOptIn,
-      applied_at: new Date().toISOString(),
+      applied_at: appliedAt,
     });
 
     if (upsertError) {
@@ -56,30 +56,14 @@ export async function completeProfileAction(
       return { ok: false, error: upsertError.message };
     }
 
-    // 관리자들에게 알림 전송
+    // 신청 저장 트리거가 만든 알림만 즉시 발송합니다.
     try {
-      const serviceClient = createServiceClient();
-      const { data: admins } = await serviceClient.from("admins").select("id");
-      if (admins && admins.length > 0) {
-        const notis = admins.map((admin) => ({
-          user_id: admin.id,
-          title: "신규 회원가입 승인 요청 (Google)",
-          body: `${trimmedName} (${generation}기, ${trimmedPart})님이 Google 계정으로 가입 승인을 요청했습니다.`,
-          link: "/admin/members",
-          push_eligible: true,
-        }));
-        const { data: insertedNotifications, error: notificationError } = await serviceClient
-          .from("notifications")
-          .insert(notis)
-          .select("id");
-        if (notificationError) throw notificationError;
-
-        await processPendingPushNotificationsByIds(
-          (insertedNotifications ?? []).map((notification) => notification.id),
-        );
-      }
-    } catch (notiErr) {
-      console.warn("관리자 알림 실패 건너뜀:", notiErr);
+      await processPendingPushNotifications({
+        eventType: "member_approval_requested",
+        eventKey: `member-application:${user.id}:${appliedAt}`,
+      });
+    } catch (pushError) {
+      console.warn("가입 승인 요청 즉시 푸시 실패, 재시도 대기:", pushError);
     }
 
     revalidatePath("/admin/members");

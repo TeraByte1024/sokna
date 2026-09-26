@@ -1,7 +1,7 @@
-# 선곡회의 곡 수정 하이라이팅 및 즉시 알림 큐 명세 (Setlist Highlights & Notification Queue)
+# 선곡회의 곡 수정 하이라이팅 및 즉시 알림 명세 (Setlist Highlights & Notifications)
 
 ## 1. 개요
-선곡회의 페이지(`/gigs/[id]/nominations`)에서 공연 참여 세션원들이 후보곡을 추천하고 조율할 때, **마지막으로 화면을 확인한 이후 수정되거나 새로 등록된 곡을 직관적으로 식별**할 수 있도록 시각적 하이라이트를 제공하고, **새 곡이 등록되면 등록자를 제외한 공연 참여자들에게 즉시 알림**을 전달하는 기능입니다. 현재 즉시 알림 검증을 위해 기존 15분 디바운스는 비활성화되어 있습니다.
+선곡회의 페이지(`/gigs/[id]/nominations`)에서 공연 참여 세션원들이 후보곡을 추천하고 조율할 때, **마지막으로 화면을 확인한 이후 수정되거나 새로 등록된 곡을 직관적으로 식별**할 수 있도록 시각적 하이라이트를 제공하고, **새 곡이 등록되면 등록자를 제외한 공연 참여자들에게 즉시 알림**을 전달하는 기능입니다. 별도 지연 예약 없이 후보곡과 계정 알림을 함께 저장한 뒤 즉시 발송합니다.
 
 ---
 
@@ -24,30 +24,37 @@
 
 ---
 
-### 2.2 새 곡 즉시 알림 큐 (Immediate Notification Queue)
-1. **목적**:
-   - 후보곡 등록 이벤트를 신뢰성 있게 기록하고 중복 처리를 방지하면서 즉시 알림을 발송합니다.
-2. **큐 등록 (`enqueueSongNotification`)**:
-   - 새 곡 등록 시 `gig_notification_queue`에 즉시 처리 가능한 레코드를 생성합니다 (`scheduled_at = now()`).
-   - 큐 생성은 후보곡을 등록한 동일한 인증 사용자 세션과 RLS 정책을 사용하여 서버 secret key 설정과 독립적으로 등록 이벤트를 보존합니다.
-   - 등록 액션은 새로 생성하거나 갱신한 정확한 큐 ID를 현재 서버 요청 안에서 `await`하여 처리합니다.
-3. **발송 처리 (`processNotificationQueue`)**:
-   - `scheduled_at <= now() AND status = 'pending'`인 대기열을 조회하여 처리합니다.
-   - 해당 공연의 참여 세션원(`performers`) 중 유효 계정이며 `users.marketing_opt_in = true`인 부원들에게 `notifications` 테이블에 일괄 등록하고 FCM 푸시 발송:
-     - **제목**: `🎵 [공연명] 새 후보곡 N건 등록`
-     - **본문**: 곡 명칭 요약 (예: `'곡1', '곡2'이(가) 선곡회의에 추천되었습니다. 지금 세션 편성과 악보를 확인해보세요!`)
-     - **링크**: `/gigs/:id/nominations`
-   - **수신 제외**: 곡을 등록한 본인(`triggered_by`)과 마케팅 알림 미동의 계정은 자동 제외.
-   - 발송 완료 시 `status = 'sent'`, `sent_at = now()`로 상태 전이.
-4. **발송 트리거 파이프라인**:
-   - **Cron 엔드포인트**: `/api/cron/notifications` (`CRON_SECRET` Bearer 인증, 외부 스케줄러에서 매분 호출)
-   - **즉시 처리**: 새 곡 등록 요청이 만든 큐만 동기적으로 처리합니다. cron은 처리되지 못하고 남은 `pending` 큐의 복구 경로입니다.
+### 2.2 새 곡 즉시 알림
+
+1. **원자적 생성**:
+   - 후보곡 INSERT의 `nominations_notify_added` DB 트리거가 같은 트랜잭션에서 수신자별 `notifications`를 만듭니다. 알림 저장이 실패하면 후보곡 등록도 롤백합니다.
+   - 공연에 계정으로 연결된 참여자 중 등록자를 제외합니다. 한 계정이 여러 참여 세션을 갖더라도 알림은 한 번만 만듭니다. 인증 세션이 없는 DB 실행은 `created_by`에 연결된 계정으로 등록자를 판단합니다.
+   - 알림 종류는 `nomination_added`, 이벤트 키는 `nomination:<후보곡 ID>`입니다. `(user_id, event_type, event_key)` 고유 제약으로 이벤트별 중복을 막습니다. 후보곡 수정은 새 등록 알림을 만들지 않습니다.
+2. **내용과 인앱 기록**:
+   - 제목·본문·링크는 비공개 실행 권한의 공통 DB 헬퍼 `create_app_notification()`에서 생성합니다. 상세 템플릿과 생성 권한은 [알림 outbox 명세](./notification-outbox.md)를 따릅니다.
+   - 제목은 `[공연명] 선곡회의 새 후보곡 등록`, 본문은 후보곡 안내 및 세션 응답 요청, 링크는 `/gigs/:id/nominations`입니다. 저장된 내용은 이후 템플릿을 바꿔도 유지합니다.
+   - 푸시 미동의자도 인앱 내역을 저장하되 `push_status = skipped`, `push_error = not_opted_in`으로 종결합니다. 동의자의 내역은 pending으로 만들고 실제 발송 전 동의를 다시 확인합니다.
+   - `created_at`은 알림 생성 트랜잭션의 시각이며 별도 지연 예약을 두지 않습니다.
+3. **즉시 발송과 복구**:
+   - 등록 서버 액션이 `processPendingPushNotifications({ eventType: "nomination_added", eventKey: "nomination:" + inserted.id })`를 await하여 저장된 이벤트를 즉시 발송합니다.
+   - FCM 오류로 후보곡과 인앱 알림을 다시 생성하지 않습니다. 기존 outbox의 상태와 기기별 결과를 갱신하여 복구합니다.
+   - 상태는 pending/accepted/skipped/failed입니다. accepted는 FCM 접수 완료이며 기기 표시나 읽음을 뜻하지 않습니다.
+   - 현재 로그인 계정으로 연결된 기기에만 발송하고, 서비스 워커도 표시·클릭 직전 계정을 검증합니다. 로그아웃은 기기 등록을 보존하며 이전 계정의 지연 알림은 차단합니다.
+   - `/api/cron/notifications`가 CRON_SECRET Bearer 인증 후 발송 가능한 pending 알림만 처리합니다. 5분 선점 복구, 기기별 성공 제외, 1분·5분·15분·1시간과 지터를 포함한 재시도, 24시간 한도는 [푸시 알림 명세](./push-notifications.md#41-수신자별-결과와-재시도)를 따릅니다.
+
+### 2.3 기존 구조 이관과 배포
+
+- `20260927000000_simplify_notification_outbox.sql`에서 `gig_notification_queue`를 폐지합니다. 미처리 항목은 기존 UUID 규칙으로 계정 outbox에 이관하고 이미 생성된 알림의 내용·읽음·발송 결과는 덮어쓰지 않습니다.
+- 기존 `push_eligible`과 `processing` 상태를 제거하고 기존 `sent`는 `accepted`로 옮깁니다. 재시도 체크포인트와 진행 중인 선점은 보존합니다.
+- 현재 공유 운영 DB에는 이 최적화 마이그레이션을 적용하지 않았습니다. 새 서버 코드·cron과 DB 스키마를 함께 전환해야 합니다. [운영 전환 절차](../maintenance/environment-setup.md#23-알림-outbox-구조-전환)를 따릅니다.
 
 ---
 
 ## 3. 관련 파일 링크
-- 선곡 패널 컴포넌트: [components/nominations/nomination-panel.tsx](file:///d:/dev/sokna/components/nominations/nomination-panel.tsx)
-- 알림 큐 및 헬퍼: [lib/setlist-notifications.ts](file:///d:/dev/sokna/lib/setlist-notifications.ts)
-- 선곡회의 서버 액션: [app/gigs/[id]/nominations/actions.ts](file:///d:/dev/sokna/app/gigs/[id]/nominations/actions.ts)
-- Cron API 라우트: [app/api/cron/notifications/route.ts](file:///d:/dev/sokna/app/api/cron/notifications/route.ts)
-- DB 마이그레이션: [supabase/migrations/20260916020000_add_setlist_views_and_notification_queue.sql](file:///d:/dev/sokna/supabase/migrations/20260916020000_add_setlist_views_and_notification_queue.sql)
+
+- 선곡 패널: [nomination-panel.tsx](../../components/nominations/nomination-panel.tsx)
+- 마지막 확인 시각: [nomination-views.ts](../../lib/nomination-views.ts)
+- 선곡회의 서버 액션: [actions.ts](<../../app/gigs/[id]/nominations/actions.ts>)
+- 공통 발송 처리기: [push-notifications.ts](../../lib/push-notifications.ts)
+- Cron API: [route.ts](../../app/api/cron/notifications/route.ts)
+- 원자적 생성·문구·이관 마이그레이션: [simplify_notification_outbox.sql](../../supabase/migrations/20260927000000_simplify_notification_outbox.sql)

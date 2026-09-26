@@ -6,16 +6,13 @@ import { getIsAdmin } from "@/lib/auth-admin";
 import { SUPABASE_GIGS_TABLE } from "@/lib/supabase/gigs";
 import { isNominationClosed } from "@/lib/nomination-deadline";
 import type { NominationFormValues } from "@/lib/nomination";
-import {
-	enqueueSongNotification,
-	processNotificationQueue,
-	recordLastViewedNomination,
-} from "@/lib/nomination-notifications";
+import { recordLastViewedNomination } from "@/lib/nomination-views";
+import { processPendingPushNotifications } from "@/lib/push-notifications";
 
 /**
  * 선곡회의 후보곡 등록 액션
  * - nominations 테이블에 저장
- * - 새 곡 알림 큐를 생성하고 요청 안에서 즉시 발송
+ * - DB 트리거가 알림을 함께 저장하고 요청 안에서 즉시 발송
  */
 export async function addNomination(gigId: string, payload: NominationFormValues) {
 	const supabase = await createClient();
@@ -103,17 +100,13 @@ export async function addNomination(gigId: string, payload: NominationFormValues
 		throw new Error("후보곡 등록 중 오류가 발생했습니다: " + (error?.message || ""));
 	}
 
-	// 5. 알림 큐를 생성하고 현재 요청 안에서 즉시 처리
+	// 후보곡과 알림은 이미 같은 DB 트랜잭션으로 저장되었습니다.
 	try {
-		const queueId = await enqueueSongNotification(numericGigId, inserted.id, user.id);
-		if (queueId !== null) {
-			const result = await processNotificationQueue([queueId]);
-			if (result.processedCount === 0) {
-				console.warn("후보곡 알림 큐가 즉시 처리되지 않았습니다:", queueId);
-			}
-		}
-	} catch (queueErr) {
-		console.warn("알림 큐 등록 실패 건너뜀:", queueErr);
+		await processPendingPushNotifications({
+			eventType: "nomination_added", eventKey: "nomination:" + inserted.id,
+		});
+	} catch (pushError) {
+		console.warn("후보곡 즉시 푸시 실패, 재시도 대기:", pushError);
 	}
 
 	// 데이터 캐시 갱신

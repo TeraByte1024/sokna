@@ -82,8 +82,9 @@ export async function updateSession(request: NextRequest) {
       pathname === "/" ||
       pathname.startsWith("/login") ||
       pathname.startsWith("/auth") ||
-      // 푸시 서비스 워커는 로그아웃 상태에서도 갱신·실행할 수 있어야 합니다.
+      // 워커 갱신과 로그아웃 상태의 수신 차단 응답은 로그인 리다이렉트 없이 처리합니다.
       pathname === "/firebase-messaging-sw.js" ||
+      pathname === "/api/push/authorize" ||
       // 외부 스케줄러는 사용자 세션이 없습니다. cron 라우트 자체에서
       // CRON_SECRET Bearer 토큰을 검증하므로 로그인 리다이렉트만 제외합니다.
       pathname.startsWith("/api/cron/") ||

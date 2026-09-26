@@ -89,7 +89,9 @@ docs/
 | **Feature** | [gig-visibility.md](./features/gig-visibility.md) | 비공개·회원 공개·전체 공개 권한 및 기존 공연 전환 |
 | **Feature** | [setlists.md](./features/setlists.md) | 곡 등록/삭제, 필수 파트 선택, 악보 유무, 참고 링크 관리 |
 | **Feature** | [push-notifications.md](./features/push-notifications.md) | Firebase Cloud Messaging(FCM) 토큰 관리 및 푸시 수신 |
-| **Feature** | [setlist-notifications-and-highlights.md](./features/setlist-notifications-and-highlights.md) | **선곡회의 곡 수정 하이라이팅 및 새 곡 15분 지연 알림 큐** |
+| **Feature** | [notification-outbox.md](./features/notification-outbox.md) | 알림 생성·문구 통합, 단일 발송 대기와 재시도, 운영 DB 전환 |
+| **Feature** | [notification-inbox.md](./features/notification-inbox.md) | 헤더 종 버튼, 미확인 배지, 알림 목록 및 읽음 상태 |
+| **Feature** | [setlist-notifications-and-highlights.md](./features/setlist-notifications-and-highlights.md) | **선곡회의 곡 수정 하이라이팅 및 새 곡 즉시 알림·계정별 발송 복구** |
 | **Feature** | [spreadsheet-bulk-import.md](./features/spreadsheet-bulk-import.md) | **엑셀 공연자 및 셋리스트 표 일괄 불러오기(덮어쓰기) 및 스마트 Conflict 해결** |
 | **Architecture** | [system-overview.md](./architecture/system-overview.md) | Next.js 16, Supabase SSR, Tailwind CSS 등 시스템 전체 구조 |
 | **Architecture** | [database-schema.md](./architecture/database-schema.md) | Supabase DB 스키마, 테이블 상세, ERD, 제약조건 |

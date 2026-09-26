@@ -4,6 +4,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "test": "node --test tests/*.test.mjs",
     "lint": "eslint .",
     "types": "npx supabase gen types typescript --linked > lib/supabase/database.types.ts"
   },

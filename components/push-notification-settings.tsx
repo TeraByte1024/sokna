@@ -1,72 +1,30 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { BellRing, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
 import { requestNotificationPermission } from "@/lib/firebase/push-permission";
+import { enableMarketingOptInAction } from "@/app/profile/notification-actions";
 import {
-	enableMarketingOptInAction,
-	registerPushTokenAction,
-	unregisterPushTokenAction,
-} from "@/app/profile/notification-actions";
-
-const TOKEN_STORAGE_KEY = "sokna-fcm-token";
-const TOKEN_CHANGE_EVENT = "sokna-push-token-change";
+	disablePushDevice,
+	enablePushDevice,
+	getPushDeviceSnapshot,
+	getServerPushDeviceSnapshot,
+	refreshPushDevice,
+	subscribePushDevice,
+} from "@/lib/firebase/push-device";
 
 export function usePushNotificationDevice(initialMarketingOptIn: boolean, enabled = true) {
 	const router = useRouter();
-	const [permission, setPermission] = useState<NotificationPermission | "unsupported">("default");
-	const [hasRegisteredToken, setHasRegisteredToken] = useState(false);
-	const [hasMarketingConsent, setHasMarketingConsent] = useState(initialMarketingOptIn);
+	const device = useSyncExternalStore(subscribePushDevice, getPushDeviceSnapshot, getServerPushDeviceSnapshot);
+	const hasMarketingConsent = device.hasMarketingConsent ?? initialMarketingOptIn;
 	const [isPending, setIsPending] = useState(false);
 
 	useEffect(() => {
-		setHasMarketingConsent(initialMarketingOptIn);
-	}, [initialMarketingOptIn]);
-
-	useEffect(() => {
-		if (!enabled) return;
-		let active = true;
-		const syncTokenState = async () => {
-			const { isPushNotificationSupported } = await import("@/lib/firebase/pushNotification");
-			const supported = await isPushNotificationSupported();
-			if (!active) return;
-			if (!supported) {
-				setPermission("unsupported");
-				setHasRegisteredToken(false);
-				return;
-			}
-			setPermission(Notification.permission);
-			try {
-				setHasRegisteredToken(Boolean(window.localStorage.getItem(TOKEN_STORAGE_KEY)));
-			} catch {
-				setHasRegisteredToken(false);
-			}
-		};
-		const onTokenChange = () => { void syncTokenState(); };
-		void syncTokenState();
-		window.addEventListener(TOKEN_CHANGE_EVENT, onTokenChange);
-		return () => {
-			active = false;
-			window.removeEventListener(TOKEN_CHANGE_EVENT, onTokenChange);
-		};
-	}, [enabled]);
-
-	const registerDevice = async () => {
-		const registration = await navigator.serviceWorker.register("/firebase-messaging-sw.js");
-		await navigator.serviceWorker.ready;
-		const { getFcmToken } = await import("@/lib/firebase/pushNotification");
-		const tokenResult = await getFcmToken(registration);
-		if (!tokenResult.data) throw new Error(tokenResult.error ?? "토큰 발급 실패");
-		const result = await registerPushTokenAction(tokenResult.data, navigator.userAgent);
-		if (!result.ok) throw new Error(result.error);
-		window.localStorage.setItem(TOKEN_STORAGE_KEY, tokenResult.data);
-		setPermission(Notification.permission);
-		setHasRegisteredToken(true);
-		window.dispatchEvent(new Event(TOKEN_CHANGE_EVENT));
-	};
+		if (enabled) void refreshPushDevice(true);
+	}, [enabled, initialMarketingOptIn]);
 
 	const enablePush = async () => {
 		if (isPending) return false;
@@ -74,7 +32,7 @@ export function usePushNotificationDevice(initialMarketingOptIn: boolean, enable
 		try {
 			const permissionResult = await requestNotificationPermission();
 			if (permissionResult.error) throw new Error(permissionResult.error);
-			await registerDevice();
+			await enablePushDevice();
 			toast.success("이 기기에서 푸시 알림을 받습니다.");
 			return true;
 		} catch (error) {
@@ -93,8 +51,7 @@ export function usePushNotificationDevice(initialMarketingOptIn: boolean, enable
 			if (permissionResult.error) throw new Error(permissionResult.error);
 			const consentResult = await enableMarketingOptInAction();
 			if (!consentResult.ok) throw new Error(consentResult.error);
-			setHasMarketingConsent(true);
-			await registerDevice();
+			await enablePushDevice();
 			toast.success("수신 동의와 이 기기 알림 설정이 완료되었습니다.");
 			router.refresh();
 			return true;
@@ -110,16 +67,7 @@ export function usePushNotificationDevice(initialMarketingOptIn: boolean, enable
 		if (isPending) return false;
 		setIsPending(true);
 		try {
-			const token = window.localStorage.getItem(TOKEN_STORAGE_KEY);
-			if (token) {
-				const result = await unregisterPushTokenAction(token);
-				if (!result.ok) throw new Error(result.error);
-			}
-			const { deleteFcmToken } = await import("@/lib/firebase/pushNotification");
-			await deleteFcmToken().catch(() => undefined);
-			window.localStorage.removeItem(TOKEN_STORAGE_KEY);
-			setHasRegisteredToken(false);
-			window.dispatchEvent(new Event(TOKEN_CHANGE_EVENT));
+			await disablePushDevice();
 			toast.success("이 기기의 푸시 알림을 해제했습니다.");
 			return true;
 		} catch (error) {
@@ -131,11 +79,11 @@ export function usePushNotificationDevice(initialMarketingOptIn: boolean, enable
 	};
 
 	return {
-		permission,
-		enabled: hasMarketingConsent && permission === "granted" && hasRegisteredToken,
-		hasRegisteredToken,
+		permission: device.permission,
+		enabled: hasMarketingConsent && device.permission === "granted" && device.hasRegisteredToken,
+		hasRegisteredToken: device.hasRegisteredToken,
 		hasMarketingConsent,
-		isPending,
+		isPending: isPending || device.isChecking,
 		enablePush,
 		consentAndEnablePush,
 		disablePush,

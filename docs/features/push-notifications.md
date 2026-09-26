@@ -8,7 +8,7 @@ FCM Web Push로 모바일/데스크톱 브라우저에 다음 이벤트를 알�
 2. 관리자가 회원가입을 승인하면 승인된 사용자에게 알림
 3. 선곡회의에 새 후보곡이 등록되면 등록자를 제외한 공연 참여자에게 알림
 
-두 이벤트 모두 `users.marketing_opt_in = true`인 계정만 실제 푸시 대상이 됩니다. 클라이언트 입력만 신뢰하지 않고 서버 발송 직전에 다시 검사합니다.
+세 이벤트 모두 `users.marketing_opt_in = true`인 계정만 실제 푸시 대상이 됩니다. 클라이언트 입력만 신뢰하지 않고 서버 발송 직전에 다시 검사합니다.
 
 ## 2. 사용자 수신 설정
 
@@ -20,80 +20,175 @@ FCM Web Push로 모바일/데스크톱 브라우저에 다음 이벤트를 알�
 5. 수신 동의를 철회하면 해당 사용자의 모든 `profiles` 토큰을 즉시 삭제하고, 프로필에서 저장한 현재 브라우저의 로컬 토큰도 해제합니다.
 6. 사용자는 어느 토글이든 다시 눌러 현재 기기 토큰만 해제할 수 있습니다. 이 동작은 계정 전체 수신 동의나 동의 시각을 변경하지 않습니다. 지원하지 않거나 권한이 거부된 브라우저에서는 토글을 비활성화하고 상태를 안내합니다.
 
-서비스 워커 `/firebase-messaging-sw.js`는 Firebase Messaging SDK를 초기화해 페이지가 닫힌 백그라운드 상태에서도 알림 payload를 표시합니다. 로그아웃 상태에서도 브라우저가 서비스 워커를 갱신할 수 있도록 인증 프록시의 공개 경로로 유지합니다. 로그인 세션은 푸시 수신 조건이 아닙니다.
+기기 상태는 `lib/firebase/push-device.ts`에서 공유하며 현재 로그인 계정·서버 수신 동의·본인의 서버 토큰 등록·실제 브라우저 FCM 토큰을 확인한 뒤에만 ON으로 표시합니다. 검사 중에는 토글을 비활성화합니다. 페이지 진입, 계정 변경, 창 포커스, 네트워크 복구 및 다른 탭의 토큰 변경 시 다시 확인합니다.
 
-페이지의 Firebase Messaging 코드는 브라우저 알림 권한이 이미 있거나 이 기기에서 토큰을 등록한 뒤에 로드합니다. 헤더 프로필 메뉴의 기기 설정 코드는 메뉴를 열 때, 프로필 폼의 기기 설정 코드는 폼을 표시할 때 지원 여부를 확인합니다. 권한 요청은 사용자 탭 동작에서 바로 시작합니다. 토큰 등록 완료 이벤트가 같은 탭의 전경 메시지 수신기도 시작합니다.
+기존 서버 등록이 남아 있는 경우에만 토큰을 자동 갱신합니다. 자동 갱신 액션은 검증된 기존 행을 UPDATE하며, 서버에서 삭제된 행을 다시 만들지 않습니다. 동의 철회로 해제된 기기는 사용자가 직접 토글을 켜야 재등록됩니다. 로컬 소유 계정은 화면 동기화용이며, 실제 수신 계정은 서버 세션과 기기 증명 쿠키로 검증합니다.
+
+서비스 워커 `/firebase-messaging-sw.js`는 Firebase Messaging SDK를 초기화해 페이지가 닫힌 백그라운드 상태에서도 알림 payload를 표시합니다. 로그아웃 상태에서도 브라우저가 서비스 워커를 갱신할 수 있도록 인증 프록시의 공개 경로로 유지합니다. **현재 기기에 로그인한 계정만 알림을 받을 수 있으며**, 페이지가 닫혀 있어도 유효한 로그인 세션이 남아 있으면 수신할 수 있습니다.
+
+전역 `PushMessageListener`는 서비스 워커 갱신과 기기 등록 상태 동기화를 시작합니다. 알림 표시 자체는 페이지 리스너가 아닌 서비스 워커가 담당합니다. 권한 요청은 자동으로 실행하지 않고 사용자 탭 동작에서만 시작합니다. 이미 권한을 허용한 기기는 페이지 진입·다시 표시·네트워크 복구·토큰 변경 시 서비스 워커를 갱신하며, 성공한 갱신은 1분 이내 중복 실행하지 않습니다.
 
 권한 요청은 브라우저 정책에 맞게 사용자 버튼 클릭에서 즉시 시작합니다. iOS/iPadOS 16.4 이상에서는 Safari의 공유 메뉴에서 사이트를 홈 화면에 추가한 뒤, 홈 화면 아이콘으로 연 웹 앱에서만 웹 푸시 권한을 요청할 수 있습니다. 일반 Safari 탭에서는 알림 토글을 비활성화합니다.
 
+### 2.1 앱/페이지 상태에 따른 표시 방식
+
+아래는 2026-09-26 수정 후 동작입니다. 서버 발송 조건을 통과하고 해당 기기에 메시지가 전달되었다는 전제이며, 운영 기기의 실제 수신을 확인한 결과는 아닙니다.
+
+| 수신 기기의 상태 | 현재 표시 방식 |
+| :--- | :--- |
+| 같은 브라우저 환경에서 소크나 페이지가 화면에 보임 | 서비스 워커가 시스템 알림을 한 번 표시. 페이지 토스트 중복 표시 없음 |
+| 소크나 탭은 열려 있지만 모든 관련 창이 숨김 상태 | 동일한 서비스 워커 경로로 시스템 알림 표시 |
+| 소크나 페이지가 모두 닫힘 | 등록된 서비스 워커를 통해 시스템 알림 표시 가능. 브라우저/OS의 푸시 처리와 알림 허용 설정 필요 |
+| PC에서는 소크나가 보이고 휴대폰에서는 백그라운드 | 각 기기에서 별도로 판단. PC의 전경 상태가 휴대폰 발송이나 시스템 알림 표시를 차단하지 않음 |
+| 로그아웃 또는 갱신할 수 없는 세션 만료 | 기기 등록은 유지하지만 알림 표시와 클릭 이동은 차단 |
+| B가 등록한 기기에 C가 로그인함 | 같은 기기를 C에 연결. C가 수신에 동의한 경우 C 대상 알림만 표시 |
+
+- `app/firebase-messaging-sw.js/route.ts`는 Firebase SDK를 불러오기 전에 `push` 핸들러를 등록합니다. `notification` payload가 있으면 `stopImmediatePropagation()`으로 SDK의 중복 처리를 막고 `event.waitUntil(...)` 안에서 수신 계정을 검증한 뒤 직접 표시합니다. 화면 가시성이나 페이지 수신기 준비 여부에 의존하지 않으며 여러 탭이 열려 있어도 표시 호출은 한 번입니다.
+- 서버는 `lib/push-notifications.ts`에서 `notification`과 `data`를 함께 전송합니다. data-only 메시지와 구독 변경 이벤트는 Firebase SDK가 계속 처리합니다. 직접 처리한 알림에는 Firebase의 `onMessage`/`onBackgroundMessage` 콜백 및 SDK 수신 통계 경로가 실행되지 않습니다.
+- 새 이벤트는 `notifications.id`에 따른 고유 태그 `sokna-notification-<id>`를 사용합니다. 같은 공연의 후속 알림도 새 이벤트로 표시하며, 동일 이벤트 재시도만 같은 태그로 기존 알림을 대체합니다. `renotify = false`로 동일 이벤트의 중복 소리·진동을 줄입니다.
+- 표시 및 클릭 직전에 `/api/push/authorize`를 쿠키 포함·캐시 없이 호출합니다. 현재 로그인 계정·기기 연결·수신 동의가 모두 유효하고 payload의 `recipientUserId`와 일치해야 내용을 표시/이동합니다. 로그아웃·수신자 누락·불일치는 내용을 표시하지 않고 재시도도 종료합니다. 인증 서버·네트워크 장애는 일시 실패로 구분하여 기기에서 제한적으로 복구합니다. 이미 FCM에 전달된 B의 알림이 C 로그인 뒤 도착해도 차단합니다.
+- 일시 장애 중에는 개인 내용 없는 `소크나 알림 확인 지연` 안내를 같은 태그로 조용히 표시하고 원래 알림의 표시 성공으로 처리하지 않습니다. 복구 후 서버에서 확인한 실제 알림 내용이 이를 대체합니다. 이 안내를 클릭하면 공개 홈으로 이동하며 이전 계정의 링크를 사용하지 않습니다.
+- 클릭 시 계정을 다시 확인하고 원래의 링크에 해당하는 창을 찾아 포커스하거나 새 창을 엽니다. 이동 대상은 현재 사이트의 HTTP(S) URL로 제한하며 잘못된 URL, 외부 사이트 및 `javascript:` 등은 사이트 홈으로 대체합니다. 세션 변경 메시지는 진행 중인 표시/클릭 검사를 무효화하고 이미 표시된 알림을 닫습니다.
+
+플랫폼 동작 근거: [Firebase 웹 메시지 수신](https://firebase.google.com/docs/cloud-messaging/web/receive-messages), [WebKit iOS/iPadOS 웹 푸시](https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/), [알림 대체와 renotify](https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorkerRegistration/showNotification#renotify).
+
+### 2.2 실제 기기 수신에 필요한 조건
+
+1. 해당 이벤트의 수신 대상 계정이어야 합니다. 후보곡은 해당 공연의 `performers.user_id`에 연결된 사용자 중 등록자를 제외합니다. 명단에 이름만 있는 참여자는 수신 대상이 아닙니다. 본인 계정으로 곡을 등록하면 본인의 모든 기기가 제외됩니다.
+2. 서버의 `users.marketing_opt_in = true`여야 합니다. 가입 폼의 수신 동의만으로는 기기 토큰이 등록되지 않습니다.
+3. 알림을 받을 기기·브라우저·사이트 주소에 유효한 FCM 토큰이 등록되어 있고, 해당 기기의 현재 로그인 계정으로 `profiles.user_id`가 연결되어 있어야 합니다. 기기 증명 쿠키와 로그인 세션도 유효해야 합니다. PC에서 설정한 것만으로 휴대폰이 등록되지 않으며, localhost 등록과 운영 도메인 등록도 구분됩니다.
+4. 지원되는 브라우저에서 알림 권한이 `granted`이고 서비스 워커가 정상 등록되어야 합니다. 운영 환경은 HTTPS를 사용하며, iOS/iPadOS는 위의 홈 화면 웹 앱 조건을 따릅니다.
+5. 서버의 Firebase/Supabase 설정이 정상이고, 기기의 네트워크·브라우저·OS가 푸시를 처리할 수 있어야 합니다. 시스템 배너·잠금 화면 표시·소리 등은 OS 알림 설정과 집중 모드의 영향도 받습니다.
+
+### 2.3 기기 등록과 로그인 계정 연결
+
+- 기기 등록(`profiles.id`, `fcm_token`)과 수신 계정(`profiles.user_id`)을 구분합니다. B 로그아웃은 현재 기기의 `user_id`만 null로 바꾸며 토큰·서비스 워커·푸시 구독을 삭제하지 않습니다. 공통 로그아웃 함수는 연결 정지 후 `signOut({ scope: "local" })`을 실행하므로 B의 다른 기기는 유지합니다.
+- C가 로그인하면 검증된 동일 기기를 C에 자동 연결합니다. C의 수신 동의가 없으면 연결은 C로 바꾸되 알림은 표시하지 않습니다. 계정 전환 자체로 토큰을 삭제하거나 새로 발급하지 않습니다. 명시적 기기 OFF, 계정의 수신 동의 철회, 회원 탈퇴는 기존 삭제 정책을 유지합니다.
+- 로그인·포커스·온라인 복구 등에서 연결을 다시 확인합니다. 로그아웃을 시작하면 즉시 화면 상태와 서비스 워커 검사를 무효화합니다. 탭 간 로그아웃 표시와 지원 브라우저의 Web Locks로 기존 계정의 동시 연결 요청을 억제합니다. 연결 정지 실패가 실제 로그아웃을 막지는 않으며, 표시 시 인증 검사로 이전 계정 알림을 차단합니다. 로그아웃 자체가 실패하면 연결 확인을 재개합니다.
+- 서버는 기기 등록 시 HttpOnly 기기 증명 쿠키를 발급합니다. 기기 ID·토큰 해시·만료 시각에 기존 서버 Supabase secret으로 HMAC 서명하며 프로덕션에서는 Secure/`__Host-` 접두사, Path=/, SameSite=Lax를 사용합니다. 서명·현재 DB 토큰·기기 ID를 검증한 경우에만 서버 권한으로 계정을 재연결합니다. 클라이언트가 제출한 FCM 토큰이나 로컬 소유 계정만으로 다른 계정의 기기를 가져올 수 없습니다.
+- 증명 쿠키가 없는 기존 등록은 **원래 소유 계정의 로그인 세션으로 본인 토큰임을 확인한 뒤** 쿠키를 발급합니다. 쿠키 없이 이미 다른 계정으로 전환한 오래된 등록은 자동 이전하지 않고 OFF로 처리합니다. 원래 계정에서 한 번 확인하거나 브라우저 구독을 초기화한 뒤 명시적으로 재등록해야 합니다.
+- `GET /api/push/authorize`는 로그인 리다이렉트에서 제외하지만 자체 세션·기기·동의 검증을 수행합니다. 상태를 변경하지 않으며 `{ userId: string | null }`을 `private, no-store`/`Vary: Cookie`로 응답합니다. 선택 입력 `notificationId`가 있으면 본인 알림과 24시간 유효기간도 확인하고 복구용 `notification`(`id`, `title`, `body`, `link`, `created_at`)을 추가합니다. 인증/DB 오류는 503이며 서비스 워커는 개인 내용을 표시하지 않습니다. 기기 연결에는 기존 nullable 컬럼을 사용하고 새 환경 변수는 필요하지 않습니다.
+
 ## 3. 발송 파이프라인
+
+`notifications`를 계정 알림함과 유일한 영속 발송 outbox로 사용합니다. 메시지 제목·본문·링크는 비공개 실행 권한의 DB 헬퍼 `create_app_notification()` 한곳에서 생성하고 완성된 문구를 저장합니다. 이후 템플릿 변경은 새 알림에만 적용됩니다. 이 함수는 `public` 스키마에 있지만 `PUBLIC`·`anon`·`authenticated`의 직접 실행 권한이 없으며, 검증된 트리거와 승인 함수만 호출합니다.
+
+`event_type`은 알림 종류, `event_key`는 해당 이벤트의 식별자입니다. `(user_id, event_type, event_key)` 고유 제약으로 계정별 중복 생성을 막으며 발송 대상은 제목 문자열로 조회하지 않습니다. 상세 설계와 이관 규칙은 [알림 outbox 명세](./notification-outbox.md)를 따릅니다.
 
 ### 3.1 회원가입 승인 요청
 
-- 이메일 가입: Supabase `handle_new_user()` 트리거가 필수 프로필 데이터가 있는 경우 관리자별 `notifications` outbox 레코드를 생성합니다.
-- Google 가입: 최초 OAuth 시점에는 필수 프로필이 없으므로 알림을 만들지 않고, `/auth/complete-profile` 완료 시 생성합니다.
-- `push_eligible = true`, `push_status = 'pending'` 레코드를 생성한 직후 가입 완료 서버 흐름에서 FCM 발송을 즉시 시도합니다.
-- 이메일 가입은 DB 트리거가 outbox를 생성한 뒤 가입 폼의 서버 액션이 가입 관련 pending 레코드만 처리하고, Google 가입은 프로필 완성 액션이 새로 생성한 정확한 outbox ID를 처리합니다.
+- 이메일 가입은 `handle_new_user()`가 회원 프로필을 저장하고, `users_notify_member_application` 트리거가 필수 가입 정보를 갖춘 pending 신청에 대해 관리자별 알림을 같은 트랜잭션으로 생성합니다.
+- Google 가입도 프로필 완성 액션이 회원 정보를 저장하면 같은 트리거를 거칩니다. 필수 정보가 없는 최초 OAuth 로그인이나 이미 완성된 pending 프로필의 단순 재저장은 새 알림을 만들지 않습니다.
+- 이벤트 종류는 `member_approval_requested`, 키는 `member-application:<신청자 ID>:<신청 시각>`입니다.
+- 이메일 가입 직후 폼이 반환받은 계정 ID를 서버 액션에 전달하면, DB의 신청 시각으로 정확한 이벤트 키를 계산해 해당 신청만 즉시 처리합니다. 오래된 대기 알림이 새 신청을 밀어내지 않습니다. Google 프로필 완성도 종류와 정확한 신청 이벤트 키로 범위를 제한합니다.
 
 ### 3.2 회원가입 승인 완료
 
-- 관리자가 `/admin/members`에서 `pending` 사용자를 승인하면 DB 함수 `approve_member_with_notification()`이 상태 변경과 "회원가입 승인 완료" 인앱 알림 생성을 하나의 트랜잭션으로 처리합니다.
-- 같은 알림 레코드에 `push_eligible = true`, `push_status = 'pending'`을 설정하며 cron이 마케팅 수신 동의 및 활성 기기 토큰을 다시 검사한 뒤 FCM으로 발송합니다.
-- 승인 업데이트는 `pending` 상태에서만 성공하도록 제한하여 중복 승인 요청으로 동일 알림이 여러 번 만들어지지 않게 합니다.
-- 알림 클릭 시 `/members`로 이동합니다.
-- 승인 액션은 outbox 생성 직후 해당 사용자의 승인 완료 알림을 즉시 FCM으로 발송합니다.
+- 관리자용 `approve_member_with_notification()`이 pending 회원의 승인 전이와 `member_approved` 알림 생성을 하나의 트랜잭션으로 처리합니다. 기존 관리자 검증과 pending 조건을 유지합니다.
+- 이벤트 키는 `member-approved:<회원 ID>:<승인 시각>`이며 공통 DB 헬퍼의 문구와 `/members` 링크를 사용합니다.
+- 승인 액션은 저장 이후 해당 사용자의 승인 완료 알림을 공통 처리기로 즉시 발송합니다. 중복 승인으로 동일 알림을 다시 만들지 않습니다.
 
 ### 3.3 선곡회의 새 후보곡
 
-- 신규 곡을 `gig_notification_queue`에 `scheduled_at = now()`로 넣고, 후보곡 등록 서버 액션이 해당 큐 ID를 즉시 처리합니다. 기존 15분 디바운스는 현재 테스트를 위해 비활성화되어 있습니다.
-- cron이 만료된 큐를 선점하고 공연 참여자 중 등록자를 제외합니다.
-- 마케팅 동의자를 한 번 더 제한하고 `notifications` 로그를 만든 뒤 FCM으로 발송합니다.
+- `nominations_notify_added` AFTER INSERT 트리거가 후보곡과 수신자별 알림을 같은 트랜잭션으로 저장합니다. 알림 생성이 실패하면 후보곡 INSERT도 함께 롤백되어 이벤트 유실 구간이 생기지 않습니다.
+- 현재 인증 사용자를 등록자로 판단하며, 인증 사용자가 없는 DB 실행에서는 `created_by`에 연결된 참여자 계정을 사용합니다. 공연 참여 계정 중 등록자를 제외하고 계정마다 한 행을 생성합니다.
+- 이벤트 종류는 `nomination_added`, 키는 `nomination:<후보곡 ID>`입니다. 새 후보곡마다 별도 이벤트를 만들고 등록 액션은 이 종류·키로 저장된 outbox를 즉시 처리합니다. 후보곡 수정은 새 등록 알림을 만들지 않습니다.
+- 푸시 동의와 관계없이 인앱 내역을 저장합니다. 생성 당시 미동의자의 알림은 `skipped`/`not_opted_in`으로 종결하며 나중에 동의해도 재발송하지 않습니다.
 
-### 3.4 스케줄러와 보안
+### 3.4 공통 처리기와 스케줄러
 
-- 엔드포인트: `GET/POST /api/cron/notifications`
-- 스케줄러: Vercel Pro/Enterprise Cron 또는 Supabase Cron에서 1분 간격 호출
-- 가입 요청, 가입 승인 완료, 후보곡 등록 알림은 cron 주기와 무관하게 이벤트 처리 중 즉시 발송합니다. cron은 남은 `pending` outbox와 후보곡 큐의 복구용입니다.
-- 프로덕션에서는 `Authorization: Bearer <CRON_SECRET>`가 반드시 필요합니다.
-- 사용자 세션이 없는 외부 스케줄러 요청을 허용하기 위해 인증 프록시의 로그인 리다이렉트에서는 제외하되, 엔드포인트의 Bearer 검증은 항상 적용합니다.
-- DB outbox와 토큰 조회는 서버 전용 `SUPABASE_SECRET_KEY`를 사용합니다(기존 `SUPABASE_SERVICE_ROLE_KEY`도 호환).
-- Firebase 발송은 서버 전용 Admin SDK 자격 증명을 사용합니다.
+- 즉시 처리와 cron은 `processPendingPushNotifications({ eventType?, eventKey?, userId?, notificationIds?, limit? })` 하나를 사용합니다. 명시적으로 빈 ID 목록을 전달하면 처리하지 않으며 기본 한도는 50개입니다.
+- DB에서 `push_status = pending`이며 `push_next_attempt_at <= now`인 행만 조회합니다. 이 시각과 생성 시각·ID 순으로 처리하며, 대기 중인 재시도 전체를 애플리케이션에서 훑지 않습니다.
+- 엔드포인트: `GET/POST /api/cron/notifications`. 응답은 `{ ok, pendingPush: { processedCount, sentCount }, timestamp }`이며 후보곡용 별도 처리 결과는 없습니다.
+- 모든 이벤트는 요청 처리 중 즉시 발송을 시도합니다. 1분 간격 cron은 남은 pending 알림과 중단된 선점을 복구합니다. 정상 요청의 즉시 발송은 cron 주기에 의존하지 않습니다.
+- 2026-09-27 점검에서 연결된 Supabase에 `pg_cron`이 설치되어 있지 않고 저장소에도 Vercel cron 설정은 없었습니다. 별도 외부 스케줄러의 운영 여부는 확인하지 않았으므로 배포 환경에서 주기 호출과 실제 실행을 확인해야 서버 자동 재시도가 동작합니다.
+- 프로덕션에서는 `Authorization: Bearer <CRON_SECRET>`가 반드시 필요합니다. 로그인 리다이렉트에서 제외하되 엔드포인트의 Bearer 검증은 유지합니다.
+- DB outbox와 토큰 조회는 서버 전용 `SUPABASE_SECRET_KEY`를 사용합니다(`SUPABASE_SERVICE_ROLE_KEY` 호환). Firebase 발송은 서버 전용 Admin SDK 자격 증명을 사용합니다.
 
 ## 4. 전달 상태
 
-`notifications`의 푸시 관련 필드:
-
 | 필드 | 의미 |
 | :--- | :--- |
-| `push_eligible` | 이 로그가 푸시 발송 대상 이벤트인지 여부 |
-| `push_status` | `pending`, `processing`, `sent`, `skipped`, `failed` |
-| `push_attempted_at` | 발송 시도 시각 |
-| `push_sent_at` | FCM 성공 시각 |
-| `push_error` | 미발송/실패 사유 |
+| `event_type`, `event_key` | 문구와 독립적인 이벤트 종류·식별자 |
+| `push_status` | `pending`, `accepted`, `skipped`, `failed` |
+| `push_attempted_at` | 마지막 처리 선점 시각. 완료 저장 시 소유권 비교에 사용 |
+| `push_sent_at` | 한 기기 이상 FCM 접수에 성공한 마지막 시각. 부분 성공도 기록 |
+| `push_attempts` | 영속 처리 시도 횟수 |
+| `push_next_attempt_at` | 다음 재시도 시각. 처리 중에는 5분 선점 만료 시각 |
+| `push_progress` | 성공 기기 ID와 기기별 오류 코드·재시도 가능 여부의 JSONB |
+| `push_error` | 미발송·실패 사유의 짧은 코드. 체크포인트 JSON을 넣지 않음 |
 
-마케팅 미동의 또는 활성 토큰이 없는 계정은 FCM에 전달하지 않으며 `skipped`로 기록합니다. 만료되거나 해지된 FCM 토큰은 발송 응답에 따라 자동 삭제합니다.
-사용자 계정이 삭제되면 알림 로그는 보존되고 `notifications.user_id`만 외래키 `ON DELETE SET NULL`로 해제되어 삭제 의존성을 만들지 않습니다.
+동의가 없거나 활성 토큰이 없는 계정은 FCM에 전달하지 않으며 `skipped`로 기록합니다. 삭제된 사용자의 알림은 보존하며 `notifications.user_id`만 외래키 `ON DELETE SET NULL`로 해제합니다.
+
+### 4.1 수신자별 결과와 재시도
+
+- 계정별 outbox를 처리하므로 다른 계정의 성공으로 현재 계정의 처리를 끝내지 않습니다. 해당 계정의 대상 기기가 모두 FCM에 접수되면 `accepted`, 일시 오류가 남으면 `pending`, 영구 오류가 남거나 기한이 끝나면 `failed`입니다. 부분 성공 여부는 `push_sent_at`과 `push_progress`로 구분합니다.
+- 이미 성공한 기기와 영구 실패한 기기는 재시도에서 제외합니다. 한 기기의 성공은 다른 기기의 일시 오류 재시도를 중단하지 않습니다.
+- 일시 오류는 1분 → 5분 → 15분 → 이후 1시간 간격에 0~20% 지터를 더해 재시도합니다. 생성 후 24시간 한도를 유지하며 FCM TTL과 payload `expiresAt`도 같은 원래 만료 시각을 사용합니다.
+- 무효·해지 토큰은 기기 ID와 발송 당시 토큰이 모두 일치할 때만 삭제합니다. 응답 도중 같은 기기의 토큰이 교체되었다면 새 토큰을 보존하고 재시도합니다.
+- `push_progress`에는 `successfulProfileIds`와 `failures`(`profileId`, `code`, `retryable`)만 기록합니다. 시도 횟수와 예약 시각은 별도 컬럼에서 관리하며 토큰 원문이나 제공자의 상세 오류 메시지는 보관하지 않습니다.
+- 선점 시 상태는 pending을 유지하고 `push_next_attempt_at`을 5분 뒤로 설정합니다. 완료 저장은 상태·선점 시각·선점 만료 시각을 비교하므로 오래된 실행이 새 실행의 결과를 덮지 못합니다. 프로세스 종료나 완료 저장 실패 시 같은 행을 만료 후 다시 선점하며 별도 상태 복구 UPDATE는 필요하지 않습니다.
+- **`accepted`는 FCM 접수 완료이며 OS 표시나 사용자 열람 확인이 아닙니다.** FCM 접수 직후 DB 저장 전에 프로세스가 종료되는 구간까지 정확히 한 번을 보장할 수 없으며 동일 알림 태그로 중복 표시를 줄입니다.
+- 종결된 accepted/skipped/failed 알림은 다시 발송하지 않습니다. 읽음 상태와 푸시 처리 상태는 독립적입니다.
+
+미수신 조사는 이벤트/수신자 확인 → 계정 outbox 존재 여부 → 계정 동의와 기기 연결 → 기기별 처리 결과 → OS 설정 순서로 진행합니다.
+
+### 4.2 표시 전 일시 장애의 제한적 복구
+
+- FCM이 접수한 메시지는 설정한 TTL 안에서 푸시 서비스가 전달을 시도합니다. 앱 서버는 FCM 발송 오류만 재시도하며, 표시 확인 응답이 없다는 이유로 다시 발송하지 않습니다. 별도 표시 ACK API나 기기별 전달 테이블은 사용하지 않습니다.
+- 서비스 워커는 표시 전 인증 요청을 8초로 제한합니다. 서버·네트워크 오류 또는 표시 API 실패가 발생한 알림은 기기에서 최대 15분 동안 추가 3회만 복구를 시도합니다. 첫 복구는 다음 활성화 시 가능하고 실패 후 최소 1분, 다음 실패 후 최소 3분을 기다립니다.
+- 복구 대상은 IndexedDB에 알림 ID·수신자 ID·시도 횟수·만료 시각만 저장합니다. 제목·본문·URL·인증 토큰은 저장하지 않습니다. 복구 시 `GET /api/push/authorize?notificationId=<UUID>`가 현재 세션·기기 연결·동의·본인 알림·원알림 24시간 유효기간을 확인하고 본문을 다시 제공합니다.
+- 로그아웃·계정 변경·기기 연결 해제·동의 철회는 정상 차단으로 취급하고 복구를 중단합니다. 서비스 워커의 세션 변경 메시지는 대기 중인 복구 대상도 정리합니다.
+- 복구는 서비스 워커 활성화, 지원 브라우저의 Background Sync, 페이지 진입·포커스·온라인 복구·가시성 변경으로 실행합니다. 긴 백그라운드 타이머나 주기 실행을 보장하지 않습니다. 특히 Background Sync 미지원 브라우저에서는 앱을 다시 열어야 복구될 수 있습니다. 복구 기간이 지나도 본인 알림은 [알림함 팝업](./notification-inbox.md)에 남습니다.
+- 장애 중에는 개인 내용 없는 `소크나 알림 확인 지연` 안내를 같은 태그로 조용히 표시합니다. 복구 성공 후 원래 내용으로 대체하며, 지연 안내 클릭은 공개 홈으로 이동합니다.
+- 이미 처리한 이벤트는 로컬 완료 표식과 현재 표시된 알림의 태그로 중복을 줄입니다. 표시와 저장 사이 종료나 저장소 사용 불가로 중복이 생길 수 있으며 정확히 한 번을 보장하지 않습니다.
+- 동일 push의 재전달도 기존 복구 횟수와 다음 시도 시각을 적용합니다. 유효한 기록은 개수 기준으로 축출하지 않고 TTL 만료 시 정리하여, 기록 축출로 복구 기간이나 횟수가 초기화되지 않게 합니다.
+- Safari의 `userVisibleOnly` 정책상 무표시 push는 구독에 영향을 줄 수 있습니다. 지연 안내가 일시 장애의 무표시를 줄이지만, 계정 불일치 차단과 중복 제거는 개인정보 비노출을 우선하며 실기기 검증이 필요합니다. [WebKit 정책](https://webkit.org/blog/12945/meet-web-push/#power-and-privacy), [Background Sync 지원 범위](https://developer.mozilla.org/en-US/docs/Web/API/Background_Synchronization_API).
 
 ## 5. 운영 설정
 
-필요한 환경 변수와 Firebase/Supabase 콘솔 절차는 [개발 환경 설정 가이드](../maintenance/environment-setup.md)를 따릅니다. DB 마이그레이션 `20260922010000_enable_web_push_delivery.sql`을 배포하기 전에는 토큰 등록과 발송을 활성화하면 안 됩니다.
+알림 outbox 구조 변경 마이그레이션 `20260927000000_simplify_notification_outbox.sql`은 현재 공유 운영 DB에 미적용입니다. 구 서버·cron과 새 스키마가 혼재하지 않도록 [운영 전환 절차](../maintenance/environment-setup.md#23-알림-outbox-구조-전환)에 따라 새 코드와 함께 적용해야 합니다. 이관 시 기존 `gig_notification_queue`를 제거하고 `push_eligible`과 `processing`을 새 상태·선점 모델로 옮기며, 기존 `sent`는 `accepted`로 바꿉니다. 종결 기록과 기기별 진행 상태는 보존합니다.
+
+필요한 환경 변수와 Firebase/Supabase 콘솔 절차는 [개발 환경 설정 가이드](../maintenance/environment-setup.md)를 따릅니다. DB 마이그레이션 `20260922010000_enable_web_push_delivery.sql`을 배포하기 전에는 토큰 등록과 발송을 활성화하면 안 됩니다. 헤더 알림함은 `20260926151654_add_notification_read_state.sql`도 필요하며 연결된 DB에는 적용 완료했습니다.
 
 ## 6. 관련 파일
 
 - 브라우저 FCM: `lib/firebase/firebase.ts`, `lib/firebase/pushNotification.ts`
+- 기기 상태 동기화: `lib/firebase/push-device.ts`, `app/profile/notification-actions.ts`
+- 기기 증명 및 수신 계정 검사: `lib/firebase/push-device-binding.ts`, `app/api/push/authorize/route.ts`
+- 공통 로그아웃: `lib/supabase/logout.ts`
 - Firebase Admin: `lib/firebase/admin.ts`
 - 발송 및 outbox 처리: `lib/push-notifications.ts`
 - 기기 설정 UI: `components/push-notification-settings.tsx`
-- 서비스 워커: `app/firebase-messaging-sw.js/route.ts`
+- 서비스 워커: `app/firebase-messaging-sw.js/route.ts`, `lib/firebase/push-worker-script.ts`
 - 홈 화면 웹앱 매니페스트 및 메타데이터: `app/manifest.ts`, `app/layout.tsx`
 - cron: `app/api/cron/notifications/route.ts`
 - DB: `supabase/migrations/20260922010000_enable_web_push_delivery.sql`
-- 회원 승인 outbox 트랜잭션: `supabase/migrations/20260922020000_add_member_approval_push_notification.sql`
+- 공통 문구·생성 트랜잭션·이관: `supabase/migrations/20260927000000_simplify_notification_outbox.sql`
+- 상세 설계: [알림 outbox 명세](./notification-outbox.md)
 
 ## 7. 브라우저 호환성 및 실패 격리
 
-- Firebase Messaging은 브라우저 지원 여부를 비동기로 확인한 뒤 초기화합니다. 전역 포그라운드 메시지 리스너도 이 검사를 통과한 경우에만 등록합니다.
+- Firebase Messaging은 브라우저 지원 여부를 비동기로 확인한 뒤 토큰을 관리합니다. 지원 검사·초기화가 실패한 캐시는 해제하여 이후 검사에서 재시도할 수 있습니다. 시스템 알림 표시는 페이지의 Firebase 메시지 리스너와 독립적으로 서비스 워커에서 실행합니다.
 - iOS Safari 일반 탭처럼 Service Worker는 있지만 Web Push API가 없는 환경에서는 푸시 기능만 비활성화하며, 페이지 렌더링은 계속되어야 합니다.
-- 지원 여부 확인 또는 Firebase 메시지 리스너 초기화가 실패해도 예외를 전역으로 전파하지 않습니다.
+- 지원 여부 확인, 기기 상태 동기화 또는 서비스 워커 갱신이 실패해도 예외를 전역으로 전파하지 않습니다.
 - `/manifest.webmanifest`는 로그인 상태와 관계없이 제공하며, `display: standalone`, 고정된 `id`, 시작 URL 및 아이콘을 포함합니다.
 - iPhone 실기기 검증은 홈 화면 앱에서 권한 허용, 토큰 등록, 전경 및 백그라운드 수신, 알림 탭 이동을 각각 확인해야 완료됩니다.
+
+### 7.1 수정 전 표시 경로 모의 검증 (2026-09-26)
+
+설치된 Firebase 12.11.0 / Messaging 0.12.25의 실제 서비스 워커 함수를 Node VM으로 실행하여 7개 시나리오를 확인했습니다. 전경 창은 페이지 메시지 전달만, 숨김 창 또는 열린 창이 없는 경우는 시스템 알림 표시 함수 호출로 분기했습니다. 전경 창에 페이지 수신기가 없는 경우에도 시스템 알림으로 전환되지 않는 것을 확인했습니다. 전경/숨김 혼합, Chrome 확장 창 제외, 백그라운드 data-only 메시지의 자동 표시 없음도 확인했습니다.
+
+모든 검증은 모의 창과 알림 표시 함수를 사용했으며 실제 FCM 발송·운영 DB 조회·실기기 표시 확인은 포함하지 않았습니다. 운영 미수신 원인을 확정하려면 해당 사용자·기기·이벤트 시점의 별도 확인이 필요합니다.
+
+### 7.2 수정 후 회귀 검증 (2026-09-27)
+
+- `tests/push-service-worker.test.mjs`: 실제 라우트가 생성한 서비스 워커와 설치된 Firebase SDK를 모의 환경에서 실행해 전경·백그라운드·페이지 없음·다중 탭 표시, 이벤트 태그, 클릭 이동 및 잘못된 URL 처리를 검증합니다. 수신 계정 불일치·로그아웃·인증 실패 차단 및 세션 변경 도중 표시/클릭 경합도 확인합니다.
+- `tests/push-device.test.mjs`: 서버 토큰 삭제, 실제 토큰 갱신, 토큰을 유지하는 로그아웃/계정 전환, 미동의 계정 연결, 동의 철회, 검사 중 인증 변경, 탭 간 로그아웃 표시 및 루트 서비스 워커 구독 해제를 검증합니다.
+- `tests/push-device-binding.test.mjs`: 기기 증명 서명·변조, 기존 등록 전환, 로그아웃 연결 정지, 인증/DB 오류 시 보존, 타계정 토큰 재할당 거부 및 표시 인증 API를 검증합니다.
+- `tests/push-logout.test.mjs`: 연결 정지 후 현재 기기의 세션만 종료, 연결 정지 실패 시 로그아웃 지속, 로그아웃 실패 시 연결 검사 복구를 검증합니다.
+- `tests/server-push-delivery.test.mjs`: 수신자별 결과 및 payload 수신자 분리, 부분 성공 기기 제외, 오류 분류, 재시도 간격·기한, 중단 작업 복구, 동시 선점, 오래된 실행의 완료 저장 차단, 이벤트 필터, FCM 배치 제한 및 발송 도중 토큰 교체를 검증합니다.
+
+알림 outbox 최적화 이전의 알림함·푸시 변경은 전체 회귀 테스트 **243개**, 변경 코드·테스트 ESLint 및 TypeScript를 포함한 프로덕션 빌드를 통과했습니다. 알림함의 `read_at` 마이그레이션을 연결된 DB에 적용하고 실제 API의 개수 조회 성공(HTTP 200)을 확인했습니다. `npm run types`로 원격 스키마를 재생성하며 기존 미적용 로컬 마이그레이션 컬럼 `marketing_opted_in_at`은 타입에 보존합니다. 브라우저 검증 도구 연결 실패로 실제 화면 검증은 완료하지 못했으며, 실제 기기의 배너·소리·사용자 열람 여부도 이 검증에 포함되지 않습니다.
+
+이번 최적화의 검증 범위와 결과는 [알림 outbox 명세](./notification-outbox.md#6-검증)에 기록합니다. 로컬 발송 테스트 23개와 알림함·서비스 워커 테스트 101개를 통과했으며, 공유 운영 DB 이관이나 실제 FCM 발송은 실행하지 않았습니다. 배포 후 기존 기기에서 앱/페이지를 한 번 열어 서비스 워커를 갱신하고, 해당 기기 알림 토글의 서버 검증 결과를 확인해야 합니다. 서버 등록이 이미 해제되어 OFF로 표시되는 기기는 사용자가 다시 켜야 합니다. 운영 수신 검증은 전경·백그라운드·알림 클릭을 각각 확인합니다.

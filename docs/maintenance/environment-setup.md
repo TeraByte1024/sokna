@@ -48,7 +48,7 @@ CRON_SECRET=<long-random-secret>
 
 1. Supabase Dashboard의 서버 전용 secret key를 `SUPABASE_SECRET_KEY`로 설정합니다.
 2. Google OAuth를 로컬에서 사용할 경우 Supabase Dashboard의 **Authentication > URL Configuration > Redirect URLs**에 `http://localhost:3000/auth/callback`을 추가합니다. 운영 **Site URL**은 운영 도메인으로 유지합니다. 이 로컬 콜백이 허용되지 않으면 Supabase가 로그인 후 운영 Site URL로 되돌릴 수 있습니다.
-3. `npx supabase db push`로 최신 마이그레이션을 적용합니다.
+3. `npx supabase db push`로 최신 마이그레이션을 적용합니다. 알림 outbox 전환은 아래 2.3의 동시 전환 절차를 먼저 따릅니다.
 4. `npm run types`로 원격 스키마 타입을 다시 생성합니다.
 5. Vercel 환경 변수에도 동일한 서버/공개 변수를 등록하고 16자 이상의 임의 문자열 `CRON_SECRET`을 추가합니다.
 6. **Vercel Pro/Enterprise**라면 `vercel.json`에 아래 스케줄을 추가합니다. Vercel Hobby는 1일 1회만 허용하므로 이 설정으로 배포할 수 없습니다.
@@ -66,7 +66,20 @@ CRON_SECRET=<long-random-secret>
    Authorization: Bearer <CRON_SECRET>
    ```
 
-8. 배포 후 cron 응답이 401/500 없이 완료되고 `nominationQueues`, `pendingPush` 카운트가 반환되는지 실행 로그에서 확인합니다.
+8. 배포 후 cron 응답이 401/500 없이 완료되고 `pendingPush.processedCount`와 `pendingPush.sentCount`가 반환되는지 실행 로그에서 확인합니다.
+
+### 2.3 알림 outbox 구조 전환
+
+`20260927000000_simplify_notification_outbox.sql`은 **현재 공유 운영 DB에 미적용**입니다. 새 코드와 DB 스키마가 함께 바뀌므로 기존 코드가 실행되는 동안 이 마이그레이션만 먼저 적용하지 않습니다.
+
+1. 새 서버 코드·마이그레이션·환경 변수와 [알림 outbox 명세](../features/notification-outbox.md)를 함께 검토하고 배포 전 검증 후 전환 구간을 정합니다.
+2. 기존 서버의 가입·승인·후보곡 쓰기와 기존 cron을 중지하고 진행 중인 작업을 마칩니다. 기존 코드가 새 스키마와 함께 실행되지 않도록 합니다.
+3. 마이그레이션으로 기존 `gig_notification_queue`의 미처리 항목을 계정 outbox에 이관한 뒤 테이블을 제거합니다. 기존 성공 기기 체크포인트·읽음·종결 기록은 보존하고 `sent`는 `accepted`로, `processing`은 선점 시각이 있는 pending으로 옮기며 `push_eligible`은 제거합니다.
+4. 새 서버 코드를 함께 전환합니다. 공통 DB 헬퍼 `create_app_notification()`의 직접 RPC 실행 권한은 열지 않습니다. 새 생성 경로는 회원·후보곡 트리거와 관리자 검증이 있는 승인 RPC입니다.
+5. 새 스키마 기준으로 `npm run types`를 실행하고 해당 타입과 새 코드를 사용합니다. 연결된 원격 DB에서 타입을 생성하는 명령은 DB 마이그레이션을 대신하지 않습니다.
+6. 알림 생성과 계정별 중복 방지, 미동의자의 인앱 내역 및 푸시 제외, 기존 미확인 개수 조회를 확인합니다. cron 응답 `pendingPush`와 pending/accepted/skipped/failed 상태를 확인하고 주기 호출을 재개합니다.
+
+새 cron은 `notifications`만 처리하며 응답은 `{ ok, pendingPush: { processedCount, sentCount }, timestamp }`입니다. 1분 간격 재실행은 일시 실패와 5분 선점 만료를 복구하며 FCM 접수 성공은 실기기 배너나 사용자 열람 확인과 다릅니다.
 
 ---
 
