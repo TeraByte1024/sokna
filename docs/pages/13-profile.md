@@ -20,6 +20,7 @@
   - 공연/행사 및 앱 푸시 알림 수신 동의 체크박스. 기존 상태 칩 대신 라벨 다음 줄에 `YYYY. MM. DD. HH:mm 동의함`(한국 시간)을 표시합니다. 동의 시각이 null인 기존 동의자는 `동의함`만 표시하고, 미동의자는 `미동의`로 표시합니다.
   - 바로 아래 `이 기기에서 알림 받기` 토글: 벨 아이콘과 문구를 한 줄에 놓고 오른쪽에 스위치를 표시합니다. 현재 브라우저의 알림 권한과 FCM 토큰 등록 상태에 따라 켜거나 끕니다. 지원하지 않거나 권한이 거부된 브라우저에서는 비활성화하고 이유를 안내합니다.
   - `[변경사항 저장하기]` 버튼.
+- 회원 탈퇴 카드: 복구 불가 및 공유 기록 보존 안내, `[회원 탈퇴]` 버튼.
 
 ---
 
@@ -36,6 +37,13 @@
 3. **페이지 이탈 방지 확인 팝업 (`LeaveConfirmDialog` 및 `beforeunload`)**:
    - 폼 작성 및 수정 중(`isDirty`) 사용자가 상단 네비게이션, 헤더 링크 클릭 또는 브라우저 탭 닫기/새로고침을 시도할 경우 변경사항 유실을 방지하기 위한 확인 팝업("페이지를 벗어나시겠습니까?")을 표시합니다.
    - 저장 완료 시에는 정상 제출 플래그(`markSubmitting()`)를 통해 팝업 없이 즉시 최신 상태가 반영됩니다.
+4. **회원 탈퇴 (`deleteMyAccountAction`)**:
+   - 하단 `[회원 탈퇴]` 버튼으로 확인 창을 열고 `탈퇴`를 정확히 입력한 뒤 최종 제출합니다.
+   - 계정과 개인 알림·신청 정보는 삭제되며, 공연·선곡 등 공유 기록은 남을 수 있고 복구할 수 없음을 안내합니다.
+   - 프로필 저장·푸시 설정과 탈퇴 처리를 동시에 실행할 수 없습니다. 실패 시 확인 창에 오류를 표시하고 다시 시도할 수 있습니다.
+   - 마지막 관리자는 다른 관리자를 지정한 뒤 탈퇴해야 합니다.
+   - 성공하면 `회원 탈퇴가 완료되었습니다.` 브라우저 알림을 표시합니다. 사용자가 확인하면 미저장 변경 경고를 해제하고 로컬 세션·기기 토큰을 정리한 뒤 홈으로 이동합니다.
+   - 상세 데이터 처리 규칙: [회원 탈퇴 명세](../features/account-withdrawal.md).
 
 ---
 
@@ -43,5 +51,6 @@
 - 페이지 라우트: [app/profile/page.tsx](file:///d:/dev/sokna/app/profile/page.tsx)
 - 프로필 폼 컴포넌트: [app/profile/profile-form.tsx](file:///d:/dev/sokna/app/profile/profile-form.tsx)
 - 프로필 수정 서버 액션: [app/profile/actions.ts](file:///d:/dev/sokna/app/profile/actions.ts)
+- 탈퇴 확인 컴포넌트: [app/profile/delete-account-section.tsx](../../app/profile/delete-account-section.tsx)
 - 공통 기기 알림 설정: [components/push-notification-settings.tsx](file:///d:/dev/sokna/components/push-notification-settings.tsx)
 - 공통 이탈 확인 다이얼로그: [components/ui/leave-confirm-dialog.tsx](file:///d:/dev/sokna/components/ui/leave-confirm-dialog.tsx)

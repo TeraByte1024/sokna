@@ -15,6 +15,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { updateMyProfileAction } from "./actions";
+import { DeleteAccountSection } from "./delete-account-section";
 import { toast } from "@/components/ui/sonner";
 import { LeaveConfirmDialog, useUnsavedChangesWarning } from "@/components/ui/leave-confirm-dialog";
 import {
@@ -92,6 +93,7 @@ export function ProfileForm({ user, isAdmin }: ProfileFormProps) {
   }, [user.marketing_opt_in]);
 
   const [isPending, startTransition] = useTransition();
+  const [isDeleting, setIsDeleting] = useState(false);
   const [message, setMessage] = useState<{
     type: "success" | "error";
     text: string;
@@ -131,6 +133,7 @@ export function ProfileForm({ user, isAdmin }: ProfileFormProps) {
   };
 
   const handleDevicePushToggle = () => {
+    if (isDeleting) return;
     if (push.enabled) {
       void push.disablePush();
     } else if (!push.hasMarketingConsent) {
@@ -142,6 +145,7 @@ export function ProfileForm({ user, isAdmin }: ProfileFormProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isPending || push.isPending || isDeleting) return;
     setMessage(null);
 
     const trimmedName = name.trim();
@@ -306,6 +310,7 @@ export function ProfileForm({ user, isAdmin }: ProfileFormProps) {
         </CardHeader>
 
         <CardContent>
+          <fieldset disabled={isDeleting} className="min-w-0">
           <form
             onSubmit={handleSubmit}
             className="space-y-5"
@@ -492,7 +497,7 @@ export function ProfileForm({ user, isAdmin }: ProfileFormProps) {
                   aria-labelledby="devicePushLabel"
                   aria-describedby={push.permission === "unsupported" || push.permission === "denied" ? "devicePushDescription" : undefined}
                   title={push.enabled ? "이 기기 알림 끄기" : "이 기기 알림 켜기"}
-                  disabled={isPending || push.isPending || push.permission === "unsupported" || push.permission === "denied"}
+                  disabled={isPending || push.isPending || isDeleting || push.permission === "unsupported" || push.permission === "denied"}
                   onClick={handleDevicePushToggle}
                   className="inline-flex h-11 w-14 shrink-0 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                 >
@@ -525,7 +530,7 @@ export function ProfileForm({ user, isAdmin }: ProfileFormProps) {
             <div className="pt-4 flex items-center justify-end">
               <Button
                 type="submit"
-                disabled={isPending || push.isPending}
+                disabled={isPending || push.isPending || isDeleting}
                 className="w-full sm:w-auto min-w-32 h-10 bg-primary text-primary-foreground font-semibold shadow-sm"
               >
                 {isPending ? (
@@ -539,8 +544,15 @@ export function ProfileForm({ user, isAdmin }: ProfileFormProps) {
               </Button>
             </div>
           </form>
+          </fieldset>
         </CardContent>
       </Card>
+
+      <DeleteAccountSection
+        disabled={isPending || push.isPending || pushConsentDialogOpen}
+        onPendingChange={setIsDeleting}
+        onDeleted={markSubmitting}
+      />
 
       <MarketingPushConsentDialog
         isOpen={pushConsentDialogOpen}

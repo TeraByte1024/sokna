@@ -329,6 +329,17 @@ erDiagram
 
 
 ## 3. 데이터 무결성 및 RLS 원칙
+
+### 회원 탈퇴 RPC
+- `20260926080436_add_account_withdrawal.sql`: `delete_my_account(p_confirmation text) RETURNS boolean` 추가. 연결된 Supabase DB 적용 완료.
+- `SECURITY DEFINER`, 빈 `search_path`, `authenticated` 실행 권한만 부여. `auth.uid()`의 실제 인증 계정 및 확인 문구 `탈퇴`를 검사합니다. 삭제 대상 ID는 입력받지 않습니다.
+- 관리자 테이블 잠금으로 동시 탈퇴를 직렬화하고, 다른 실제 인증 계정에 연결된 관리자가 없는 경우 관리자 탈퇴를 거부합니다.
+- ID/이메일에 대응하는 관리자 권한, 본인 `profiles`·`notifications`, `public.users`, `auth.users`를 한 트랜잭션으로 삭제합니다. `public.users`와 `auth.users` 사이에는 외래키가 없으므로 둘 다 명시적으로 삭제합니다.
+- `performers`는 삭제하지 않고 `user_id = null`, 이름 `탈퇴 회원`, `photo_url = null`로 변경합니다. 이로써 `setlists.created_by`와 `nominations.created_by` 등 공유 기록을 보존합니다.
+- `gig_rsvps`, `nomination_responses`, `setlist_views`는 기존 CASCADE로 삭제되고 `gig_notification_queue.triggered_by`는 기존 SET NULL로 해제됩니다.
+- 일반적인 `users` 삭제에서는 알림 로그가 유지되지만, **본인 탈퇴에서는 수신 알림을 먼저 명시적으로 삭제**합니다. 공유 콘텐츠의 이름/사진 스냅샷과 Storage 파일은 일괄 삭제하지 않습니다.
+- 상세 정책: [회원 탈퇴 명세](../features/account-withdrawal.md).
+
 1. **셋리스트 등록 권한**:
    - `setlists.created_by`는 반드시 해당 공연의 참여자로 등록된 `performers.id`여야 합니다.
 2. **삭제 및 수정 제어**:

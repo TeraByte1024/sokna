@@ -622,6 +622,7 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: boolean
       }
+      delete_my_account: { Args: { p_confirmation: string }; Returns: boolean }
       is_admin: { Args: never; Returns: boolean }
       review_gig_rsvp: {
         Args: {

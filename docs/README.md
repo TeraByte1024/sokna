@@ -84,6 +84,7 @@ docs/
 | :--- | :--- | :--- |
 | **Feature** | [roles-and-permissions.md](./features/roles-and-permissions.md) | **방문자 / 일반 회원 / 세션 참여자 / 관리자별 기능 매트릭스** |
 | **Feature** | [authentication.md](./features/authentication.md) | Supabase Auth, 쿠키 기반 세션 갱신, 관리자 권한 판별 |
+| **Feature** | [account-withdrawal.md](./features/account-withdrawal.md) | 프로필 회원 탈퇴, 계정·개인 데이터 삭제, 공유 공연 기록 보존 |
 | **Feature** | [gigs.md](./features/gigs.md) | 공연 생성, 목록/상세 조회, 참여 세션(Performer) 매핑 |
 | **Feature** | [setlists.md](./features/setlists.md) | 곡 등록/삭제, 필수 파트 선택, 악보 유무, 참고 링크 관리 |
 | **Feature** | [push-notifications.md](./features/push-notifications.md) | Firebase Cloud Messaging(FCM) 토큰 관리 및 푸시 수신 |

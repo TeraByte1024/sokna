@@ -56,6 +56,9 @@ SOKNA 애플리케이션은 **Supabase Auth**와 `@supabase/ssr`을 결합하여
    - 세션은 필수 입력 항목이 아니며, 프리셋 칩(`보컬`, `기타`, `베이스`, `드럼`, `건반`, `창작`, `직접 입력`) 및 "선택 해제"를 지원합니다.
 
 ### 2.3 권한 제어 (Role-Based Authorization)
+
+회원은 `/profile`에서 확인 문구를 입력하여 본인 계정을 탈퇴할 수 있습니다. `deleteMyAccountAction`은 `auth.getUser()`로 확인한 세션으로 `delete_my_account` RPC를 호출합니다. 계정·개인 데이터는 단일 트랜잭션으로 삭제하며, 마지막 관리자 탈퇴는 차단합니다. 성공 후 세션을 정리하고 홈으로 이동합니다. 상세 정책은 [회원 탈퇴 명세](./account-withdrawal.md)를 따릅니다.
+
 - **일반 회원 (User)**:
    - 로그인된 인증 사용자.
    - 공연 목록 및 상세 조회 가능.

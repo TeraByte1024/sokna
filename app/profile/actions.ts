@@ -7,6 +7,54 @@ export type ProfileActionResult =
   | { ok: true; message?: string }
   | { ok: false; error: string };
 
+/** 검증된 세션의 본인 계정만 삭제합니다. 사용자 ID는 입력받지 않습니다. */
+export async function deleteMyAccountAction(
+  confirmation: string
+): Promise<ProfileActionResult> {
+  if (confirmation !== "탈퇴") {
+    return { ok: false, error: "확인 문구 '탈퇴'를 정확히 입력해 주세요." };
+  }
+
+  let supabase;
+  try {
+    supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return { ok: false, error: "로그인 세션이 만료되었습니다. 다시 로그인해 주세요." };
+    }
+
+    const { data, error } = await supabase.rpc("delete_my_account", {
+      p_confirmation: confirmation,
+    });
+    if (error || data !== true) {
+      console.error("회원 탈퇴 실패:", error);
+      return {
+        ok: false,
+        error: error?.code === "P0001"
+          ? "마지막 관리자는 탈퇴할 수 없습니다. 다른 관리자를 지정한 뒤 다시 시도해 주세요."
+          : "회원 탈퇴에 실패했습니다. 잠시 후 다시 시도해 주세요.",
+      };
+    }
+  } catch (error) {
+    console.error("deleteMyAccountAction 예외:", error);
+    return { ok: false, error: "회원 탈퇴에 실패했습니다. 잠시 후 다시 시도해 주세요." };
+  }
+
+  // 여기부터 계정 삭제는 완료된 상태입니다. 후속 오류 때문에 삭제를 재시도하게 하지 않습니다.
+  try {
+    const { error } = await supabase.auth.signOut({ scope: "local" });
+    if (error) console.error("탈퇴 후 세션 정리 실패:", error);
+  } catch (error) {
+    console.error("탈퇴 후 세션 정리 예외:", error);
+  }
+  try {
+    revalidatePath("/", "layout");
+  } catch (error) {
+    console.error("탈퇴 후 캐시 갱신 실패:", error);
+  }
+  return { ok: true };
+}
+
 /** 회원 본인의 프로필(이름, 기수, 세션, 마케팅 동의) 수정 액션 */
 export async function updateMyProfileAction(
   name: string,
