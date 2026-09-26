@@ -17,22 +17,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { GoogleSignInButton } from "@/components/google-sign-in-button";
+import { MemberProfileFields } from "@/components/member-profile-fields";
 import {
   LeaveConfirmDialog,
   useUnsavedChangesWarning,
 } from "@/components/ui/leave-confirm-dialog";
 import { dispatchSignupPushNotificationsAction } from "@/app/auth/sign-up/actions";
-
-const SESSION_PRESETS = [
-  "보컬(남)",
-  "보컬(여)",
-  "기타",
-  "베이스",
-  "드럼",
-  "건반",
-  "창작",
-  "직접 입력",
-] as const;
 
 export function SignUpForm({
   className,
@@ -161,10 +151,10 @@ export function SignUpForm({
 
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
-      <Card className="border-border/60 shadow-lg">
-        <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold tracking-tight">회원가입 신청</CardTitle>
-          <CardDescription className="text-sm text-muted-foreground leading-relaxed">
+      <Card className="border-border/60 shadow-sm">
+        <CardHeader className="space-y-1 pb-4">
+          <CardTitle className="text-lg font-bold tracking-tight">회원가입 신청</CardTitle>
+          <CardDescription className="text-xs text-muted-foreground leading-relaxed">
             소크나 부원 인증을 위한 계정 신청입니다. 관리자 승인 후 정식 회원으로 활동하실 수 있습니다.
           </CardDescription>
         </CardHeader>
@@ -185,8 +175,8 @@ export function SignUpForm({
           <form onSubmit={handleSignUp} className="flex flex-col gap-5">
             {/* 기본 로그인 계정 정보 */}
             <div className="space-y-4">
-              <div className="grid gap-2">
-                <Label htmlFor="email">이메일 계정 <span className="text-red-500">*</span></Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="email" className="flex items-center gap-1 text-xs font-semibold">이메일 계정 <span className="text-destructive">*</span></Label>
                 <Input
                   id="email"
                   type="email"
@@ -195,12 +185,13 @@ export function SignUpForm({
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   autoComplete="email"
+                  className="h-10"
                 />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="grid gap-2">
-                  <Label htmlFor="password">비밀번호 <span className="text-red-500">*</span></Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="password" className="flex items-center gap-1 text-xs font-semibold">비밀번호 <span className="text-destructive">*</span></Label>
                   <Input
                     id="password"
                     type="password"
@@ -209,10 +200,11 @@ export function SignUpForm({
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     autoComplete="new-password"
+                    className="h-10"
                   />
                 </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="repeat-password">비밀번호 확인 <span className="text-red-500">*</span></Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="repeat-password" className="flex items-center gap-1 text-xs font-semibold">비밀번호 확인 <span className="text-destructive">*</span></Label>
                   <Input
                     id="repeat-password"
                     type="password"
@@ -221,6 +213,7 @@ export function SignUpForm({
                     value={repeatPassword}
                     onChange={(e) => setRepeatPassword(e.target.value)}
                     autoComplete="new-password"
+                    className="h-10"
                   />
                 </div>
               </div>
@@ -228,77 +221,17 @@ export function SignUpForm({
 
             <div className="border-t border-border/40 my-1" />
 
-            {/* 부원 프로필 정보 */}
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="grid gap-2">
-                  <Label htmlFor="name">이름 (실명) <span className="text-red-500">*</span></Label>
-                  <Input
-                    id="name"
-                    type="text"
-                    placeholder="예: 홍길동"
-                    required
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="generation">동아리 기수 <span className="text-red-500">*</span></Label>
-                  <div className="relative flex items-center">
-                    <Input
-                      id="generation"
-                      type="number"
-                      min={1}
-                      max={99}
-                      placeholder="예: 39"
-                      required
-                      value={generation}
-                      onChange={(e) => setGeneration(e.target.value)}
-                      className="pr-8"
-                    />
-                    <span className="absolute right-3 text-sm text-muted-foreground pointer-events-none">기</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* 세션(파트) 프리셋 선택 */}
-              <div className="grid gap-2.5">
-                <Label>담당 세션 (파트) <span className="text-red-500">*</span></Label>
-                <div className="flex flex-wrap gap-2">
-                  {SESSION_PRESETS.map((preset) => {
-                    const isSelected = selectedPreset === preset;
-                    return (
-                      <button
-                        key={preset}
-                        type="button"
-                        onClick={() => handlePresetSelect(preset)}
-                        className={cn(
-                          "px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-all duration-150 border",
-                          isSelected
-                            ? "bg-primary text-primary-foreground border-primary shadow-sm"
-                            : "bg-secondary/60 hover:bg-secondary text-secondary-foreground border-border/50"
-                        )}
-                      >
-                        {preset}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {selectedPreset === "직접 입력" && (
-                  <div className="mt-1">
-                    <Input
-                      type="text"
-                      placeholder="세션명을 직접 입력해 주세요 (예: 색소폰, 바이올린)"
-                      value={customPart}
-                      onChange={(e) => setCustomPart(e.target.value)}
-                      required
-                      autoFocus
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
+            <MemberProfileFields
+              name={name}
+              generation={generation}
+              selectedPreset={selectedPreset}
+              customPart={customPart}
+              onNameChange={setName}
+              onGenerationChange={setGeneration}
+              onPresetChange={handlePresetSelect}
+              onCustomPartChange={setCustomPart}
+              disabled={isLoading}
+            />
 
             <div className="border-t border-border/40 my-1" />
 

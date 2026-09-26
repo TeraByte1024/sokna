@@ -35,6 +35,13 @@ SOKNA 애플리케이션은 **Supabase Auth**와 `@supabase/ssr`을 결합하여
 6. **비밀번호 재설정 (`/auth/forgot-password`, `/auth/update-password`)**:
    - 이메일 재설정 링크 발송 및 토큰 검증 후 새로운 비밀번호로 변경합니다.
 
+#### 가입 부원 정보 입력 UI
+
+- 이메일 회원가입과 소셜 로그인 후 부원 정보 등록은 `components/member-profile-fields.tsx`를 공유하여 이름, 기수, 담당 세션의 디자인과 입력 동작을 통일합니다.
+- 프로필 수정 폼과 동일하게 작은 라벨(`text-xs font-semibold`)과 `h-10` 입력 필드를 사용하며, 이름·기수는 모바일에서 세로로, `sm` 이상에서는 두 열로 배치합니다. 폼 카드는 `border-border/60 shadow-sm`, 제목은 `text-lg`, 설명은 `text-xs`를 사용합니다.
+- 세션 선택은 `rounded-lg text-xs` 버튼을 사용하며 선택 상태는 `primary`, 기본 상태는 `muted` 색상으로 표시합니다. 키보드 포커스를 표시하고 `aria-pressed`로 각 버튼의 선택 여부를 제공합니다.
+- 가입 세션은 필수 단일 선택이며 `보컬(남)`·`보컬(여)` 프리셋을 유지합니다. `직접 입력` 선택 시 아래의 `h-10` 필드에 세션명을 입력하며, 기존 선택 전환과 입력값 처리 규칙은 유지합니다.
+
 ### 2.2 프로필 및 회원 정보 관리 (Profile & Member Information Management)
 1. **회원 본인의 정보 수정 (`/profile`)**:
    - 로그인한 모든 회원(일반 회원 및 관리자)은 상단 헤더의 `[내 정보]` 버튼을 통해 자신의 프로필 관리 화면에 접근할 수 있습니다.
@@ -73,5 +80,7 @@ SOKNA 애플리케이션은 **Supabase Auth**와 `@supabase/ssr`을 결합하여
 - 관리자 권한 검증: [lib/auth-admin.ts](file:///c:/dev/sokna/lib/auth-admin.ts)
 - 로그인 폼 컴포넌트: [components/login-form.tsx](file:///c:/dev/sokna/components/login-form.tsx)
 - 회원가입 폼 컴포넌트: [components/sign-up-form.tsx](file:///c:/dev/sokna/components/sign-up-form.tsx)
+- 공통 부원 정보 입력 필드: [components/member-profile-fields.tsx](../../components/member-profile-fields.tsx)
+- 소셜 로그인 부원 정보 등록 폼: [app/auth/complete-profile/complete-profile-form.tsx](../../app/auth/complete-profile/complete-profile-form.tsx)
 - 내 정보 페이지: [app/profile/page.tsx](file:///c:/dev/sokna/app/profile/page.tsx)
 - 회원 관리(관리자): [app/admin/members/page.tsx](file:///c:/dev/sokna/app/admin/members/page.tsx)

@@ -5,7 +5,7 @@ import { CompleteProfileForm } from "./complete-profile-form";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "부원 정보 등록 - 소크나",
+  title: "회원가입 - 소크나",
   description: "소크나 부원 인증을 위한 기수 및 세션 정보 등록",
 };
 

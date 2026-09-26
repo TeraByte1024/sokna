@@ -36,6 +36,14 @@
 +-------------------------------------------------------------------+
 ```
 
+### 부원 정보 입력 공통 디자인
+
+- 이메일 회원가입과 소셜 로그인 후 부원 정보 등록은 `MemberProfileFields`를 공유하며, `/profile`과 동일한 간결한 폼 스타일을 사용합니다.
+- 카드에는 옅은 테두리(`border-border/60`)와 작은 그림자(`shadow-sm`)를 적용하고, 제목은 `text-lg`, 설명은 `text-xs`로 표시합니다.
+- 이름과 기수는 모바일에서 세로로 배치하고, `sm` 이상 화면에서는 두 열로 나란히 배치합니다. 라벨은 `text-xs font-semibold`, 입력 필드는 `h-10`으로 통일합니다.
+- 담당 세션은 `rounded-lg` 모서리와 `text-xs` 크기의 버튼으로 표시합니다. 선택한 버튼은 기본 강조색(`primary`), 나머지는 옅은 배경(`muted`)을 사용하며, 키보드 포커스와 `aria-pressed`로 선택 상태를 구분합니다.
+- 세션은 필수 단일 선택이며 `보컬(남)`, `보컬(여)` 구분을 유지합니다. `직접 입력`을 선택하면 버튼 아래에 `h-10` 입력 필드를 표시하여 세션명을 입력받습니다.
+
 ---
 
 ## 3. 화면별 UX 흐름 (User Interactions)
@@ -89,6 +97,8 @@
 - 로그인 폼 컴포넌트: [components/login-form.tsx](file:///c:/dev/sokna/components/login-form.tsx)
 - 회원가입 페이지: [app/auth/sign-up/page.tsx](file:///c:/dev/sokna/app/auth/sign-up/page.tsx)
 - 회원가입 폼 컴포넌트: [components/sign-up-form.tsx](file:///c:/dev/sokna/components/sign-up-form.tsx)
+- 공통 부원 정보 입력 필드: [components/member-profile-fields.tsx](../../components/member-profile-fields.tsx)
+- 소셜 로그인 부원 정보 등록 폼: [app/auth/complete-profile/complete-profile-form.tsx](../../app/auth/complete-profile/complete-profile-form.tsx)
 - 비밀번호 찾기: [components/forgot-password-form.tsx](file:///c:/dev/sokna/components/forgot-password-form.tsx)
 - 비밀번호 변경: [components/update-password-form.tsx](file:///c:/dev/sokna/components/update-password-form.tsx)
 - 세션 프록시: [proxy.ts](file:///c:/dev/sokna/proxy.ts)

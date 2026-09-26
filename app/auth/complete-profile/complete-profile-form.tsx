@@ -3,8 +3,6 @@
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { LeaveConfirmDialog, useUnsavedChangesWarning } from "@/components/ui/leave-confirm-dialog";
 import {
@@ -14,20 +12,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
+import { MemberProfileFields } from "@/components/member-profile-fields";
 import { completeProfileAction } from "./actions";
 import { Sparkles } from "lucide-react";
-
-const SESSION_PRESETS = [
-  "보컬(남)",
-  "보컬(여)",
-  "기타",
-  "베이스",
-  "드럼",
-  "건반",
-  "창작",
-  "직접 입력",
-] as const;
 
 interface Props {
   initialName?: string;
@@ -121,14 +108,14 @@ export function CompleteProfileForm({ initialName = "", email = "" }: Props) {
 
   return (
     <>
-      <Card className="border-border/60 shadow-lg">
-      <CardHeader className="space-y-1">
-        <div className="flex items-center gap-2 text-primary font-semibold text-sm mb-1">
-          <Sparkles className="w-4 h-4" />
+      <Card className="border-border/60 shadow-sm">
+      <CardHeader className="space-y-1 pb-4">
+        <div className="flex items-center gap-1.5 text-muted-foreground font-medium text-xs mb-1">
+          <Sparkles className="size-3.5" />
           <span>Google 로그인 성공</span>
         </div>
-        <CardTitle className="text-2xl font-bold tracking-tight">부원 정보 등록</CardTitle>
-        <CardDescription className="text-sm text-muted-foreground leading-relaxed">
+        <CardTitle className="text-lg font-bold tracking-tight">부원 정보 등록</CardTitle>
+        <CardDescription className="text-xs text-muted-foreground leading-relaxed">
           동아리 활동 인증을 위해 <strong>기수와 담당 세션</strong>을 입력해 주세요. 운영진 확인 후 승인됩니다.
         </CardDescription>
       </CardHeader>
@@ -149,79 +136,22 @@ export function CompleteProfileForm({ initialName = "", email = "" }: Props) {
           }}
         >
           {email && (
-            <div className="rounded-lg bg-muted/40 p-3 text-xs border border-border/40 text-muted-foreground">
+            <div className="rounded-lg bg-muted/40 p-3 text-xs border border-border/60 text-muted-foreground break-all">
               <span className="font-semibold text-foreground">연동 계정:</span> {email}
             </div>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="grid gap-2">
-              <Label htmlFor="name">이름 (실명) <span className="text-red-500">*</span></Label>
-              <Input
-                id="name"
-                type="text"
-                placeholder="예: 홍길동"
-                required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="generation">동아리 기수 <span className="text-red-500">*</span></Label>
-              <div className="relative flex items-center">
-                <Input
-                  id="generation"
-                  type="number"
-                  min={1}
-                  max={99}
-                  placeholder="예: 40"
-                  required
-                  value={generation}
-                  onChange={(e) => setGeneration(e.target.value)}
-                  className="pr-8"
-                />
-                <span className="absolute right-3 text-sm text-muted-foreground pointer-events-none">기</span>
-              </div>
-            </div>
-          </div>
-
-          {/* 세션 프리셋 선택 */}
-          <div className="grid gap-2.5">
-            <Label>담당 세션 (파트) <span className="text-red-500">*</span></Label>
-            <div className="flex flex-wrap gap-2">
-              {SESSION_PRESETS.map((preset) => {
-                const isSelected = selectedPreset === preset;
-                return (
-                  <button
-                    key={preset}
-                    type="button"
-                    onClick={() => handlePresetSelect(preset)}
-                    className={cn(
-                      "px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-all duration-150 border",
-                      isSelected
-                        ? "bg-primary text-primary-foreground border-primary shadow-sm"
-                        : "bg-secondary/60 hover:bg-secondary text-secondary-foreground border-border/50"
-                    )}
-                  >
-                    {preset}
-                  </button>
-                );
-              })}
-            </div>
-
-            {selectedPreset === "직접 입력" && (
-              <div className="mt-1">
-                <Input
-                  type="text"
-                  placeholder="세션명을 직접 입력해 주세요 (예: 색소폰, 바이올린)"
-                  value={customPart}
-                  onChange={(e) => setCustomPart(e.target.value)}
-                  required
-                  autoFocus
-                />
-              </div>
-            )}
-          </div>
+          <MemberProfileFields
+            name={name}
+            generation={generation}
+            selectedPreset={selectedPreset}
+            customPart={customPart}
+            onNameChange={setName}
+            onGenerationChange={setGeneration}
+            onPresetChange={handlePresetSelect}
+            onCustomPartChange={setCustomPart}
+            disabled={isLoading}
+          />
 
           {/* 약관 동의 */}
           <div className="space-y-3 rounded-lg bg-muted/40 p-3.5 text-xs text-muted-foreground border border-border/40">
@@ -267,7 +197,7 @@ export function CompleteProfileForm({ initialName = "", email = "" }: Props) {
             className="w-full h-10 font-semibold"
             disabled={isLoading || !agreeTerms}
           >
-            {isLoading ? "등록 처리 중..." : "부원 정보 등록 완료 및 승인 요청"}
+            {isLoading ? "등록 처리 중..." : "회원가입 요청하기"}
           </Button>
         </form>
       </CardContent>
@@ -276,7 +206,7 @@ export function CompleteProfileForm({ initialName = "", email = "" }: Props) {
     <LeaveConfirmDialog
       isOpen={showLeaveModal}
       title="페이지를 벗어나시겠습니까?"
-      description="입력 중인 부원 정보가 저장되지 않았습니다. 지금 페이지를 벗어나면 작성 내용이 모두 사라집니다."
+      description="입력 중인 정보가 저장되지 않았습니다. 지금 페이지를 벗어나면 작성 내용이 모두 사라집니다."
       onClose={cancelLeave}
       onConfirm={confirmLeave}
     />
