@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { hasCompletedMemberProfile } from "@/lib/member-application";
 import { CompleteProfileForm } from "./complete-profile-form";
 import type { Metadata } from "next";
 
@@ -27,7 +28,7 @@ export default async function CompleteProfilePage() {
     .maybeSingle();
 
   // 이미 기수와 세션이 입력되어 있고 승인 대기 또는 완료 상태라면 홈으로
-  if (profile?.generation && profile?.part) {
+  if (hasCompletedMemberProfile(profile)) {
     redirect("/");
   }
 

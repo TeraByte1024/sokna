@@ -18,6 +18,8 @@ SOKNA 애플리케이션은 **Supabase Auth**와 `@supabase/ssr`을 결합하여
    - 클라이언트는 현재 origin의 `/auth/callback`을 `redirectTo`로 전달합니다. 따라서 로컬 테스트 시 Supabase Auth Redirect URLs에 `http://localhost:3000/auth/callback`이 반드시 허용되어야 하며, 누락 시 운영 Site URL로 fallback될 수 있습니다.
    - 프로필 입력 화면에서도 세션 프리셋의 보컬을 `보컬(남)`과 `보컬(여)`로 구분하여 입력받습니다.
    - 프로필 입력 완료 시 관리자 승인 대기(`pending`) 상태로 전환되며, 관리자에게 알림이 발송됩니다.
+   - OAuth 최초 로그인으로 생성된 `public.users` 레코드도 DB 기본값은 `pending`이지만, **가입 신청 전 계정**으로 취급합니다. 기수(1 이상의 정수)와 공백이 아닌 세션이 저장되기 전에는 관리자 승인 대기 명단·헤더 알림 건수·본인의 승인 대기 배지에서 제외합니다.
+   - `hasCompletedMemberProfile()`로 프로필 등록 화면 진입과 신청 완료 여부를 공통 판별합니다. 미작성 계정의 `/profile` 접근은 `/auth/complete-profile`로 안내하며, 등록 완료 후 관리자 페이지와 공통 레이아웃을 갱신합니다.
 3. **관리자 승인 (`/admin/members`)**:
    - 관리자가 독립된 관리자 전용 페이지에서 신청 내역을 검토한 후 승인(`status = 'approved'`) 또는 거절(`status = 'rejected'`)합니다.
    - 승인 시 해당 회원에게 "가입 승인 완료" 인앱 알림이 등록됩니다. 회원이 마케팅 알림에 동의하고 기기 토큰을 등록한 경우 동일 outbox 레코드를 cron 주기와 무관하게 웹 푸시로 즉시 발송하며, 클릭 시 `/members`로 이동합니다.
@@ -25,7 +27,7 @@ SOKNA 애플리케이션은 **Supabase Auth**와 `@supabase/ssr`을 결합하여
 4. **로그인 (`/auth/login`)**:
    - 이메일 / 패스워드 인증 및 구글 소셜 로그인을 지원합니다.
    - 브라우저 쿠키(HttpOnly)에 세션 토큰을 보관합니다.
-   - 미승인(`pending`) 상태인 경우 승인 대기 안내 배지가 표시되며, 거절(`rejected`)된 계정은 로그인이 차단됩니다.
+   - 필수 부원 정보를 등록한 미승인(`pending`) 상태인 경우에만 승인 대기 안내 배지가 표시되며, 거절(`rejected`)된 계정은 로그인이 차단됩니다.
    - 이미 로그인한 사용자가 `/auth/login`에 접근하면 프록시에서 안전한 내부 `redirect` 경로로 이동시키고, 유효하지 않거나 지정되지 않은 경우 `/`로 이동시킵니다. 리다이렉트 응답에도 갱신된 세션 쿠키를 유지합니다.
 5. **세션 유지 및 프록시 (`proxy.ts`)**:
    - Next.js 미들웨어 계층(`proxy.ts` -> `lib/supabase/proxy.ts`)에서 모든 요청에 대해 `updateSession`을 실행하여 만료 전 토큰을 갱신합니다.

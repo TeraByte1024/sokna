@@ -3,6 +3,7 @@ import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { createClient } from "@/lib/supabase/server";
 import { getIsAdmin } from "@/lib/auth-admin";
+import { getPendingMemberApplications, hasCompletedMemberProfile } from "@/lib/member-application";
 import { UserProfileMenu } from "./user-profile-menu";
 import { ShieldAlert, ShieldCheck, Clock } from "lucide-react";
 
@@ -23,13 +24,14 @@ export async function AuthButton() {
   const isAdmin = await getIsAdmin();
   let pendingCount = 0;
   let userStatus: string | null = null;
+  let hasCompletedProfile = false;
   let userName: string | null = null;
   let marketingOptIn = false;
 
   if (user.sub) {
     const { data: userProfile } = await supabase
       .from("users")
-      .select("name, status, marketing_opt_in")
+      .select("name, status, generation, part, marketing_opt_in")
       .eq("id", user.sub)
       .maybeSingle();
 
@@ -43,16 +45,14 @@ export async function AuthButton() {
       metaName ||
       null;
     userStatus = userProfile?.status ?? null;
+    hasCompletedProfile = hasCompletedMemberProfile(userProfile);
     marketingOptIn = userProfile?.marketing_opt_in ?? false;
   }
 
   if (isAdmin) {
     // 관리자일 경우 대기 중인 회원가입 건수 조회
-    const { count } = await supabase
-      .from("users")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "pending");
-    pendingCount = count ?? 0;
+    const { data: pendingApplications } = await getPendingMemberApplications(supabase);
+    pendingCount = pendingApplications?.length ?? 0;
   }
 
   return (
@@ -77,7 +77,7 @@ export async function AuthButton() {
       )}
 
       {/* 미승인 사용자 상태 표시 */}
-      {!isAdmin && userStatus === "pending" && (
+      {!isAdmin && userStatus === "pending" && hasCompletedProfile && (
         <Badge variant="outline" className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 gap-1 py-1">
           <Clock className="w-3 h-3" />
           승인 대기 중

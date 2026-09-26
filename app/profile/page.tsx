@@ -3,6 +3,7 @@ import { SiteLayout } from "@/components/site-layout";
 import { PageContainer } from "@/components/page-container";
 import { createClient } from "@/lib/supabase/server";
 import { getIsAdmin } from "@/lib/auth-admin";
+import { hasCompletedMemberProfile } from "@/lib/member-application";
 import { ProfileForm, ProfileUser } from "./profile-form";
 import type { Metadata } from "next";
 
@@ -47,6 +48,14 @@ export default async function ProfilePage() {
 
   // 2. 관리자 권한 확인
   const isAdmin = await getIsAdmin();
+
+  if (
+    !isAdmin &&
+    (!userRow || userRow.status === "pending") &&
+    !hasCompletedMemberProfile(userRow)
+  ) {
+    redirect("/auth/complete-profile");
+  }
 
   const profileUser: ProfileUser = {
     id: user.id,

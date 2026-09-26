@@ -30,7 +30,7 @@ export async function completeProfileAction(
       return { ok: false, error: "이름(실명)을 입력해 주세요." };
     }
 
-    if (generation < 1) {
+    if (!Number.isInteger(generation) || generation < 1) {
       return { ok: false, error: "올바른 기수를 입력해 주세요." };
     }
 
@@ -83,6 +83,7 @@ export async function completeProfileAction(
     }
 
     revalidatePath("/admin/members");
+    revalidatePath("/", "layout");
     return { ok: true };
   } catch (err) {
     console.error("completeProfileAction 예외:", err);

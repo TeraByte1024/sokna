@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { hasCompletedMemberProfile } from "@/lib/member-application";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
@@ -21,7 +22,7 @@ export async function GET(request: NextRequest) {
 
       // 만약 아직 기수/세션 정보가 없다면 (신규 구글 로그인 가입자)
       // 프로필 입력 페이지로 이동시키거나 기본 안내
-      if (!profile?.generation || !profile?.part) {
+      if (!hasCompletedMemberProfile(profile)) {
         return NextResponse.redirect(`${origin}/auth/complete-profile`);
       }
 

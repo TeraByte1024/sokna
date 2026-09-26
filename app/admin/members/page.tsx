@@ -3,6 +3,7 @@ import { SiteLayout } from "@/components/site-layout";
 import { PageContainer } from "@/components/page-container";
 import { createClient } from "@/lib/supabase/server";
 import { getIsAdmin } from "@/lib/auth-admin";
+import { getPendingMemberApplications } from "@/lib/member-application";
 import { AdminMembersClient } from "./admin-members-client";
 import { AdminMember, AdminRecord } from "./actions";
 import { GigRsvpManager } from "@/components/gigs/gig-rsvp-manager";
@@ -35,11 +36,7 @@ export default async function AdminMembersPage() {
   }
 
   // 3. 승인 대기 회원 목록
-  const { data: pendingRows, error: pendingError } = await supabase
-    .from("users")
-    .select("id, name, generation, part, email, status, applied_at, approved_at, marketing_opt_in")
-    .eq("status", "pending")
-    .order("applied_at", { ascending: false });
+  const { data: pendingRows, error: pendingError } = await getPendingMemberApplications(supabase);
 
   if (pendingError) {
     console.error("대기 회원 로딩 오류:", pendingError);

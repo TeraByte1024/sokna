@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getIsAdmin } from "@/lib/auth-admin";
+import { getPendingMemberApplications } from "@/lib/member-application";
 import { processPendingApprovalPushNotification } from "@/lib/push-notifications";
 
 export type AdminMember = {
@@ -41,11 +42,7 @@ export async function getPendingMembersAction(): Promise<{
     }
 
     const supabase = await createClient();
-    const { data, error } = await supabase
-      .from("users")
-      .select("id, name, generation, part, email, status, applied_at, approved_at, marketing_opt_in")
-      .eq("status", "pending")
-      .order("applied_at", { ascending: false });
+    const { data, error } = await getPendingMemberApplications(supabase);
 
     if (error) {
       console.error("대기 회원 목록 조회 실패:", error);

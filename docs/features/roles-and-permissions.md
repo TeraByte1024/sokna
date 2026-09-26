@@ -9,7 +9,7 @@
 | 역할 | 정의 | 식별 기준 |
 | :--- | :--- | :--- |
 | **방문자 (Guest)** | 로그인하지 않은 외부 사용자 또는 일반 방문자 | 세션 없음 |
-| **가입 대기자 (Pending)** | 회원가입 신청 완료 후 관리자 승인을 기다리는 사용자 | Supabase `users.status = 'pending'` |
+| **가입 대기자 (Pending)** | 회원가입 신청 완료 후 관리자 승인을 기다리는 사용자 | Supabase `users.status = 'pending'`이며 기수(1 이상의 정수)와 공백이 아닌 세션 등록 완료. 소셜 로그인 직후 미작성 계정은 제외 |
 | **일반 회원 (Member)** | 동아리 가입 승인이 완료된 회원 | Supabase `users.status = 'approved'` |
 | **공연 참여자 (Performer)** | 특정 공연(`gigs`)에 연주 세션(보컬, 악기 등)으로 배정된 회원 | `public.performers` 테이블에 `gig_id`와 매핑된 회원 |
 | **관리자 (Admin)** | 동아리 운영진 또는 시스템 관리자 | `public.admins` 테이블에 등록된 이메일 소유자 |
