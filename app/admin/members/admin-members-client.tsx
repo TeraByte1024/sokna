@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -41,12 +41,14 @@ interface Props {
   initialAdmins: AdminRecord[];
   initialPendingMembers: AdminMember[];
   initialApprovedMembers: AdminMember[];
+  gigRsvpSection: ReactNode;
 }
 
 export function AdminMembersClient({
   initialAdmins,
   initialPendingMembers,
   initialApprovedMembers,
+  gigRsvpSection,
 }: Props) {
   const [admins, setAdmins] = useState<AdminRecord[]>(initialAdmins);
   const [pendingMembers, setPendingMembers] = useState<AdminMember[]>(
@@ -340,7 +342,7 @@ export function AdminMembersClient({
             <h1 className="text-2xl font-bold tracking-tight">회원 관리</h1>
           </div>
           <p className="text-sm text-muted-foreground mt-1">
-            소크나 부원 가입 신청 검토, 부원 명부 확인 및 관리자(운영진) 권한을 관리합니다.
+            소크나 부원 가입·공연 참가 신청 검토, 부원 명부 확인 및 관리자(운영진) 권한을 관리합니다.
           </p>
         </div>
 
@@ -484,6 +486,8 @@ export function AdminMembersClient({
           </div>
         )}
       </section>
+
+      {gigRsvpSection}
 
       {/* 구분선 */}
       <div className="border-t border-border/60 my-6" />

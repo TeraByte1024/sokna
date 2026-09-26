@@ -414,7 +414,7 @@ export async function submitGigRsvp(formData: FormData): Promise<{ ok: true } | 
   }
 
   const gigId = Number(formData.get("gig_id"));
-  if (!gigId || isNaN(gigId)) {
+  if (!Number.isSafeInteger(gigId) || gigId <= 0) {
     return { ok: false, error: "유효하지 않은 공연 ID입니다." };
   }
 
@@ -425,6 +425,24 @@ export async function submitGigRsvp(formData: FormData): Promise<{ ok: true } | 
 
   const part = emptyToNull(formData.get("part"));
   const note = emptyToNull(formData.get("note"));
+
+  if (status === "going" && !part) {
+    return { ok: false, error: "참여할 세션을 선택하거나 직접 추가해 주세요." };
+  }
+
+  const [{ data: gig, error: gigError }, { data: performer, error: performerError }] = await Promise.all([
+    supabase.from("gigs").select("is_public").eq("id", gigId).maybeSingle(),
+    supabase.from("performers").select("id").eq("gig_id", gigId).eq("user_id", user.id).limit(1).maybeSingle(),
+  ]);
+  if (gigError || performerError || !gig) {
+    return { ok: false, error: "공연 정보를 확인할 수 없습니다." };
+  }
+  if (performer) {
+    return { ok: false, error: "이미 공연 참여자로 등록되어 있습니다." };
+  }
+  if (!gig.is_public && !(await getIsAdmin())) {
+    return { ok: false, error: "비공개 공연에는 참가 신청을 할 수 없습니다." };
+  }
 
   const { error } = await supabase.from("gig_rsvps").upsert(
     {
@@ -445,6 +463,49 @@ export async function submitGigRsvp(formData: FormData): Promise<{ ok: true } | 
 
   revalidatePath(`/gigs/${gigId}`);
   revalidatePath(`/gigs/${gigId}/join`);
+  revalidatePath("/admin/members");
+  return { ok: true };
+}
+
+/** 관리자만 참여 신청을 승인하거나 무시할 수 있습니다. */
+export async function reviewGigRsvp(
+  gigId: number,
+  rsvpId: number,
+  updatedAt: string,
+  decision: "approve" | "ignore"
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!(await getIsAdmin())) {
+    return { ok: false, error: "관리자만 참가 신청을 처리할 수 있습니다." };
+  }
+  if (!Number.isSafeInteger(gigId) || gigId <= 0 || !Number.isSafeInteger(rsvpId) || rsvpId <= 0
+    || !["approve", "ignore"].includes(decision) || !updatedAt || Number.isNaN(Date.parse(updatedAt))) {
+    return { ok: false, error: "유효하지 않은 참가 신청입니다." };
+  }
+
+  const supabase = await createClient();
+  const { data: reviewed, error } = await supabase.rpc("review_gig_rsvp", {
+    p_gig_id: gigId,
+    p_rsvp_id: rsvpId,
+    p_updated_at: updatedAt,
+    p_decision: decision,
+  });
+  if (error) {
+    console.error("참가 신청 처리 실패:", error);
+    if (error.code === "PGRST202" || error.code === "42883") {
+      return { ok: false, error: "참가 신청 승인 기능의 서버 설정이 누락되었습니다. 설정 완료 후 다시 시도해 주세요." };
+    }
+    return { ok: false, error: "참가 신청을 처리하지 못했습니다. 다시 시도해 주세요." };
+  }
+
+  revalidatePath("/gigs");
+  revalidatePath(`/gigs/${gigId}`, "layout");
+  revalidatePath(`/gigs/${gigId}`);
+  revalidatePath(`/gigs/${gigId}/edit`);
+  revalidatePath(`/gigs/${gigId}/nominations`);
+  revalidatePath("/admin/members");
+  if (!reviewed) {
+    return { ok: false, error: "이미 처리되었거나 변경된 신청입니다. 최신 내역을 확인해 주세요." };
+  }
   return { ok: true };
 }
 

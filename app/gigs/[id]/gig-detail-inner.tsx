@@ -89,6 +89,7 @@ export async function GigDetailInner({ gigId }: GigDetailInnerProps) {
         .select("id")
         .eq("gig_id", numericId)
         .eq("user_id", user.id)
+        .limit(1)
         .maybeSingle(),
     ]);
 
@@ -347,6 +348,7 @@ export async function GigDetailInner({ gigId }: GigDetailInnerProps) {
                 <GigDetailActions
                   gig={gig}
                   existingRsvp={userRsvp}
+                  isCurrentUserPerformer={isCurrentUserPerformer}
                   defaultPart={userProfile?.part ?? ""}
                   userName={userProfile?.name ?? user?.email ?? "부원"}
                   isLoggedIn={isLoggedIn}
@@ -380,7 +382,7 @@ export async function GigDetailInner({ gigId }: GigDetailInnerProps) {
                 <Button asChild variant="outline" size="sm">
                   <Link href={`/gigs/${numericId}/edit`}>
                     <Pencil className="size-3.5 mr-1.5" />
-                    공연 수정에서 셋리스트 등록하기
+                    셋리스트 등록하기
                   </Link>
                 </Button>
               )}

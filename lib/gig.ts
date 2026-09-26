@@ -123,6 +123,8 @@ export type GigRsvp = {
   } | null;
 };
 
+export type GigRsvpWithGig = GigRsvp & { gigTitle: string };
+
 export type GigSetlistPreview = {
   id: number;
   title: string | null;

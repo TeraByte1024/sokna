@@ -623,6 +623,15 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: never; Returns: boolean }
+      review_gig_rsvp: {
+        Args: {
+          p_decision: string
+          p_gig_id: number
+          p_rsvp_id: number
+          p_updated_at: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never

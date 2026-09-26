@@ -9,6 +9,7 @@ import { formatKoreanDateTime } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Calendar,
@@ -22,6 +23,7 @@ import {
   X,
   UserCheck,
   Lock,
+  Plus,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -45,16 +47,7 @@ const GLOBAL_SESSIONS = [
 ];
 
 function resolveInitialPart(partVal?: string | null): string {
-  if (!partVal) return GLOBAL_SESSIONS[0];
-  if (GLOBAL_SESSIONS.includes(partVal)) return partVal;
-  if (partVal.includes("남") || partVal.includes("male")) return "보컬(남)";
-  if (partVal.includes("여") || partVal.includes("female")) return "보컬(여)";
-  if (partVal.includes("보컬")) return "보컬(남)";
-  if (partVal.includes("기타") || partVal.includes("일렉") || partVal.includes("어쿠스틱")) return "기타";
-  if (partVal.includes("베이스")) return "베이스";
-  if (partVal.includes("건반") || partVal.includes("키보드") || partVal.includes("피아노") || partVal.includes("신디")) return "키보드";
-  if (partVal.includes("드럼")) return "드럼";
-  return GLOBAL_SESSIONS[0];
+  return partVal?.trim() || GLOBAL_SESSIONS[0];
 }
 
 export function GigJoinDialog({
@@ -63,26 +56,34 @@ export function GigJoinDialog({
   gig,
   existingRsvp,
   defaultPart = "",
-  userName = "부원",
   isLoggedIn = true,
 }: GigJoinDialogProps) {
   const router = useRouter();
 
-  const [status, setStatus] = useState<GigRsvpStatus>(
-    existingRsvp?.status ?? "going"
+  const [status, setStatus] = useState<GigRsvpStatus | null>(
+    existingRsvp?.status ?? null
   );
   const [part, setPart] = useState<string>(
     resolveInitialPart(existingRsvp?.part || defaultPart)
   );
   const [note, setNote] = useState<string>(existingRsvp?.note || "");
   const [pending, setPending] = useState(false);
+  const [customSessions, setCustomSessions] = useState<string[]>([]);
+  const [customSession, setCustomSession] = useState("");
+  const sessions = Array.from(new Set([
+    ...GLOBAL_SESSIONS,
+    resolveInitialPart(existingRsvp?.part || defaultPart),
+    ...customSessions,
+  ]));
 
   // 모달이 열릴 때 최신 RSVP 상태로 초기화
   useEffect(() => {
     if (isOpen) {
-      setStatus(existingRsvp?.status ?? "going");
+      setStatus(existingRsvp?.status ?? null);
       setPart(resolveInitialPart(existingRsvp?.part || defaultPart));
       setNote(existingRsvp?.note || "");
+      setCustomSessions([]);
+      setCustomSession("");
     }
   }, [isOpen, existingRsvp, defaultPart]);
 
@@ -100,7 +101,7 @@ export function GigJoinDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (pending) return;
+    if (pending || !status) return;
     setPending(true);
 
     const formData = new FormData();
@@ -119,7 +120,9 @@ export function GigJoinDialog({
         toast.success(
           existingRsvp
             ? "참가 신청 내역이 수정되었습니다."
-            : "공연 참가 신청이 완료되었습니다!"
+            : status === "going"
+            ? "참여 신청이 완료되었습니다. 관리자 승인을 기다려 주세요."
+            : "공연 참가 여부가 저장되었습니다."
         );
         onClose();
         router.refresh();
@@ -131,6 +134,14 @@ export function GigJoinDialog({
     } finally {
       setPending(false);
     }
+  };
+
+  const addCustomSession = () => {
+    const session = customSession.trim();
+    if (!session || pending) return;
+    setCustomSessions((previous) => Array.from(new Set([...previous, session])));
+    setPart(session);
+    setCustomSession("");
   };
 
   return (
@@ -158,14 +169,14 @@ export function GigJoinDialog({
                     variant="outline"
                     className={
                       existingRsvp.status === "going"
-                        ? "text-emerald-500 border-emerald-500/40 bg-emerald-500/10 text-[11px]"
+                        ? "text-amber-500 border-amber-500/40 bg-amber-500/10 text-[11px]"
                         : existingRsvp.status === "not_going"
                         ? "text-destructive border-destructive/40 bg-destructive/10 text-[11px]"
                         : "text-amber-500 border-amber-500/40 bg-amber-500/10 text-[11px]"
                     }
                   >
                     {existingRsvp.status === "going"
-                      ? "참여 등록됨"
+                      ? "승인 대기 중"
                       : existingRsvp.status === "not_going"
                       ? "불참 등록됨"
                       : "미정 등록됨"}
@@ -258,6 +269,8 @@ export function GigJoinDialog({
                 <button
                   type="button"
                   onClick={() => setStatus("going")}
+                  aria-pressed={status === "going"}
+                  disabled={pending}
                   className={`flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl border text-xs font-bold transition-all ${
                     status === "going"
                       ? "border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shadow-xs ring-1 ring-emerald-500/30"
@@ -271,6 +284,8 @@ export function GigJoinDialog({
                 <button
                   type="button"
                   onClick={() => setStatus("not_going")}
+                  aria-pressed={status === "not_going"}
+                  disabled={pending}
                   className={`flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl border text-xs font-bold transition-all ${
                     status === "not_going"
                       ? "border-destructive bg-destructive/10 text-destructive shadow-xs ring-1 ring-destructive/30"
@@ -284,6 +299,8 @@ export function GigJoinDialog({
                 <button
                   type="button"
                   onClick={() => setStatus("undecided")}
+                  aria-pressed={status === "undecided"}
+                  disabled={pending}
                   className={`flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl border text-xs font-bold transition-all ${
                     status === "undecided"
                       ? "border-amber-500 bg-amber-500/10 text-amber-500 shadow-xs ring-1 ring-amber-500/30"
@@ -296,21 +313,23 @@ export function GigJoinDialog({
               </div>
             </div>
 
-            {/* 참여 시 세션 선택 (글로벌 세션 칩 전용) */}
+            {/* 참여 시 기본 세션 및 직접 추가한 세션 선택 */}
             {status === "going" && (
               <div className="space-y-2 animate-in fade-in-50 duration-150">
                 <Label className="text-xs font-bold text-foreground">
                   세션 <span className="text-destructive">*</span>
                 </Label>
                 <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 sm:gap-2">
-                  {GLOBAL_SESSIONS.map((p) => {
+                  {sessions.map((p) => {
                     const isSelected = part === p;
                     return (
                       <button
                         key={p}
                         type="button"
                         onClick={() => setPart(p)}
-                        className={`text-xs py-2 px-1 rounded-xl border font-bold text-center transition-all ${
+                        aria-pressed={isSelected}
+                        disabled={pending}
+                        className={`min-w-0 break-words text-xs py-2 px-1 rounded-xl border font-bold text-center transition-all ${
                           isSelected
                             ? "bg-primary text-primary-foreground border-primary shadow-xs ring-1 ring-primary/30 scale-[1.02]"
                             : "bg-background border-border/70 text-foreground/80 hover:bg-muted hover:text-foreground"
@@ -321,6 +340,27 @@ export function GigJoinDialog({
                     );
                   })}
                 </div>
+                <div className="flex gap-2">
+                  <Input
+                    aria-label="직접 추가할 세션"
+                    placeholder="세션 직접 입력 (예: 바이올린)"
+                    value={customSession}
+                    onChange={(e) => setCustomSession(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+                        e.preventDefault();
+                        addCustomSession();
+                      }
+                    }}
+                    disabled={pending}
+                    className="min-w-0 text-xs"
+                  />
+                  <Button type="button" variant="outline" onClick={addCustomSession} disabled={pending || !customSession.trim()} className="shrink-0 gap-1 text-xs">
+                    <Plus className="size-3.5" />
+                    추가
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">참여 신청 후 관리자가 승인하면 공연 참여자로 등록됩니다.</p>
               </div>
             )}
 
@@ -333,6 +373,7 @@ export function GigJoinDialog({
                 id="note_input"
                 rows={2}
                 value={note}
+                disabled={pending}
                 onChange={(e) => setNote(e.target.value)}
                 placeholder="늦참/불참 예정 등 특이사항이 있으면 적어주세요."
                 className="text-xs resize-none"
@@ -354,7 +395,7 @@ export function GigJoinDialog({
               <Button
                 type="submit"
                 size="sm"
-                disabled={pending || (status === "going" && !part.trim())}
+                disabled={pending || !status || (status === "going" && !part.trim())}
                 className="text-xs font-bold gap-1.5"
               >
                 {pending ? (

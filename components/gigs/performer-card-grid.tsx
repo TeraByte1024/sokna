@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Users, Camera, Loader2, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { createClient } from "@/lib/supabase/client";
@@ -27,6 +27,11 @@ export function PerformerCardGrid({
   const [uploadingId, setUploadingId] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const targetPerformerIdRef = useRef<number | null>(null);
+
+  // 관리자 승인 후 router.refresh()로 전달된 최신 공연자 명단을 반영합니다.
+  useEffect(() => {
+    setPerformers(initialPerformers);
+  }, [initialPerformers]);
 
   // 프로필 사진 업로드 트리거
   const triggerUpload = (performerId: number) => {
@@ -105,7 +110,7 @@ export function PerformerCardGrid({
   if (performers.length === 0) {
     return (
       <p className="text-center py-10 text-sm text-muted-foreground">
-        아직 등록된 LINEUP이 없습니다.
+        아직 등록된 공연 참여자가 없습니다.
       </p>
     );
   }

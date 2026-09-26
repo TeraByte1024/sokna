@@ -8,6 +8,7 @@
   - 승인된 정식 부원의 실명, 기수, 세션 파트 정보 수정.
   - 관리자 권한 부여 및 회수.
   - 부원 명단 검색 및 관리.
+  - 여러 공연의 참가 신청 확인 및 승인 / 무시 처리.
 
 ---
 
@@ -37,10 +38,22 @@
 - 관리자 권한 부여: 대상 부원의 이메일 입력 후 권한 추가.
 - 관리자 권한 회수: 기존 관리자 목록에서 대상자 권한 해제 (단, 마지막 1인의 관리자 권한은 회수 불가).
 
+### 2.5 공연 참가 신청 현황
+- 가입 승인 대기 목록 아래에 표시하며, 기존 공연 상세 페이지에서는 제거합니다.
+- 관리자 권한을 확인한 뒤 모든 공연의 참여/불참 응답과 공연 제목, 신청자 이름/기수를 조회합니다. **미정(`undecided`)은 목록과 인원 집계에서 모두 제외**합니다.
+- 이미 신청한 공연에 등록된 공연자는 목록에서 제외합니다. 동일 회원이 다른 공연에 참여하고 있어도 현재 공연의 미승인 신청은 계속 표시합니다.
+- `공연제목 | 이름 | 기수 | 신청세션 | 비고 | 승인 | 무시` 순서로 **신청 한 건을 한 줄에 표시**합니다. 공연제목은 상세 링크이며, 좁은 화면에서는 표 내부를 가로 스크롤합니다.
+- 신청 현황의 승인 대기 칩은 표시하지 않고, 헤더 아래에는 참여/불참 인원만 일반 텍스트로 표시합니다.
+- 참여 신청: **초록 체크(승인)**로 해당 신청의 공연/회원/세션을 공연자로 등록하고, **빨간 휴지통(무시)**으로 RSVP를 삭제해 다시 신청할 수 있게 합니다.
+- 불참 응답: 신청세션 칸을 `불참`, 승인/무시 칸을 `-`로 표시합니다.
+- `reviewGigRsvp`에는 각 행의 `gig_id`, 신청 ID, `updated_at`을 전달합니다. 처리 중 버튼을 비활성화하며, 완료 시 관리자 목록을 갱신합니다. 신청 제출/수정 및 승인/무시 모두 관리자 페이지 캐시를 갱신합니다.
+- 오류 시 신청 목록 대신 조회 실패 안내를 표시합니다. 서버 액션과 DB 함수에서도 관리자 권한을 재검증합니다.
+
 ---
 
 ## 3. 관련 소스 코드 파일
 - 페이지 라우트: [app/admin/members/page.tsx](file:///c:/dev/sokna/app/admin/members/page.tsx)
 - 클라이언트 컴포넌트: [app/admin/members/admin-members-client.tsx](file:///c:/dev/sokna/app/admin/members/admin-members-client.tsx)
+- 공연 참가 신청 표: [components/gigs/gig-rsvp-manager.tsx](../../components/gigs/gig-rsvp-manager.tsx)
 - 관리자 서버 액션: [app/admin/members/actions.ts](file:///c:/dev/sokna/app/admin/members/actions.ts)
 - 공통 이탈 확인 모달: [components/ui/leave-confirm-dialog.tsx](file:///c:/dev/sokna/components/ui/leave-confirm-dialog.tsx)
