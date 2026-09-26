@@ -47,6 +47,7 @@ import {
 } from "@/app/gigs/[id]/nominations/actions";
 import { toast } from "sonner";
 import { cn, getDDay } from "@/lib/utils";
+import { getNominationDeadline } from "@/lib/nomination-deadline";
 
 const NominationDrawer = dynamic(
 	() => import("@/components/nominations/nomination-drawer").then((module) => module.NominationDrawer),
@@ -69,13 +70,9 @@ const SESSION_FILTER_PARTS = [
  * 마감 기한까지 남은 시간을 계산 (회의 1일 전 마감)
  */
 const getRemainingTime = (targetDate: string) => {
-	if (!targetDate) return { dd: 0, hh: 0, mm: 0, isOver: true };
-
-	const deadline = new Date(targetDate);
-	deadline.setDate(deadline.getDate() - 1);
-
-	const now = new Date();
-	const diff = deadline.getTime() - now.getTime();
+	const deadline = getNominationDeadline(targetDate);
+	if (deadline === null) return { dd: 0, hh: 0, mm: 0, isOver: true };
+	const diff = deadline - Date.now();
 
 	if (diff <= 0) return { dd: 0, hh: 0, mm: 0, isOver: true };
 
@@ -218,7 +215,6 @@ export function NominationPanel({
 	};
 
 	useEffect(() => {
-		if (!gigInfo?.meetingDate) return;
 		setTimeLeft(getRemainingTime(gigInfo.meetingDate));
 		const timer = setInterval(
 			() => setTimeLeft(getRemainingTime(gigInfo.meetingDate)),
@@ -389,20 +385,30 @@ export function NominationPanel({
 							</div>
 						</div>
 
-						<Link
-							href={`/gigs/${gigId}/nominations/new`}
-							className="hidden sm:inline-flex"
-						>
+						{canRecommend ? (
 							<Button
+								asChild
 								size="lg"
-								disabled={!canRecommend}
-								className="font-bold shadow-sm hover:shadow-md transition-all h-11 px-6 text-sm"
+								className="hidden sm:inline-flex font-bold shadow-sm hover:shadow-md transition-all h-11 px-6 text-sm"
+								title={recommendationTitle}
+							>
+								<Link href={`/gigs/${gigId}/nominations/new`}>
+									<Plus className="size-4 mr-1.5" />
+									곡 추천하기
+								</Link>
+							</Button>
+						) : (
+							<Button
+								type="button"
+								size="lg"
+								disabled
+								className="hidden sm:inline-flex font-bold shadow-sm h-11 px-6 text-sm"
 								title={recommendationTitle}
 							>
 								<Plus className="size-4 mr-1.5" />
-								후보곡 추천하기
+								곡 추천하기
 							</Button>
-						</Link>
+						)}
 					</div>
 				</div>
 			</div>
@@ -708,23 +714,27 @@ export function NominationPanel({
 								<h3 className="text-base font-bold text-foreground">
 									아직 추천된 후보곡이 없습니다
 								</h3>
-								<p className="text-xs text-muted-foreground">
-									이번 공연 무대에서 함께 연주하고 싶은 명곡을 가장 먼저
-									추천해보세요!
-								</p>
 							</div>
-							<Link
-								href={`/gigs/${gigId}/nominations/new`}
-								className="hidden sm:inline-flex"
-							>
+							{canRecommend ? (
 								<Button
-									disabled={!canRecommend}
-									className="mt-2 text-xs font-bold"
+									asChild
+									className="hidden sm:inline-flex mt-2 text-xs font-bold"
+									title={recommendationTitle}
+								>
+									<Link href={`/gigs/${gigId}/nominations/new`}>
+										<Plus className="size-4 mr-1" /> 첫 번째 곡 추천하기
+									</Link>
+								</Button>
+							) : (
+								<Button
+									type="button"
+									disabled
+									className="hidden sm:inline-flex mt-2 text-xs font-bold"
 									title={recommendationTitle}
 								>
 									<Plus className="size-4 mr-1" /> 첫 번째 곡 추천하기
 								</Button>
-							</Link>
+							)}
 						</div>
 					) : (
 						/* 검색 결과 없음 */
@@ -797,7 +807,7 @@ export function NominationPanel({
 						title={recommendationTitle}
 					>
 						<Plus className="size-6" />
-						<span className="sr-only">후보곡 추천하기</span>
+						<span className="sr-only">곡 추천하기</span>
 					</Link>
 				</Button>
 			) : (

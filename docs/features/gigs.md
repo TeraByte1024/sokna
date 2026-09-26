@@ -8,7 +8,7 @@
 ## 2. 세부 명세
 
 ### 2.1 공연 목록 조회 (`/gigs`)
-- 공개 공연은 모든 방문자에게 표시합니다. 비공개 공연은 관리자와 `performers.user_id`로 연결된 해당 공연 참여자에게만 표시합니다.
+- 공개 범위는 **비공개(관리자만) / 회원 공개(로그인 회원) / 전체 공개(모든 방문자)**로 구분합니다. 목록·상세·메타데이터에 동일하게 적용합니다. 기존 비공개 공연은 회원 공개로 전환하며, 자세한 규칙은 [공연 공개 범위 명세](./gig-visibility.md)를 따릅니다.
 - **분류 표시**:
   - `upcomingGigs`: 오늘 날짜 이후의 예정된 공연 (가까운 순서로 정렬, D-Day 표시)
   - `pastGigs`: 지난 공연 (최신순 정렬)
@@ -29,7 +29,7 @@
   - 공연 장소 (`location`, 선택)
   - 선곡회의 일시 및 시각 (`meeting_date`, 일자 및 24hh:mm 시각, 선택)
   - 선곡회의 장소 (`meeting_location`, 선택)
-  - 공개 여부 (`is_public`: 비공개 / 공개, **기본값: 비공개**)
+  - 공개 범위 (`visibility`: 비공개 / 회원 공개 / 전체 공개, **기본값: 회원 공개**)
   - 참여자 목록 (`performers`, JSON 포맷):
     - `id`: 유저 UUID
     - `name`: 이름
@@ -41,7 +41,8 @@
   4. `revalidatePath("/gigs")` 호출로 캐시 갱신.
 
 ### 2.3 공연 상세 및 참가 신청 / 선곡회의 진입 (`/gigs/[id]`)
-- 비공개 공연 상세는 관리자와 `performers.user_id`로 연결된 해당 공연 참여자만 열람할 수 있습니다. 일반 회원은 직접 URL로 접근해도 차단합니다.
+- 회원 공개 공연은 로그인한 모든 회원, 비공개 공연은 관리자만 열람합니다. 권한 없는 직접 URL 접근에서는 공연 제목·상세 정보·메타데이터를 숨깁니다.
+- 로그인 회원은 회원 공개/전체 공개 공연에 참가 신청할 수 있으며, 비공개 공연 신청은 관리자로 제한합니다. 공연 수정은 관리자 전용이며 선곡회의는 조회 가능한 공연의 참여자·관리자에게만 허용합니다.
 - 특정 공연을 선택하면 해당 공연의 세부 정보 페이지로 이동하며, 히어로 섹션 및 모바일 하단 플로팅 바에서 `공연 참여` 및 `선곡회의`(`app/gigs/[id]/nominations`)로 즉시 이동할 수 있습니다.
   - **히어로 정보**: 포스터, 공연 일시 및 장소와 함께 등록된 티켓 예매 정보(사전예매 / 현장구매 가격)를 표시합니다.
   - **비회원 권한 제어**: 비회원(로그아웃 상태) 사용자에게는 `공연 참여` 및 `선곡회의` CTA 버튼이 렌더링되지 않습니다.
@@ -82,14 +83,14 @@
   - 공연 장소 (`location`, 선택)
   - 선곡 회의 일시 및 시각 (`meeting_date`, 24hh:mm, 선택)
   - 선곡 회의 장소 (`meeting_location`, 선택)
-  - 공개 여부 (`is_public`: 비공개 / 공개)
+  - 공개 범위 (`visibility`: 비공개 / 회원 공개 / 전체 공개)
   - 참여 공연자 명단 (`performers`):
     - 세션원 추가 및 삭제
     - 개별 세션원의 담당 파트 수정
     - 공연별 세션 프로필 사진 업로드 및 수정
 - **처리 절차 (`updateGig` Server Action)**:
   1. `getIsAdmin()` 검증.
-  2. `gigs` 테이블의 기본 정보(`title`, `subtitle`, `advance_ticket_price`, `door_ticket_price`, `perform_date`, `meeting_date`, `location`, `meeting_location`, `poster_url`, `is_public`) update.
+  2. `gigs` 테이블의 기본 정보(`title`, `subtitle`, `advance_ticket_price`, `door_ticket_price`, `perform_date`, `meeting_date`, `location`, `meeting_location`, `poster_url`, `visibility`) update. 호환용 `is_public`은 전체 공개 여부로 동기화.
   3. 참여자(Performers) 지능형 동기화 (Diff/Upsert):
      - 기존 `performers` 목록과 새 목록 비교.
      - 유지되는 참여자는 파트/프로필 사진 변경사항만 update하여 고유 `performers.id` 보존 (`setlists.created_by` FK 무결성 유지).

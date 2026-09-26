@@ -3,6 +3,7 @@ import { GigEditForm } from "@/components/gigs/gig-edit-form";
 import { createClient } from "@/lib/supabase/server";
 import { getGigRow } from "@/lib/gig-server-data";
 import { getIsAdmin } from "@/lib/auth-admin";
+import { getGigVisibility } from "@/lib/gig-visibility";
 import type { Performer } from "@/components/performer-selector";
 
 interface GigEditInnerProps {
@@ -106,7 +107,7 @@ export async function GigEditInner({ gigId }: GigEditInnerProps) {
         location: gigRow.location,
         meeting_location: gigRow.meeting_location,
         poster_url: gigRow.poster_url,
-        is_public: gigRow.is_public ?? true,
+        visibility: getGigVisibility(gigRow),
       }}
       initialPerformers={initialPerformers}
       initialSetlists={initialSetlists}

@@ -3,6 +3,7 @@
 import React from "react";
 import { GigForm, type SetlistItem } from "@/components/gigs/gig-form";
 import type { Performer } from "@/components/performer-selector";
+import { getGigVisibility, type GigVisibility } from "@/lib/gig-visibility";
 
 export type { SetlistItem };
 
@@ -20,7 +21,8 @@ interface GigEditFormProps {
     location: string | null;
     meeting_location?: string | null;
     poster_url: string | null;
-    is_public: boolean;
+    visibility?: GigVisibility | null;
+    is_public?: boolean | null;
   };
   initialPerformers: Performer[];
   initialSetlists: SetlistItem[];
@@ -47,7 +49,7 @@ export function GigEditForm({
         location: gig.location,
         meeting_location: gig.meeting_location,
         poster_url: gig.poster_url,
-        is_public: gig.is_public,
+        visibility: getGigVisibility(gig),
       }}
       initialPerformers={initialPerformers}
       initialSetlists={initialSetlists}

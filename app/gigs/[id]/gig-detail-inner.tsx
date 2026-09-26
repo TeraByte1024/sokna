@@ -14,6 +14,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getGigRow } from "@/lib/gig-server-data";
 import { getIsAdmin } from "@/lib/auth-admin";
 import { mapGigRow, parseSessionSlots, type Gig, type GigPerformer, type GigRsvp } from "@/lib/gig";
+import { canViewGig } from "@/lib/gig-visibility";
 import { getDDay, formatKoreanDateTime } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -66,6 +67,39 @@ export async function GigDetailInner({ gigId }: GigDetailInnerProps) {
     );
   }
 
+  const gig: Gig = mapGigRow(gigRow as Record<string, unknown>);
+
+  // 공개 범위를 먼저 확인하고 허용된 사용자에게만 상세 데이터를 조회합니다.
+  if (!canViewGig(gig.visibility, { isLoggedIn, isAdmin })) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center gap-4 max-w-md mx-auto">
+        <div className="size-12 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center">
+          <Lock className="size-6" />
+        </div>
+        <div className="space-y-1">
+          <h2 className="text-lg font-bold text-foreground">
+            {gig.visibility === "private" ? "비공개 공연입니다" : "회원 공개 공연입니다"}
+          </h2>
+          <p className="text-xs text-muted-foreground">
+            {gig.visibility === "private"
+              ? "관리자만 공연 정보를 확인할 수 있습니다."
+              : "로그인한 회원만 공연 정보를 확인할 수 있습니다."}
+          </p>
+        </div>
+        <div className="flex items-center gap-2 pt-2">
+          <Button asChild variant="outline" size="sm">
+            <Link href="/gigs">목록으로</Link>
+          </Button>
+          {!isLoggedIn && (
+            <Button asChild size="sm">
+              <Link href={`/auth/login?redirect=/gigs/${numericId}`}>로그인하기</Link>
+            </Button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   let isCurrentUserPerformer = false;
 
   // 1-1. 로그인 유저의 프로필 및 본 공연 참가 신청(RSVP) 내역 조회
@@ -107,35 +141,6 @@ export async function GigDetailInner({ gigId }: GigDetailInnerProps) {
     }
     userProfile = profileRow;
     isCurrentUserPerformer = Boolean(performerRow);
-  }
-
-  const gig: Gig = mapGigRow(gigRow as Record<string, unknown>);
-
-  // 비공개 공연인 경우 비회원 접근 차단 (로그인 페이지로 안내)
-  if (!gig.is_public && !isAdmin && !isCurrentUserPerformer) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 text-center gap-4 max-w-md mx-auto">
-        <div className="size-12 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center">
-          <Lock className="size-6" />
-        </div>
-        <div className="space-y-1">
-          <h2 className="text-lg font-bold text-foreground">비공개 공연입니다</h2>
-          <p className="text-xs text-muted-foreground">
-            해당 공연의 참여자와 관리자만 공연 정보를 확인할 수 있습니다.
-          </p>
-        </div>
-        <div className="flex items-center gap-2 pt-2">
-          <Button asChild variant="outline" size="sm">
-            <Link href="/gigs">목록으로</Link>
-          </Button>
-          {!isLoggedIn && (
-            <Button asChild size="sm">
-              <Link href={`/auth/login?redirect=/gigs/${numericId}`}>로그인하기</Link>
-            </Button>
-          )}
-        </div>
-      </div>
-    );
   }
 
   // 3. 참여 공연자 (Performers) 조회 (미연동 더미 포함)
@@ -246,7 +251,7 @@ export async function GigDetailInner({ gigId }: GigDetailInnerProps) {
           <div className="flex flex-col justify-between gap-6 flex-1 w-full text-center md:text-left">
             <div className="space-y-4 sm:space-y-5">
               {/* 배지 라인 */}
-              {(dDay || (!gig.perform_date && !isPast) || !gig.is_public) && (
+              {(dDay || (!gig.perform_date && !isPast) || gig.visibility !== "public") && (
                 <div className="flex flex-wrap items-center justify-center md:justify-start gap-2.5">
                   {dDay ? (
                     <Badge className="bg-primary text-primary-foreground font-black tracking-wider px-3 py-1 text-xs sm:text-sm">
@@ -257,10 +262,10 @@ export async function GigDetailInner({ gigId }: GigDetailInnerProps) {
                       일정 조율 중
                     </Badge>
                   ) : null}
-                  {!gig.is_public && (
+                  {gig.visibility !== "public" && (
                     <Badge variant="outline" className="px-2.5 py-1 text-xs font-semibold text-amber-500 border-amber-500/40 bg-amber-500/10 flex items-center gap-1">
-                      <Lock className="size-3" />
-                      비공개
+                      {gig.visibility === "private" ? <Lock className="size-3" /> : <Users className="size-3" />}
+                      {gig.visibility === "private" ? "비공개" : "회원 공개"}
                     </Badge>
                   )}
                 </div>

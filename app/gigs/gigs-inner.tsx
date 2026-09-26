@@ -5,10 +5,11 @@ import { ResponsiveImage } from "@/components/ui/responsive-image";
 import { Badge } from "@/components/ui/badge";
 import { getIsAdmin } from "@/lib/auth-admin";
 import { mapGigRow, type Gig } from "@/lib/gig";
+import { canViewGig } from "@/lib/gig-visibility";
 import { getDDay } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/server";
 import { SUPABASE_GIGS_TABLE } from "@/lib/supabase/gigs";
-import { Plus, Calendar, Music, History, Sparkles, MapPin, Lock } from "lucide-react";
+import { Plus, Calendar, Music, History, Sparkles, MapPin, Lock, Users } from "lucide-react";
 
 function formatDate(d: string | null) {
 	if (!d) return "—";
@@ -47,22 +48,9 @@ export async function GigsInner() {
 		mapGigRow(r as Record<string, unknown>),
 	);
 
-	let performerGigIds = new Set<number>();
-	if (user && !isAdmin) {
-		const { data: performerRows } = await supabase
-			.from("performers")
-			.select("gig_id")
-			.eq("user_id", user.id);
-
-		performerGigIds = new Set(
-			(performerRows ?? []).map((performer) => performer.gig_id),
-		);
-	}
-
-	// 공개 공연은 모두에게, 비공개 공연은 관리자와 해당 공연 참여자에게만 노출합니다.
-	const gigs = isAdmin
-		? allGigs
-		: allGigs.filter((gig) => gig.is_public || performerGigIds.has(gig.id));
+	const gigs = allGigs.filter((gig) =>
+		canViewGig(gig.visibility, { isLoggedIn: Boolean(user), isAdmin }),
+	);
 
 	// 현재 날짜 기준으로 공연 분류
 	const now = new Date();
@@ -203,12 +191,12 @@ function GigGrid({
 									</div>
 								)}
 
-								{/* 비공개 뱃지 (포스터 우상단 플로팅) */}
-								{!gig.is_public && (
+								{/* 공개 범위 뱃지 (포스터 우상단 플로팅) */}
+								{gig.visibility !== "public" && (
 									<div className="absolute top-3.5 right-3.5 z-10">
 										<Badge variant="outline" className="bg-background/90 backdrop-blur-xs text-foreground font-semibold px-2 py-0.5 text-[11px] shadow-xs border-border flex items-center gap-1">
-											<Lock className="size-3 text-amber-500" />
-											비공개
+											{gig.visibility === "private" ? <Lock className="size-3 text-amber-500" /> : <Users className="size-3 text-amber-500" />}
+											{gig.visibility === "private" ? "비공개" : "회원 공개"}
 										</Badge>
 									</div>
 								)}

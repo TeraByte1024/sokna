@@ -86,6 +86,7 @@ docs/
 | **Feature** | [authentication.md](./features/authentication.md) | Supabase Auth, 쿠키 기반 세션 갱신, 관리자 권한 판별 |
 | **Feature** | [account-withdrawal.md](./features/account-withdrawal.md) | 프로필 회원 탈퇴, 계정·개인 데이터 삭제, 공유 공연 기록 보존 |
 | **Feature** | [gigs.md](./features/gigs.md) | 공연 생성, 목록/상세 조회, 참여 세션(Performer) 매핑 |
+| **Feature** | [gig-visibility.md](./features/gig-visibility.md) | 비공개·회원 공개·전체 공개 권한 및 기존 공연 전환 |
 | **Feature** | [setlists.md](./features/setlists.md) | 곡 등록/삭제, 필수 파트 선택, 악보 유무, 참고 링크 관리 |
 | **Feature** | [push-notifications.md](./features/push-notifications.md) | Firebase Cloud Messaging(FCM) 토큰 관리 및 푸시 수신 |
 | **Feature** | [setlist-notifications-and-highlights.md](./features/setlist-notifications-and-highlights.md) | **선곡회의 곡 수정 하이라이팅 및 새 곡 15분 지연 알림 큐** |

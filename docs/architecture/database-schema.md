@@ -153,7 +153,10 @@ erDiagram
 | `location` | `text` | YES | null | 공연 장소 (예: 한양대학교 학생회관 콘서트홀) |
 | `meeting_location` | `text` | YES | null | 선곡회의 장소 (예: 동아리방, 학생회관 301호 등) |
 | `poster_url` | `text` | YES | null | 공연 공식 포스터 이미지 공개 URL (Supabase Storage: gigs/posters) |
-| `is_public` | `bool` | NO | `true` | 공연 공개 여부 (`true`: 전체 공개, `false`: 관리자 및 해당 공연 참여자 전용) |
+| `visibility` | `text` | NO | `'members'` | 공개 범위: `private`(관리자만), `members`(로그인 회원), `public`(모든 방문자), CHECK 제약 적용 |
+| `is_public` | `bool` | NO | `false` | 호환용 전체 공개 여부. 트리거가 `visibility = 'public'`과 동기화 |
+
+> `20260926003000_add_gig_visibility_levels.sql`은 기존 `is_public=false`를 `members`, `true`를 `public`으로 전환합니다. `gigs` SELECT에는 공개 범위별 허용형·제한형 RLS를 적용하고, 관리자 관리 정책을 제공합니다. 공연자·확정 셋리스트·후보곡·응답의 SELECT에는 상위 공연 조회 권한을 추가로 검사합니다. 세부 규칙과 적용 순서는 [공연 공개 범위 명세](../features/gig-visibility.md)를 참고하십시오.
 | `created_at` | `timestamptz` | NO | `now()` | 생성 일시 |
 
 ### 2.4 `gig_rsvps` (공연 참가 신청/수요 조사)

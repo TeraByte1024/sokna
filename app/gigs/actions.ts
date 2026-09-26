@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getIsAdmin } from "@/lib/auth-admin";
 import { SUPABASE_GIGS_TABLE } from "@/lib/supabase/gigs";
+import { getGigVisibility, isGigVisibility } from "@/lib/gig-visibility";
 
 export type GigActionResult = { ok: true; gigId?: number } | { ok: false; error: string };
 
@@ -39,7 +40,9 @@ export async function createGig(formData: FormData): Promise<GigActionResult> {
   const location = emptyToNull(formData.get("location"));
   const meeting_location = emptyToNull(formData.get("meeting_location"));
   const poster_url = emptyToNull(formData.get("poster_url"));
-  const is_public = formData.get("is_public") === "true";
+  const visibility = formData.get("visibility");
+  if (!isGigVisibility(visibility)) return { ok: false, error: "올바른 공연 공개 범위를 선택해 주세요." };
+  const is_public = visibility === "public";
 
   const advance_ticket_price = parsePrice(formData.get("advance_ticket_price"));
   const door_ticket_price = parsePrice(formData.get("door_ticket_price"));
@@ -73,6 +76,7 @@ export async function createGig(formData: FormData): Promise<GigActionResult> {
       meeting_location,
       poster_url,
       is_public,
+      visibility,
     })
     .select()
     .single();
@@ -164,7 +168,9 @@ export async function updateGig(formData: FormData): Promise<GigActionResult> {
   const location = emptyToNull(formData.get("location"));
   const meeting_location = emptyToNull(formData.get("meeting_location"));
   const poster_url = emptyToNull(formData.get("poster_url"));
-  const is_public = formData.get("is_public") === "true";
+  const visibility = formData.get("visibility");
+  if (!isGigVisibility(visibility)) return { ok: false, error: "올바른 공연 공개 범위를 선택해 주세요." };
+  const is_public = visibility === "public";
   const advance_ticket_price = parsePrice(formData.get("advance_ticket_price"));
   const door_ticket_price = parsePrice(formData.get("door_ticket_price"));
 
@@ -196,6 +202,7 @@ export async function updateGig(formData: FormData): Promise<GigActionResult> {
       meeting_location,
       poster_url,
       is_public,
+      visibility,
     })
     .eq("id", gigId);
 
@@ -431,7 +438,7 @@ export async function submitGigRsvp(formData: FormData): Promise<{ ok: true } | 
   }
 
   const [{ data: gig, error: gigError }, { data: performer, error: performerError }] = await Promise.all([
-    supabase.from("gigs").select("is_public").eq("id", gigId).maybeSingle(),
+    supabase.from("gigs").select("visibility, is_public").eq("id", gigId).maybeSingle(),
     supabase.from("performers").select("id").eq("gig_id", gigId).eq("user_id", user.id).limit(1).maybeSingle(),
   ]);
   if (gigError || performerError || !gig) {
@@ -440,7 +447,7 @@ export async function submitGigRsvp(formData: FormData): Promise<{ ok: true } | 
   if (performer) {
     return { ok: false, error: "이미 공연 참여자로 등록되어 있습니다." };
   }
-  if (!gig.is_public && !(await getIsAdmin())) {
+  if (getGigVisibility(gig) === "private" && !(await getIsAdmin())) {
     return { ok: false, error: "비공개 공연에는 참가 신청을 할 수 없습니다." };
   }
 

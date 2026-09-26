@@ -1,3 +1,5 @@
+import { getGigVisibility, type GigVisibility } from "@/lib/gig-visibility";
+
 export type Gig = {
   id: number;
   title: string;
@@ -12,6 +14,7 @@ export type Gig = {
   meeting_location?: string | null;
   poster_url: string | null;
   is_public: boolean;
+  visibility: GigVisibility;
   created_at: string;
 };
 
@@ -185,7 +188,8 @@ export function mapGigRow(row: Record<string, unknown>): Gig {
       row.poster_url == null || row.poster_url === ""
         ? null
         : String(row.poster_url),
-    is_public: row.is_public !== false,
+    is_public: getGigVisibility(row) === "public",
+    visibility: getGigVisibility(row),
     created_at: String(row.created_at ?? ""),
   };
 }

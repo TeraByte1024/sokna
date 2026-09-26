@@ -172,6 +172,7 @@ export type Database = {
           poster_url: string | null
           subtitle: string | null
           title: string | null
+          visibility: string
         }
         Insert: {
           advance_ticket_price?: number | null
@@ -188,6 +189,7 @@ export type Database = {
           poster_url?: string | null
           subtitle?: string | null
           title?: string | null
+          visibility?: string
         }
         Update: {
           advance_ticket_price?: number | null
@@ -204,6 +206,7 @@ export type Database = {
           poster_url?: string | null
           subtitle?: string | null
           title?: string | null
+          visibility?: string
         }
         Relationships: []
       }

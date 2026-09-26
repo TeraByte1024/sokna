@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createGig, updateGig } from "@/app/gigs/actions";
 import { createClient } from "@/lib/supabase/client";
+import { getGigVisibility, type GigVisibility } from "@/lib/gig-visibility";
 import {
   PerformerSelector,
   type Performer,
@@ -73,7 +74,8 @@ export interface GigFormData {
   location: string | null;
   meeting_location?: string | null;
   poster_url: string | null;
-  is_public: boolean | null;
+  visibility?: GigVisibility | null;
+  is_public?: boolean | null;
 }
 
 export interface SetlistItem {
@@ -734,8 +736,8 @@ export function GigForm({
   const [isDragging, setIsDragging] = useState(false);
   const posterFileRef = useRef<HTMLInputElement>(null);
 
-  // 3. 공개/비공개 설정 상태
-  const [isPublic, setIsPublic] = useState(gig?.is_public ?? false);
+  // 3. 공개 범위 설정 상태
+  const [visibility, setVisibility] = useState<GigVisibility>(getGigVisibility(gig ?? {}));
 
   // 4. 참여자 관련 상태
   const [performers, setPerformers] = useState<Performer[]>(initialPerformers);
@@ -771,7 +773,8 @@ export function GigForm({
         meetingLocation.trim() ||
         posterUrl ||
         performers.length > 0 ||
-        setlists.length > 0
+        setlists.length > 0 ||
+        visibility !== "members"
       );
     } else {
       const initTitle = gig?.title ?? "";
@@ -785,7 +788,7 @@ export function GigForm({
       const initLocation = gig?.location ?? "";
       const initMeetingLocation = gig?.meeting_location ?? "";
       const initPosterUrl = gig?.poster_url ?? "";
-      const initIsPublic = gig?.is_public ?? false;
+      const initVisibility = getGigVisibility(gig ?? {});
 
       if (
         title !== initTitle ||
@@ -797,7 +800,7 @@ export function GigForm({
         location !== initLocation ||
         meetingLocation !== initMeetingLocation ||
         posterUrl !== initPosterUrl ||
-        isPublic !== initIsPublic
+        visibility !== initVisibility
       ) {
         return true;
       }
@@ -837,7 +840,7 @@ export function GigForm({
     meetingDate,
     location,
     posterUrl,
-    isPublic,
+    visibility,
     performers,
     setlists,
     gig,
@@ -1357,7 +1360,7 @@ export function GigForm({
     formData.set("location", location);
     formData.set("meeting_location", meetingLocation);
     formData.set("poster_url", posterUrl);
-    formData.set("is_public", isPublic ? "true" : "false");
+    formData.set("visibility", visibility);
     formData.set("performers", JSON.stringify(performers));
     formData.set("setlists", JSON.stringify(setlists));
 
@@ -1760,49 +1763,74 @@ export function GigForm({
               </div>
             </div>
 
-            {/* 공개 여부 */}
+            {/* 공개 범위 */}
             <div className="space-y-2 pt-2 border-t border-border/60">
               <Label className="text-xs font-semibold text-foreground">
-                공개 여부
+                공개 범위
               </Label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <button
                   type="button"
-                  onClick={() => setIsPublic(false)}
-                  className={`p-3.5 rounded-xl border text-left transition-all flex items-start gap-3 ${!isPublic
+                  onClick={() => setVisibility("private")}
+                  aria-pressed={visibility === "private"}
+                  className={`p-3.5 rounded-xl border text-left transition-all flex items-start gap-3 ${visibility === "private"
                     ? "border-primary bg-primary/5 ring-1 ring-primary"
                     : "border-border/70 hover:border-border hover:bg-muted/20"
                     }`}
                 >
-                  <div className={`p-2 rounded-lg ${!isPublic ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+                  <div className={`p-2 rounded-lg ${visibility === "private" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
                     <Lock className="size-4" />
                   </div>
                   <div className="space-y-0.5">
                     <p className="text-xs font-bold text-foreground flex items-center gap-1.5">
                       비공개
-                      {!isPublic && <Check className="size-3 text-primary" />}
+                      {visibility === "private" && <Check className="size-3 text-primary" />}
                     </p>
                     <p className="text-[11px] text-muted-foreground leading-relaxed">
-                      공연 참여 부원에게만 노출됩니다.
+                      관리자만 확인할 수 있습니다.
                     </p>
                   </div>
                 </button>
 
                 <button
                   type="button"
-                  onClick={() => setIsPublic(true)}
-                  className={`p-3.5 rounded-xl border text-left transition-all flex items-start gap-3 ${isPublic
+                  onClick={() => setVisibility("members")}
+                  aria-pressed={visibility === "members"}
+                  className={`p-3.5 rounded-xl border text-left transition-all flex items-start gap-3 ${visibility === "members"
                     ? "border-primary bg-primary/5 ring-1 ring-primary"
                     : "border-border/70 hover:border-border hover:bg-muted/20"
                     }`}
                 >
-                  <div className={`p-2 rounded-lg ${isPublic ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+                  <div className={`p-2 rounded-lg ${visibility === "members" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+                    <Users className="size-4" />
+                  </div>
+                  <div className="space-y-0.5">
+                    <p className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                      회원 공개
+                      {visibility === "members" && <Check className="size-3 text-primary" />}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      로그인한 모든 회원에게 공연 목록과 상세 정보가 공개됩니다.
+                    </p>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setVisibility("public")}
+                  aria-pressed={visibility === "public"}
+                  className={`p-3.5 rounded-xl border text-left transition-all flex items-start gap-3 ${visibility === "public"
+                    ? "border-primary bg-primary/5 ring-1 ring-primary"
+                    : "border-border/70 hover:border-border hover:bg-muted/20"
+                    }`}
+                >
+                  <div className={`p-2 rounded-lg ${visibility === "public" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
                     <Globe className="size-4" />
                   </div>
                   <div className="space-y-0.5">
                     <p className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                      공개
-                      {isPublic && <Check className="size-3 text-primary" />}
+                      전체 공개
+                      {visibility === "public" && <Check className="size-3 text-primary" />}
                     </p>
                     <p className="text-[11px] text-muted-foreground leading-relaxed">
                       모든 방문자에게 공연 목록과 상세 정보가 공개됩니다.

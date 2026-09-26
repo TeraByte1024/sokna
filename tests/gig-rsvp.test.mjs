@@ -42,7 +42,12 @@ function actionsFixture(options = {}) {
     from(table) {
       const query = {
         select() { return query; }, eq() { return query; }, limit() { return query; },
-        maybeSingle: async () => ({ data: table === "gigs" ? { is_public: !options.privateGig } : options.performer ?? null, error: null }),
+        maybeSingle: async () => ({
+          data: table === "gigs"
+            ? options.gig ?? { visibility: options.privateGig ? "private" : "public", is_public: !options.privateGig }
+            : options.performer ?? null,
+          error: null,
+        }),
         upsert: async (payload) => { writes.push({ table, payload }); return { error: null }; },
       };
       return query;
@@ -78,6 +83,42 @@ test("registered performers and unauthorized private-gig requests cannot resubmi
     const fixture = actionsFixture(options);
     assert.equal((await fixture.actions.submitGigRsvp(form())).ok, false);
     assert.equal(fixture.writes.length, 0);
+  }
+});
+
+test("signed-in members may apply to member-only and public gigs, including legacy member-only gigs", async () => {
+  for (const gig of [
+    { visibility: "members", is_public: false },
+    { visibility: "public", is_public: true },
+    { is_public: false },
+    { visibility: null, is_public: false },
+  ]) {
+    const fixture = actionsFixture({ gig });
+    assert.deepEqual(await fixture.actions.submitGigRsvp(form()), { ok: true });
+    assert.equal(fixture.writes.length, 1);
+    assert.equal(fixture.writes[0].table, "gig_rsvps");
+    assert.equal(fixture.writes[0].payload.user_id, "member-id");
+  }
+});
+
+test("private visibility blocks non-admin RSVP even when the legacy flag says public", async () => {
+  for (const is_public of [false, true]) {
+    const fixture = actionsFixture({ gig: { visibility: "private", is_public } });
+    const result = await fixture.actions.submitGigRsvp(form());
+    assert.equal(result.ok, false);
+    assert.match(result.error, /비공개/);
+    assert.deepEqual(fixture.writes, []);
+    assert.deepEqual(fixture.invalidations, []);
+  }
+});
+
+test("RSVP still requires login for both member-only and public gigs", async () => {
+  for (const visibility of ["members", "public"]) {
+    const fixture = actionsFixture({ signedOut: true, gig: { visibility, is_public: visibility === "public" } });
+    const result = await fixture.actions.submitGigRsvp(form());
+    assert.equal(result.ok, false);
+    assert.match(result.error, /로그인/);
+    assert.deepEqual(fixture.writes, []);
   }
 });
 
