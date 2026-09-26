@@ -3,6 +3,7 @@ import type { NotificationCursor, NotificationInboxItem as InboxNotification } f
 export type { InboxNotification, NotificationCursor };
 
 type Failure = { ok: false; error: string };
+type DeleteResult = { ok: true; userId: string; unreadCount: number } | Failure;
 type ReadResult = { ok: true; userId: string; unreadCount: number; readAt: string } | Failure;
 
 export interface NotificationInboxApi {
@@ -14,6 +15,8 @@ export interface NotificationInboxApi {
     nextCursor: NotificationCursor | null;
     cutoff: string;
   } | Failure>;
+  remove(id: string, expectedUserId: string): Promise<DeleteResult>;
+  removeAll(cutoff: string, expectedUserId: string): Promise<DeleteResult>;
   markRead(id: string, expectedUserId: string): Promise<ReadResult>;
   markAllRead(cutoff: string, expectedUserId: string): Promise<ReadResult>;
 }
@@ -27,16 +30,18 @@ export interface NotificationInboxSnapshot {
   loading: boolean;
   loadingMore: boolean;
   markingAll: boolean;
+  deletingId: string | null;
+  deletingAll: boolean;
   error: string | null;
   errorKind: "refresh" | "more";
   mutationError: string | null;
-  mutationKind: "single" | "all" | null;
+  mutationKind: "single" | "all" | "delete" | "deleteAll" | null;
 }
 
 function emptySnapshot(userId: string | null, unreadCount: number | null): NotificationInboxSnapshot {
   return {
     userId, unreadCount, items: [], nextCursor: null, cutoff: null,
-    loading: false, loadingMore: false, markingAll: false,
+    loading: false, loadingMore: false, markingAll: false, deletingId: null, deletingAll: false,
     error: null, errorKind: "refresh", mutationError: null, mutationKind: null,
   };
 }
@@ -60,6 +65,9 @@ export function createNotificationInbox(api: NotificationInboxApi, userId: strin
   let accountVersion = 0;
   let listVersion = 0;
   let writes: Promise<unknown> = Promise.resolve();
+  // A failed delete may already have committed before its count response failed.
+  // Retrying after a refresh must keep the original boundary, not delete new arrivals.
+  let deleteAllCutoff: string | null = null;
   const listeners = new Set<() => void>();
   const publish = (patch: Partial<NotificationInboxSnapshot>) => {
     state = { ...state, ...patch };
@@ -72,6 +80,7 @@ export function createNotificationInbox(api: NotificationInboxApi, userId: strin
     accountVersion++;
     listVersion++;
     writes = Promise.resolve();
+    deleteAllCutoff = null;
     state = emptySnapshot(nextUserId, initialCount);
     listeners.forEach((listener) => listener());
     return true;
@@ -108,19 +117,25 @@ export function createNotificationInbox(api: NotificationInboxApi, userId: strin
     }
   }
 
-  function changeReadState(id: string | null) {
+  function mutate(kind: "single" | "all" | "delete" | "deleteAll", id?: string) {
     const expectedUserId = state.userId;
     const version = accountVersion;
-    const cutoff = state.cutoff;
-    if (!expectedUserId || (!id && !cutoff)) return Promise.resolve(false);
+    const cutoff = kind === "deleteAll" ? deleteAllCutoff ?? state.cutoff : state.cutoff;
+    if (!expectedUserId || (kind === "all" || kind === "deleteAll" ? !cutoff : !id)) return Promise.resolve(false);
+    if (kind === "deleteAll") deleteAllCutoff = cutoff;
     const operation = writes.then(async () => {
       if (!isCurrent(version, expectedUserId)) return false;
-      // An older list response must not restore an unread marker after this write.
+      // A previous queued bulk delete can have succeeded and cleared its boundary.
+      if (kind === "deleteAll") deleteAllCutoff = cutoff;
+      // Older list responses must not restore deleted items or unread markers.
       listVersion++;
-      publish({ loading: false, loadingMore: false, mutationError: null, mutationKind: id ? "single" : "all", markingAll: !id });
+      publish({ loading: false, loadingMore: false, mutationError: null, mutationKind: kind,
+        markingAll: kind === "all", deletingId: kind === "delete" ? id! : null, deletingAll: kind === "deleteAll" });
       try {
-        const result = id
-          ? await api.markRead(id, expectedUserId)
+        const result = kind === "deleteAll"
+          ? await api.removeAll(cutoff!, expectedUserId)
+          : kind === "delete" ? await api.remove(id!, expectedUserId)
+          : kind === "single" ? await api.markRead(id!, expectedUserId)
           : await api.markAllRead(cutoff!, expectedUserId);
         if (!isCurrent(version, expectedUserId)) return false;
         if (!result.ok) {
@@ -129,22 +144,29 @@ export function createNotificationInbox(api: NotificationInboxApi, userId: strin
         }
         if (result.userId !== expectedUserId) { setUser(null); return false; }
         listVersion++;
+        if (kind === "deleteAll" && deleteAllCutoff === cutoff) deleteAllCutoff = null;
         publish({
           loading: false, loadingMore: false,
+          ...(kind === "deleteAll" ? {
+            error: null,
+            nextCursor: state.nextCursor && notificationAtOrBeforeCutoff(state.nextCursor.created_at, cutoff!)
+              ? null : state.nextCursor,
+          } : {}),
           mutationKind: null,
           unreadCount: result.unreadCount,
-          items: state.items.map((item) =>
-            !item.read_at && (id ? item.id === id : notificationAtOrBeforeCutoff(item.created_at, cutoff!))
+          items: kind === "deleteAll" ? state.items.filter((item) => !notificationAtOrBeforeCutoff(item.created_at, cutoff!))
+            : kind === "delete" ? state.items.filter((item) => item.id !== id) : state.items.map((item) =>
+            "readAt" in result && typeof result.readAt === "string" && !item.read_at && (kind === "single" ? item.id === id : notificationAtOrBeforeCutoff(item.created_at, cutoff!))
               ? { ...item, read_at: result.readAt } : item),
         });
         return true;
       } catch {
         if (isCurrent(version, expectedUserId)) {
-          publish({ mutationError: "읽음 표시를 저장하지 못했습니다. 다시 시도해 주세요." });
+          publish({ mutationError: kind === "delete" || kind === "deleteAll" ? "알림을 삭제하지 못했습니다. 다시 시도해 주세요." : "읽음 표시를 저장하지 못했습니다. 다시 시도해 주세요." });
         }
         return false;
       } finally {
-        if (isCurrent(version, expectedUserId)) publish({ markingAll: false });
+        if (isCurrent(version, expectedUserId)) publish({ markingAll: false, deletingId: null, deletingAll: false });
       }
     });
     writes = operation.catch(() => undefined);
@@ -160,8 +182,10 @@ export function createNotificationInbox(api: NotificationInboxApi, userId: strin
     setUser,
     refresh: () => load(false),
     loadMore: () => load(true),
-    markRead: (id: string) => changeReadState(id),
-    markAllRead: () => changeReadState(null),
+    remove: (id: string) => mutate("delete", id),
+    removeAll: () => mutate("deleteAll"),
+    markRead: (id: string) => mutate("single", id),
+    markAllRead: () => mutate("all"),
   };
 }
 

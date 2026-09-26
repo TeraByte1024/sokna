@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useId, useState, useSyncExternalStore } from "react";
-import { Bell, CheckCheck, ChevronDown, Loader2, RefreshCw } from "lucide-react";
+import { Bell, CheckCheck, ChevronDown, Loader2, RefreshCw, X } from "lucide-react";
 import {
+  deleteAllNotificationsAction,
+  deleteNotificationAction,
   listNotificationsAction,
   markAllNotificationsReadAction,
   markNotificationReadAction,
@@ -40,6 +42,8 @@ export function NotificationMenu({ userId, initialUnreadCount }: NotificationMen
   const titleId = useId();
   const [inbox] = useState(() => createNotificationInbox({
     list: listNotificationsAction,
+    remove: deleteNotificationAction,
+    removeAll: deleteAllNotificationsAction,
     markRead: markNotificationReadAction,
     markAllRead: markAllNotificationsReadAction,
   }, userId, initialUnreadCount));
@@ -124,28 +128,41 @@ export function NotificationMenu({ userId, initialUnreadCount }: NotificationMen
             알림
             {state.loading && <Loader2 className="size-3.5 animate-spin text-muted-foreground" aria-label="새로고침 중" />}
           </DropdownMenuLabel>
-          <DropdownMenuItem
-            disabled={!state.cutoff || !count || state.markingAll}
-            onSelect={(event) => { event.preventDefault(); void inbox.markAllRead(); }}
-            className="cursor-pointer gap-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground focus:text-foreground"
-          >
-            {state.markingAll ? <Loader2 className="size-3 animate-spin" aria-hidden="true" /> : <CheckCheck className="size-3" aria-hidden="true" />}
-            모두 읽음
-          </DropdownMenuItem>
+          <div className="flex shrink-0 items-center gap-0.5">
+            <DropdownMenuItem
+              disabled={!state.cutoff || !count || state.markingAll || state.deletingAll}
+              onSelect={(event) => { event.preventDefault(); void inbox.markAllRead(); }}
+              className="cursor-pointer gap-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground focus:text-foreground"
+            >
+              {state.markingAll ? <Loader2 className="size-3 animate-spin" aria-hidden="true" /> : <CheckCheck className="size-3" aria-hidden="true" />}
+              모두 읽음
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              disabled={!state.cutoff || (!state.items.length && !state.nextCursor) || state.markingAll || state.deletingAll || state.deletingId !== null}
+              onSelect={(event) => { event.preventDefault(); void inbox.removeAll(); }}
+              className="cursor-pointer gap-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground focus:bg-destructive/10 focus:text-destructive"
+            >
+              {state.deletingAll ? <Loader2 className="size-3 animate-spin" aria-hidden="true" /> : <X className="size-3" aria-hidden="true" />}
+              모두 삭제
+            </DropdownMenuItem>
+          </div>
         </div>
 
-        {state.mutationError && state.mutationKind === "all" && (
+        {state.mutationError && (state.mutationKind === "all" || state.mutationKind === "deleteAll") && (
           <div className="border-b border-border/60 bg-destructive/5 px-3 py-2">
             <p role="alert" className="text-xs text-destructive">{state.mutationError}</p>
-            <DropdownMenuItem onSelect={(event) => { event.preventDefault(); void inbox.markAllRead(); }} className="mt-1 w-fit cursor-pointer text-xs">
-              <RefreshCw className="size-3" aria-hidden="true" /> 모두 읽음 다시 시도
+            <DropdownMenuItem onSelect={(event) => {
+              event.preventDefault();
+              void (state.mutationKind === "deleteAll" ? inbox.removeAll() : inbox.markAllRead());
+            }} className="mt-1 w-fit cursor-pointer text-xs">
+              <RefreshCw className="size-3" aria-hidden="true" /> {state.mutationKind === "deleteAll" ? "모두 삭제 다시 시도" : "모두 읽음 다시 시도"}
             </DropdownMenuItem>
           </div>
         )}
 
         {state.items.length === 0 && state.loading ? (
           <p role="status" className="px-4 py-10 text-center text-xs text-muted-foreground">알림을 불러오는 중입니다.</p>
-        ) : state.items.length === 0 && !state.error ? (
+        ) : state.items.length === 0 && !state.error && !state.nextCursor ? (
           <div role="status" className="flex flex-col items-center gap-2 px-4 py-10 text-center text-muted-foreground">
             <Bell className="size-6 opacity-50" aria-hidden="true" />
             <p className="text-xs">아직 도착한 알림이 없습니다.</p>
@@ -153,39 +170,65 @@ export function NotificationMenu({ userId, initialUnreadCount }: NotificationMen
         ) : (
           <div className="p-1" aria-busy={state.loading}>
             {state.items.map((notification) => (
-              <DropdownMenuItem key={notification.id} asChild textValue={notification.title ?? "알림"}>
-                <Link
-                  href={safeNotificationLink(notification.link)}
-                  prefetch={false}
-                  data-notification-id={notification.id}
-                  data-notification-user-id={state.userId}
-                  onClick={() => {
-                    if (!notification.read_at) {
-                      void inbox.markRead(notification.id).then((ok) => {
-                        const latest = inbox.getSnapshot();
-                        if (!ok && latest.userId === userId && latest.mutationError) toast.error(latest.mutationError);
-                      });
-                    }
-                  }}
-                  className={cn(
-                    "flex scroll-mt-12 cursor-pointer items-start gap-2.5 rounded-lg px-3 py-3 focus:bg-accent",
-                    !notification.read_at && "bg-primary/[0.04]",
-                  )}
-                >
-                  <span className={cn("mt-1.5 size-1.5 shrink-0 rounded-full", notification.read_at ? "bg-transparent" : "bg-primary")}>
-                    {!notification.read_at && <span className="sr-only">읽지 않음: </span>}
-                  </span>
-                  <span className="min-w-0 flex-1 space-y-1">
-                    <span className={cn("block break-words text-xs leading-relaxed", notification.read_at ? "font-medium text-foreground/80" : "font-semibold text-foreground")}>
-                      {notification.title || "새 알림"}
+              <div key={notification.id} className="flex items-start rounded-lg">
+                <DropdownMenuItem asChild disabled={state.deletingAll} textValue={notification.title ?? "알림"}>
+                  <Link
+                    href={safeNotificationLink(notification.link)}
+                    prefetch={false}
+                    data-notification-id={notification.id}
+                    data-notification-user-id={state.userId}
+                    onClick={() => {
+                      if (!notification.read_at) {
+                        void inbox.markRead(notification.id).then((ok) => {
+                          const latest = inbox.getSnapshot();
+                          if (!ok && latest.userId === userId && latest.mutationError) toast.error(latest.mutationError);
+                        });
+                      }
+                    }}
+                    className={cn(
+                      "flex min-w-0 flex-1 scroll-mt-12 cursor-pointer items-start gap-2.5 rounded-lg px-3 py-3 focus:bg-accent",
+                      !notification.read_at && "bg-primary/[0.04]",
+                    )}
+                  >
+                    <span className={cn("mt-1.5 size-1.5 shrink-0 rounded-full", notification.read_at ? "bg-transparent" : "bg-primary")}>
+                      {!notification.read_at && <span className="sr-only">읽지 않음: </span>}
                     </span>
-                    {notification.body && <span className="block break-words text-xs leading-relaxed text-muted-foreground">{notification.body}</span>}
-                    <time dateTime={notification.created_at} className="block text-[10px] text-muted-foreground/80">
-                      {notificationTime(notification.created_at)}
-                    </time>
-                  </span>
-                </Link>
-              </DropdownMenuItem>
+                    <span className="min-w-0 flex-1 space-y-1">
+                      <span className={cn("block break-words text-xs leading-relaxed", notification.read_at ? "font-medium text-foreground/80" : "font-semibold text-foreground")}>
+                        {notification.title || "새 알림"}
+                      </span>
+                      {notification.body && <span className="block break-words text-xs leading-relaxed text-muted-foreground">{notification.body}</span>}
+                      <time dateTime={notification.created_at} className="block text-[10px] text-muted-foreground/80">
+                        {notificationTime(notification.created_at)}
+                      </time>
+                    </span>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  asChild
+                  disabled={state.deletingAll || state.deletingId === notification.id}
+                  textValue={`${notification.title || "새 알림"} 삭제`}
+                  onSelect={(event) => {
+                    event.preventDefault();
+                    void inbox.remove(notification.id).then((ok) => {
+                      const latest = inbox.getSnapshot();
+                      if (!ok && latest.userId === userId && latest.mutationError) toast.error(latest.mutationError);
+                    });
+                  }}
+                  className="mr-1 mt-2 size-10 shrink-0 cursor-pointer justify-center rounded-md p-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus:bg-destructive/10 focus:text-destructive sm:size-8"
+                >
+                  <button
+                    type="button"
+                    disabled={state.deletingAll || state.deletingId === notification.id}
+                    aria-label={`${notification.title || "새 알림"} 삭제`}
+                    title="알림 삭제"
+                  >
+                    {state.deletingId === notification.id
+                      ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+                      : <X className="size-3.5" aria-hidden="true" />}
+                  </button>
+                </DropdownMenuItem>
+              </div>
             ))}
           </div>
         )}

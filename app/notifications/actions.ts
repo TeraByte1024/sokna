@@ -16,6 +16,10 @@ export type NotificationReadResult = {
 	ok: true; userId: string; unreadCount: number; readAt: string;
 } | { ok: false; error: string };
 
+export type NotificationDeleteResult = {
+	ok: true; userId: string; unreadCount: number;
+} | { ok: false; error: string };
+
 export async function listNotificationsAction(input: {
 	cursor?: NotificationCursor | null; cutoff?: string; expectedUserId?: string;
 } = {}): Promise<NotificationListResult> {
@@ -76,5 +80,36 @@ export async function markAllNotificationsReadAction(cutoff: string, expectedUse
 		return { ok: true, userId, readAt, unreadCount: await countUnreadNotifications(supabase, userId) };
 	} catch (error) {
 		return { ok: false, error: error instanceof NotificationRequestError ? error.message : "모두 읽음 상태를 저장하지 못했습니다." };
+	}
+}
+
+export async function deleteNotificationAction(id: string, expectedUserId: string): Promise<NotificationDeleteResult> {
+	if (!isNotificationId(id) || typeof expectedUserId !== "string" || !expectedUserId) return { ok: false, error: "알림 정보가 올바르지 않습니다." };
+	try {
+		const { supabase, userId } = await getNotificationContext(expectedUserId);
+		// Scope the privileged write to the authenticated account. Missing rows are
+		// successful so a retry never reveals whether another account owns the ID.
+		const { error } = await createServiceClient().from("notifications").delete()
+			.eq("id", id).eq("user_id", userId);
+		if (error) return { ok: false, error: "알림을 삭제하지 못했습니다. 다시 시도해 주세요." };
+		return { ok: true, userId, unreadCount: await countUnreadNotifications(supabase, userId) };
+	} catch (error) {
+		return { ok: false, error: error instanceof NotificationRequestError ? error.message : "알림을 삭제하지 못했습니다. 다시 시도해 주세요." };
+	}
+}
+
+export async function deleteAllNotificationsAction(cutoff: string, expectedUserId: string): Promise<NotificationDeleteResult> {
+	if (!isNotificationTimestamp(cutoff) || Date.parse(cutoff) > Date.now() + 1_000
+		|| typeof expectedUserId !== "string" || !expectedUserId) return { ok: false, error: "알림 삭제 시각이 올바르지 않습니다. 다시 열어 주세요." };
+	try {
+		const { supabase, userId } = await getNotificationContext(expectedUserId);
+		// Delete the account's complete snapshot, including read and unloaded rows.
+		// Notifications created after the displayed cutoff remain in the inbox.
+		const { error } = await createServiceClient().from("notifications").delete()
+			.eq("user_id", userId).lte("created_at", cutoff);
+		if (error) return { ok: false, error: "알림을 모두 삭제하지 못했습니다. 다시 시도해 주세요." };
+		return { ok: true, userId, unreadCount: await countUnreadNotifications(supabase, userId) };
+	} catch (error) {
+		return { ok: false, error: error instanceof NotificationRequestError ? error.message : "알림을 모두 삭제하지 못했습니다. 다시 시도해 주세요." };
 	}
 }

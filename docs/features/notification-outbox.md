@@ -11,7 +11,7 @@
 - 완성된 가입 신청이 pending으로 진입할 때 users 트리거가 관리자 알림을 만든다. 이메일/Google 신청의 문구와 생성 경로를 통합한다. 미완성 OAuth 사용자와 이미 완성된 pending 프로필 재저장은 새 알림을 만들지 않는다.
 - 승인 RPC는 기존 관리자 검사와 pending 상태 전이를 유지하고 공통 DB 함수로 승인 알림을 함께 저장한다.
 - 서버 액션은 이미 저장된 해당 이벤트를 즉시 발송한다. 중단/전송 실패는 동일 notifications 행에서 복구한다.
-- 알림함, 로그인 계정별 기기 수신, 동의, 읽음, 기기 로컬 복구 정책은 유지한다.
+- 알림함, 로그인 계정별 기기 수신, 동의, 읽음, 기기 로컬 복구 정책은 유지한다. 사용자가 알림함에서 개별 또는 모두 삭제한 notifications 행은 발송 대기에서도 제거된다. 진행 중 또는 FCM 접수된 전송의 회수는 보장하지 않는다. [삭제 API와 UI](./notification-inbox.md)를 따른다.
 
 ## 3. 스키마
 - `gig_notification_queue` 제거. pending/processing은 기존 UUIDv5와 동일한 ID로 notifications에 이관하며 중복 INSERT는 기존 내용을 덮어쓰지 않는다.
