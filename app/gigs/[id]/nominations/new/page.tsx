@@ -3,6 +3,7 @@ import { PageContainer } from "@/components/page-container";
 import { createClient } from "@/lib/supabase/server";
 import { SUPABASE_GIGS_TABLE } from "@/lib/supabase/gigs";
 import { getIsAdmin } from "@/lib/auth-admin";
+import { isNominationClosed } from "@/lib/nomination-deadline";
 import { redirect } from "next/navigation";
 import { NominationForm } from "@/components/nominations/nomination-form";
 import type { RecommendedVocal } from "@/lib/nomination";
@@ -118,6 +119,11 @@ export default async function NewNominationPage({ params }: PageProps) {
 				</PageContainer>
 			</SiteLayout>
 		);
+	}
+
+	// 마감 후에는 직접 URL로 접근해도 등록 폼을 제공하지 않음.
+	if (!isAdmin && isNominationClosed(gig.meeting_date)) {
+		redirect(`/gigs/${numericId}/nominations`);
 	}
 
 	// 3. 공연 참여자 전체 목록 조회 (보컬 추천용)

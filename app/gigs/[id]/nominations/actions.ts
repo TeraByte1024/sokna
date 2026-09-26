@@ -3,6 +3,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { getIsAdmin } from "@/lib/auth-admin";
+import { SUPABASE_GIGS_TABLE } from "@/lib/supabase/gigs";
+import { isNominationClosed } from "@/lib/nomination-deadline";
 import type { NominationFormValues } from "@/lib/nomination";
 import {
 	enqueueSongNotification,
@@ -65,7 +67,20 @@ export async function addNomination(gigId: string, payload: NominationFormValues
 		throw new Error("이 공연의 참여자로 등록되지 않았습니다.");
 	}
 
-	// 3. nominations 테이블에 Insert
+	// 3. 제출 시점의 마감을 검사하여 미리 열어 둔 폼에서도 등록을 차단.
+	const { data: gig, error: gigError } = await supabase
+		.from(SUPABASE_GIGS_TABLE)
+		.select("meeting_date")
+		.eq("id", numericGigId)
+		.maybeSingle();
+	if (gigError || !gig) {
+		throw new Error("공연 정보를 확인할 수 없습니다.");
+	}
+	if (!isAdmin && isNominationClosed(gig.meeting_date)) {
+		throw new Error("선곡회의 접수가 마감되었습니다.");
+	}
+
+	// 4. nominations 테이블에 Insert
 	const { data: inserted, error } = await supabase
 		.from("nominations")
 		.insert({
@@ -88,7 +103,7 @@ export async function addNomination(gigId: string, payload: NominationFormValues
 		throw new Error("후보곡 등록 중 오류가 발생했습니다: " + (error?.message || ""));
 	}
 
-	// 4. 알림 큐를 생성하고 현재 요청 안에서 즉시 처리
+	// 5. 알림 큐를 생성하고 현재 요청 안에서 즉시 처리
 	try {
 		const queueId = await enqueueSongNotification(numericGigId, inserted.id, user.id);
 		if (queueId !== null) {
