@@ -4,6 +4,7 @@ import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { atPushDeviceStage, PushDeviceError } from "@/lib/firebase/push-device-diagnostics";
 
 const RECEIPT_LIFETIME_SECONDS = 365 * 24 * 60 * 60;
 const RECEIPT_DOMAIN = "sokna:push-device-receipt:v1\0";
@@ -25,7 +26,7 @@ export interface VerifiedPushProfile {
 
 function signingKey() {
 	const key = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
-	if (!key) throw new Error("Push device verification is unavailable.");
+	if (!key) throw new PushDeviceError("receipt-sign");
 	return key;
 }
 
@@ -38,11 +39,11 @@ function signature(body: string) {
 }
 
 async function readReceipt(): Promise<DeviceReceipt | null> {
-	const value = (await cookies()).get(PUSH_DEVICE_COOKIE)?.value;
+	const value = await atPushDeviceStage("receipt-read", async () => (await cookies()).get(PUSH_DEVICE_COOKIE)?.value);
 	if (!value || value.length > 2048) return null;
 	const parts = value.split(".");
 	if (parts.length !== 2 || !/^[A-Za-z0-9_-]+$/.test(parts[0]) || !/^[A-Za-z0-9_-]{43}$/.test(parts[1])) return null;
-	const expected = signature(parts[0]);
+	const expected = await atPushDeviceStage("receipt-sign", () => signature(parts[0]));
 	const actual = Buffer.from(parts[1], "base64url");
 	if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) return null;
 	try {
@@ -65,42 +66,44 @@ export async function issuePushDeviceReceipt(profile: Pick<VerifiedPushProfile, 
 		expiresAt: Math.floor(Date.now() / 1000) + RECEIPT_LIFETIME_SECONDS,
 	};
 	const body = Buffer.from(JSON.stringify(receipt)).toString("base64url");
-	const value = body + "." + signature(body).toString("base64url");
-	(await cookies()).set(PUSH_DEVICE_COOKIE, value, {
+	const value = body + "." + (await atPushDeviceStage("receipt-sign", () => signature(body))).toString("base64url");
+	await atPushDeviceStage("receipt-write", async () => (await cookies()).set(PUSH_DEVICE_COOKIE, value, {
 		httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/",
 		maxAge: RECEIPT_LIFETIME_SECONDS,
-	});
+	}));
 }
 
 export async function clearPushDeviceReceipt() {
-	(await cookies()).delete(PUSH_DEVICE_COOKIE);
+	await atPushDeviceStage("receipt-clear", async () => (await cookies()).delete(PUSH_DEVICE_COOKIE));
 }
 
 /** A signed device receipt is required before accessing another account's or an unbound row. */
 export async function getReceiptPushProfile(token?: string | null): Promise<VerifiedPushProfile | null> {
 	const receipt = await readReceipt();
 	if (!receipt || (token && tokenHash(token) !== receipt.tokenHash)) return null;
-	const { data, error } = await createServiceClient().from("profiles")
-		.select("id, fcm_token, user_id").eq("id", receipt.profileId).maybeSingle();
-	if (error) throw new Error("Push device verification is unavailable.");
+	const { data, error } = await atPushDeviceStage("receipt-profile-read", () => createServiceClient().from("profiles")
+		.select("id, fcm_token, user_id").eq("id", receipt.profileId).maybeSingle());
+	if (error) throw new PushDeviceError("receipt-profile-read", error);
 	if (!data || tokenHash(data.fcm_token) !== receipt.tokenHash) return null;
 	return data;
 }
 
 /** Only a confirmed missing session means signed out; auth/network failures must not rebind devices. */
 export async function getPushSession() {
-	const supabase = await createClient();
-	const { data: { user }, error } = await supabase.auth.getUser();
-	if (error && error.name !== "AuthSessionMissingError") throw new Error("Push session verification is unavailable.");
+	const supabase = await atPushDeviceStage("session", createClient);
+	const { data: { user }, error } = await atPushDeviceStage("session", () => supabase.auth.getUser());
+	if (error && error.name !== "AuthSessionMissingError") throw new PushDeviceError("session", error);
 	return { supabase, user: error ? null : user };
 }
 
 export async function bindPushProfile(profile: VerifiedPushProfile, userId: string | null): Promise<boolean> {
 	if (profile.user_id === userId) return true;
-	let query = createServiceClient().from("profiles").update({ user_id: userId, updated_at: new Date().toISOString() })
-		.eq("id", profile.id).eq("fcm_token", profile.fcm_token);
-	query = profile.user_id === null ? query.is("user_id", null) : query.eq("user_id", profile.user_id);
-	const { data, error } = await query.select("id").maybeSingle();
-	if (error) throw new Error("Push device binding is unavailable.");
+	const { data, error } = await atPushDeviceStage("profile-bind", () => {
+		let query = createServiceClient().from("profiles").update({ user_id: userId, updated_at: new Date().toISOString() })
+			.eq("id", profile.id).eq("fcm_token", profile.fcm_token);
+		query = profile.user_id === null ? query.is("user_id", null) : query.eq("user_id", profile.user_id);
+		return query.select("id").maybeSingle();
+	});
+	if (error) throw new PushDeviceError("profile-bind", error);
 	return Boolean(data);
 }

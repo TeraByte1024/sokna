@@ -410,3 +410,28 @@ test("failures crossing the original expiry during dispatch are terminal immedia
   assert.equal(f.db.notifications[0].push_status, "failed");
   assert.equal(f.db.notifications[0].push_error, "retry_window_expired");
 });
+
+
+test("missing Firebase Admin configuration preserves the device and retries after configuration is corrected", async () => {
+  const error = Object.assign(new Error("private server configuration values"), { code: "app/missing-configuration" });
+  const f = fixture(basic(), [error, [success]]);
+  await f.push.processPendingPushNotifications();
+  const row = f.db.notifications[0];
+  assert.equal(row.push_status, "pending");
+  assert.equal(row.push_error, "retryable_delivery_failure");
+  assert.equal(row.push_sent_at, null);
+  assert.deepEqual(row.push_progress, {
+    successfulProfileIds: [], failures: [{ profileId: "phone", code: "app/missing-configuration", retryable: true }],
+  });
+  assert.equal(f.db.profiles.length, 1);
+  assert.equal(f.db.profiles[0].fcm_token, "secret-token-phone");
+  assert.doesNotMatch(JSON.stringify([row, f.logs]), /private server|secret-token/);
+  assert.equal(row.push_attempts, 1);
+  f.advance(60_001);
+  await f.push.processPendingPushNotifications();
+  assert.equal(row.push_status, "accepted");
+  assert.equal(row.push_error, null);
+  assert.deepEqual(row.push_progress, { successfulProfileIds: ["phone"], failures: [] });
+  assert.equal(row.push_attempts, 2);
+  assert.equal(f.sends[0].data.tag, f.sends[1].data.tag);
+});

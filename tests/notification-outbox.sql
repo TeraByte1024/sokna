@@ -91,6 +91,45 @@ BEGIN
 END $fixture$;
 END_SETUP_BEFORE_MIGRATION */
 
+/* SETUP_GUARD_FAILURE_BEFORE_MIGRATION
+-- Run after SETUP_BEFORE_MIGRATION in a separate isolated legacy database.
+-- The migration must fail with SQLSTATE 55000. ROLLBACK its failed transaction
+-- before running ASSERT_GUARD_FAILURE_AFTER_ROLLBACK below.
+INSERT INTO public.notifications (id, user_id, title, body, link, created_at,
+  push_eligible, push_status, push_error)
+SELECT '40000000-0000-4000-8000-000000000001'::uuid,
+  '20000000-0000-4000-8000-000000000002'::uuid,
+  'Legacy random-ID snapshot', 'Preserve this failed delivery',
+  '/gigs/' || q.gig_id::text || '/nominations', now(),
+  true, 'failed', 'legacy_failure'
+FROM public.gig_notification_queue q
+JOIN notification_migration_test_fixture f ON f.queue_id = q.id
+WHERE f.label = 'fresh';
+END_SETUP_GUARD_FAILURE_BEFORE_MIGRATION */
+
+/* ASSERT_GUARD_FAILURE_AFTER_ROLLBACK
+DO $guard_rollback_assertions$
+BEGIN
+  IF to_regclass('public.gig_notification_queue') IS NULL
+    OR EXISTS (SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'notifications'
+        AND column_name IN ('event_type', 'event_key', 'push_attempts', 'push_next_attempt_at', 'push_progress'))
+    OR NOT EXISTS (SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'notifications' AND column_name = 'push_eligible')
+    OR NOT EXISTS (SELECT 1 FROM public.notifications
+      WHERE id = '40000000-0000-4000-8000-000000000001'
+        AND title = 'Legacy random-ID snapshot' AND body = 'Preserve this failed delivery'
+        AND push_status = 'failed' AND push_error = 'legacy_failure')
+    OR NOT EXISTS (SELECT 1 FROM public.notifications n
+      JOIN notification_migration_test_fixture f ON f.notification_id = n.id
+      WHERE f.label = 'existing' AND n.push_status = 'sent' AND n.read_at = f.read_at)
+    OR EXISTS (SELECT 1 FROM pg_trigger
+      WHERE tgname IN ('users_notify_member_application', 'nominations_notify_added')) THEN
+    RAISE EXCEPTION 'Ambiguous legacy IDs must abort without changing schema, history, or triggers';
+  END IF;
+END $guard_rollback_assertions$;
+END_ASSERT_GUARD_FAILURE_AFTER_ROLLBACK */
+
 -- Run only against an isolated test database after the notification-outbox migration.
 -- All fixture writes, including schema probes, are rolled back.
 BEGIN;

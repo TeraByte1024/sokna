@@ -2,10 +2,40 @@
 -- Apply with the matching application release: the old push_eligible/processing
 -- contract and the intermediate nomination queue are retired together.
 BEGIN;
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '60s';
 
 -- Prevent business writes and an old queue worker from straddling the handoff.
 LOCK TABLE public.users, public.nominations, public.gig_notification_queue,
   public.notifications IN SHARE ROW EXCLUSIVE MODE;
+
+-- The deployed legacy worker inserted random notification IDs. Its failed queue
+-- attempts can leave those rows behind before returning the queue to pending.
+-- A later, deterministic-ID worker is also supported, but random IDs cannot be
+-- assigned to a queue safely from message text alone. Refuse ambiguous recovery
+-- before changing any schema or data; an operator must resolve that mapping.
+DO $legacy_random_id_guard$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM public.gig_notification_queue q
+    JOIN public.notifications n
+      ON n.link = '/gigs/' || q.gig_id::text || '/nominations'
+      AND n.created_at >= q.created_at
+    WHERE q.status IN ('pending', 'processing')
+      AND NOT EXISTS (
+        SELECT 1 FROM public.gig_notification_queue known_queue
+        WHERE known_queue.gig_id = q.gig_id
+          AND n.id = extensions.uuid_generate_v5(
+            'af7345df-195a-4a39-98af-239fe2a2e3bf'::uuid,
+            'nomination:' || known_queue.id::text || ':' || n.user_id::text
+          )
+      )
+  ) THEN
+    RAISE EXCEPTION 'Legacy notification mapping is ambiguous; resolve existing random-ID notifications before migrating the queue'
+      USING ERRCODE = '55000';
+  END IF;
+END $legacy_random_id_guard$;
 
 ALTER TABLE public.notifications
   ADD COLUMN event_type text NOT NULL DEFAULT 'legacy',
@@ -311,7 +341,7 @@ CREATE TRIGGER nominations_notify_added
   AFTER INSERT ON public.nominations
   FOR EACH ROW EXECUTE FUNCTION public.notify_nomination_added();
 
--- Legacy queue handoff. UUID v5 must match the old Node namespace/name exactly:
+-- Legacy queue handoff. UUID v5 must match the deterministic worker exactly:
 -- an interrupted worker may already have written an outbox before updating its
 -- queue row. Do not replace its content, read state, timestamps, or push state.
 DO $$

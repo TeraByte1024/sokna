@@ -359,6 +359,7 @@ function serverFixture({ userId = "user-a", rowOwner = "user-a", rowPresent = tr
   };
   const actions = loadSource("app/profile/notification-actions.ts", {
     "next/cache": { revalidatePath() {} },
+    "@/lib/firebase/push-device-diagnostics": loadSource("lib/firebase/push-device-diagnostics.ts", { "server-only": {} }),
     "@/lib/supabase/service": { createServiceClient: () => client },
     "@/lib/firebase/push-device-binding": {
       getPushSession: async () => ({ supabase: client, user: userId ? { id: userId } : null }),

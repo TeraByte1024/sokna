@@ -12,6 +12,7 @@ const nativeRequire = createRequire(import.meta.url);
 const profileId = "02f86d84-4940-419b-bf87-dc9e5632fb3e";
 const otherProfileId = "e5f4d63f-7200-421c-9132-d6d24b5a791e";
 const files = {
+  diagnostics: "lib/firebase/push-device-diagnostics.ts",
   binding: "lib/firebase/push-device-binding.ts",
   actions: "app/profile/notification-actions.ts",
   authorize: "app/api/push/authorize/route.ts",
@@ -29,15 +30,26 @@ function fixture({ owner = "user-b", token = "browser-token", userId = "user-b",
   const cookies = new Map();
   const writes = [];
   const operations = [];
+  const logs = [];
+  const cookieFailures = new Map();
   let authError = null;
   let authException = null;
   let queryFailure = null;
   let currentUser = userId;
   const db = { profiles, users, notifications };
   const cookieStore = {
-    get: (name) => cookies.has(name) ? { value: cookies.get(name) } : undefined,
-    set(name, value, options) { cookies.set(name, value); writes.push({ name, value, options }); },
-    delete: (name) => cookies.delete(name),
+    get(name) {
+      if (cookieFailures.has("get")) throw cookieFailures.get("get");
+      return cookies.has(name) ? { value: cookies.get(name) } : undefined;
+    },
+    set(name, value, options) {
+      if (cookieFailures.has("set")) throw cookieFailures.get("set");
+      cookies.set(name, value); writes.push({ name, value, options });
+    },
+    delete(name) {
+      if (cookieFailures.has("delete")) throw cookieFailures.get("delete");
+      return cookies.delete(name);
+    },
   };
   class Query {
     constructor(table, service) { this.table = table; this.service = service; this.kind = "select"; this.filters = []; }
@@ -52,7 +64,8 @@ function fixture({ owner = "user-b", token = "browser-token", userId = "user-b",
     then(resolve, reject) { return Promise.resolve().then(() => this.execute()).then(resolve, reject); }
     execute() {
       operations.push({ table: this.table, service: this.service, kind: this.kind, values: this.values });
-      if (queryFailure?.(this)) return { data: null, error: { code: "DB_UNAVAILABLE" } };
+      const failure = queryFailure?.(this);
+      if (failure) return { data: null, error: failure === true ? { code: "DB_UNAVAILABLE" } : failure };
       let rows = db[this.table].filter((row) => this.filters.every((filter) => filter(row)));
       if (!this.service && this.table === "profiles") rows = rows.filter((row) => row.user_id === currentUser);
       if (this.kind === "insert") {
@@ -89,21 +102,24 @@ function fixture({ owner = "user-b", token = "browser-token", userId = "user-b",
       "@/lib/supabase/server": { createClient: async () => client },
       "@/lib/supabase/service": { createServiceClient: () => service },
     };
-    if (key !== "binding") dependencies["@/lib/firebase/push-device-binding"] = load("binding");
-    vm.runInThisContext(`(function(require,module,exports,process){${source[key]}\n})`, { filename: files[key] })(
+    if (key !== "diagnostics") dependencies["@/lib/firebase/push-device-diagnostics"] = load("diagnostics");
+    if (key === "actions" || key === "authorize") dependencies["@/lib/firebase/push-device-binding"] = load("binding");
+    vm.runInThisContext(`(function(require,module,exports,process,console){${source[key]}\n})`, { filename: files[key] })(
       (name) => { assert.ok(Object.hasOwn(dependencies, name), `Unexpected dependency ${name}`); return dependencies[name]; },
-      loadedModule, loadedModule.exports, { env },
+      loadedModule, loadedModule.exports, { env }, { error: (...args) => logs.push(args) },
     );
     modules[key] = loadedModule.exports;
     return loadedModule.exports;
   }
   return {
-    profiles, users, notifications, cookies, writes, operations, env,
+    profiles, users, notifications, cookies, writes, operations, env, logs,
+    diagnostics: load("diagnostics"),
     binding: load("binding"), actions: load("actions"), authorize: load("authorize"),
     signIn: (id) => { currentUser = id; authError = null; authException = null; },
     failAuth: (error) => { authError = error; },
     throwAuth: (error) => { authException = error; },
     failQuery: (callback) => { queryFailure = callback; },
+    failCookies: (operation, error) => cookieFailures.set(operation, error),
   };
 }
 
@@ -314,4 +330,98 @@ test("temporary notification lookup failures return 503 without content or devic
   assert.equal(result.status, 503);
   assert.deepEqual(result.body, { userId: null });
   assert.equal(f.profiles[0].user_id, "user-b");
+});
+
+
+test("device actions log only safe auth metadata and preserve registrations on auth failure", async () => {
+  for (const throws of [false, true]) {
+    const f = fixture();
+    const sensitive = "secret-token-cookie-user-credential";
+    const failure = Object.assign(new Error(sensitive), {
+      code: "bad_jwt", status: 401, details: sensitive, hint: sensitive,
+      cause: { token: sensitive }, userId: sensitive, stack: sensitive,
+    });
+    if (throws) f.throwAuth(failure); else f.failAuth(failure);
+    const result = await f.actions.getPushDeviceStatusAction("browser-token");
+    assert.equal(result.ok, false);
+    assert.deepEqual(f.logs, [["[push-device] operation failed", { action: "status", stage: "session", code: "bad_jwt", status: 401 }]]);
+    assert.equal(JSON.stringify([f.logs, result]).includes(sensitive), false);
+    assert.equal(f.profiles[0].user_id, "user-b");
+    assert.equal(f.operations.length, 0);
+    assert.equal(f.writes.length, 0);
+  }
+});
+
+test("receipt failures distinguish cookie reading, signing, writing, and clearing", async () => {
+  for (const operation of ["get", "sign", "set", "delete"]) {
+    const f = fixture();
+    if (operation === "delete") await f.actions.getPushDeviceStatusAction("browser-token");
+    if (operation === "sign") delete f.env.SUPABASE_SECRET_KEY;
+    else f.failCookies(operation, new Error("private cookie value and browser token"));
+    const result = operation === "delete"
+      ? await f.actions.unregisterPushTokenAction("browser-token")
+      : await f.actions.getPushDeviceStatusAction("browser-token");
+    assert.equal(result.ok, false);
+    const stage = { get: "receipt-read", sign: "receipt-sign", set: "receipt-write", delete: "receipt-clear" }[operation];
+    assert.deepEqual(f.logs, [["[push-device] operation failed", { action: operation === "delete" ? "unregister" : "status", stage }]]);
+    assert.equal(JSON.stringify(f.logs).includes("private cookie"), false);
+  }
+});
+
+test("toggle registration and token refresh retain receipt write failures in server diagnostics", async () => {
+  for (const action of ["register", "refresh"]) {
+    const f = fixture();
+    if (action === "refresh") await f.actions.getPushDeviceStatusAction("browser-token");
+    f.failCookies("set", new Error("Cookies can only be modified in a Server Action"));
+    const result = action === "register"
+      ? await f.actions.registerPushTokenAction("browser-token", "private device name", "user-b")
+      : await f.actions.refreshPushTokenAction("browser-token", "private rotated token", "private device name", "user-b");
+    assert.equal(result.ok, false);
+    assert.deepEqual(f.logs, [["[push-device] operation failed", { action, stage: "receipt-write" }]]);
+    assert.equal(JSON.stringify(f.logs).includes("private"), false);
+  }
+});
+
+test("returned database errors retain their failing action and query stage", async () => {
+  const cases = [
+    { action: "status", stage: "consent-read", table: "users", run: (f) => f.actions.getPushDeviceStatusAction("browser-token") },
+    { action: "status", stage: "own-profile-read", table: "profiles", run: (f) => f.actions.getPushDeviceStatusAction("browser-token") },
+    { action: "status", stage: "receipt-profile-read", receipt: true, table: "profiles", run: (f) => f.actions.getPushDeviceStatusAction("browser-token") },
+    { action: "status", stage: "profile-bind", receipt: true, kind: "update", setup: (f) => f.signIn("user-c"), run: (f) => f.actions.getPushDeviceStatusAction("browser-token") },
+    { action: "register", stage: "profile-insert", kind: "insert", run: (f) => f.actions.registerPushTokenAction("fresh-token", "browser", "user-b") },
+    { action: "refresh", stage: "profile-refresh", receipt: true, kind: "update", run: (f) => f.actions.refreshPushTokenAction("browser-token", "fresh-token", "browser", "user-b") },
+    { action: "unregister", stage: "profile-delete", receipt: true, kind: "delete", run: (f) => f.actions.unregisterPushTokenAction("browser-token") },
+    { action: "enable-consent", stage: "consent-write", kind: "update", run: (f) => f.actions.enableMarketingOptInAction() },
+  ];
+  for (const scenario of cases) {
+    const f = fixture();
+    if (scenario.receipt) await f.actions.getPushDeviceStatusAction("browser-token");
+    scenario.setup?.(f);
+    f.failQuery((query) => (!scenario.table || query.table === scenario.table) && (!scenario.kind || query.kind === scenario.kind)
+      ? { code: "42501", status: 403, message: "private query and credentials", details: "private token", hint: "private cookie" } : null);
+    const result = await scenario.run(f);
+    assert.equal(result.ok, false, scenario.stage);
+    assert.deepEqual(f.logs, [["[push-device] operation failed", { action: scenario.action, stage: scenario.stage, code: "42501", status: 403 }]], scenario.stage);
+    assert.equal(JSON.stringify(f.logs).includes("private"), false);
+  }
+});
+
+test("thrown database failures receive the same safe stage metadata as returned failures", async () => {
+  const f = fixture();
+  f.failQuery((query) => {
+    if (query.table === "profiles") throw Object.assign(new Error("sensitive request headers"), { code: "PGRST003", status: 503 });
+    return null;
+  });
+  assert.equal((await f.actions.getPushDeviceStatusAction("browser-token")).ok, false);
+  assert.deepEqual(f.logs, [["[push-device] operation failed", { action: "status", stage: "own-profile-read", code: "PGRST003", status: 503 }]]);
+});
+
+test("unknown error codes, arbitrary statuses and raw provider text never enter diagnostics", async () => {
+  for (const status of ["503", 200, 600, Infinity, 401.5]) {
+    const f = fixture();
+    const secret = "private-token-cookie-user-id-credential";
+    f.failAuth({ code: secret, status, message: secret, details: secret, cause: secret, stack: secret });
+    assert.equal((await f.actions.getPushDeviceStatusAction("browser-token")).ok, false);
+    assert.deepEqual(f.logs, [["[push-device] operation failed", { action: "status", stage: "session" }]]);
+  }
 });

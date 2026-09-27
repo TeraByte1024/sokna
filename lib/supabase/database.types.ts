@@ -275,17 +275,17 @@ export type Database = {
       }
       notifications: {
         Row: {
-          event_key: string
-          event_type: string
-          push_attempts: number
-          push_next_attempt_at: string
-          push_progress: Json
           body: string | null
           created_at: string
+          event_key: string
+          event_type: string
           id: string
           link: string | null
           push_attempted_at: string | null
+          push_attempts: number
           push_error: string | null
+          push_next_attempt_at: string
+          push_progress: Json
           push_sent_at: string | null
           push_status: string
           read_at: string | null
@@ -293,17 +293,17 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
-          event_key?: string
-          event_type?: string
-          push_attempts?: number
-          push_next_attempt_at?: string
-          push_progress?: Json
           body?: string | null
           created_at?: string
+          event_key?: string
+          event_type?: string
           id?: string
           link?: string | null
           push_attempted_at?: string | null
+          push_attempts?: number
           push_error?: string | null
+          push_next_attempt_at?: string
+          push_progress?: Json
           push_sent_at?: string | null
           push_status?: string
           read_at?: string | null
@@ -311,17 +311,17 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
-          event_key?: string
-          event_type?: string
-          push_attempts?: number
-          push_next_attempt_at?: string
-          push_progress?: Json
           body?: string | null
           created_at?: string
+          event_key?: string
+          event_type?: string
           id?: string
           link?: string | null
           push_attempted_at?: string | null
+          push_attempts?: number
           push_error?: string | null
+          push_next_attempt_at?: string
+          push_progress?: Json
           push_sent_at?: string | null
           push_status?: string
           read_at?: string | null
@@ -588,19 +588,19 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      create_app_notification: {
-        Args: {
-          p_user_id: string
-          p_event_type: string
-          p_event_key: string
-          p_context: Json
-          p_notification_id?: string
-        }
-        Returns: string
-      }
       approve_member_with_notification: {
         Args: { p_user_id: string }
         Returns: boolean
+      }
+      create_app_notification: {
+        Args: {
+          p_context: Json
+          p_event_key: string
+          p_event_type: string
+          p_notification_id?: string
+          p_user_id: string
+        }
+        Returns: string
       }
       delete_my_account: { Args: { p_confirmation: string }; Returns: boolean }
       is_admin: { Args: never; Returns: boolean }

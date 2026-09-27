@@ -295,7 +295,7 @@ erDiagram
 로그아웃/계정 전환은 기기 행과 토큰을 보존하고 `user_id`만 변경합니다. 기기 증명 쿠키와 서버 세션을 확인한 서버 액션만 이 연결을 바꿀 수 있습니다. 클라이언트가 제출한 토큰만으로 타계정 또는 연결 해제된 행을 재할당하지 않습니다. 기존 nullable 컬럼을 사용하므로 스키마 변경은 없습니다. 기기 OFF/동의 철회/탈퇴 시 삭제 정책은 유지합니다.
 
 ### 2.7 `notifications` (계정 알림함 및 푸시 발송 대기)
-회원별 인앱 알림과 푸시 발송 상태를 한 행에서 관리합니다. 아래 구조는 `20260927000000_simplify_notification_outbox.sql` 적용 후 기준이며, 공유 운영 DB에는 아직 적용하지 않았습니다. 새 서버 코드와 함께 전환해야 합니다.
+회원별 인앱 알림과 푸시 발송 상태를 한 행에서 관리합니다. `20260927000000_simplify_notification_outbox.sql`은 2026-09-27 공유 운영 DB에 적용했습니다. DB 스키마와 재생성 타입을 확인했으며, 새 서버 코드의 운영 배포와 cron 동작 확인은 별도 전환 작업입니다.
 
 | 컬럼명 | 데이터 타입 | Nullable | 기본값 | 설명 |
 | :--- | :--- | :--- | :--- | :--- |
@@ -323,7 +323,9 @@ erDiagram
 
 **공통 생성 경로**: 내부 DB 함수 `create_app_notification(user_id, event_type, event_key, context, notification_id?)`가 이벤트별 문구를 생성합니다. PUBLIC/anon/authenticated 직접 실행 권한은 없습니다. 완성된 가입 신청의 users 트리거, 후보곡 INSERT의 nominations 트리거, 관리자 전용 `approve_member_with_notification` RPC가 호출하여 업무 변경과 알림 생성을 같은 트랜잭션으로 저장합니다. 승인 RPC는 이미 처리된 사용자의 경우 false를 반환합니다.
 
-**큐 이관**: `gig_notification_queue`와 `push_eligible`을 제거합니다. 미처리 큐는 이전 UUIDv5와 같은 ID로 이관해 기존 알림을 덮어쓰지 않습니다. 기존 sent는 accepted가 됩니다. 24시간 이상 지난 큐에서 신규 생성한 알림은 인앱에 보존하되 동의자의 푸시는 failed/retry_window_expired로 종결합니다. [전환 및 처리 명세](../features/notification-outbox.md)를 참고하십시오.
+**큐 이관**: `gig_notification_queue`와 `push_eligible`을 제거했습니다. 미처리 큐와 연결이 불명확한 구 임의 UUID 알림이 있으면 마이그레이션이 SQLSTATE 55000으로 중단됩니다. 미처리 큐는 이전 UUIDv5와 같은 ID로 이관해 기존 알림을 덮어쓰지 않습니다. 기존 sent는 accepted가 됩니다. 24시간 이상 지난 큐에서 신규 생성한 알림은 인앱에 보존하되 동의자의 푸시는 failed/retry_window_expired로 종결합니다. [전환 및 처리 명세](../features/notification-outbox.md)를 참고하십시오.
+
+**전환 복구 사본**: `20260926235959_backup_notification_outbox.sql`이 비공개 `sokna_migration_backup_20260927` 스키마에 전환 직전 notifications 42건·queue 4건·교체 함수 2개의 정의 및 스키마 메타데이터를 저장했습니다. anon/authenticated/service_role의 스키마·테이블 권한을 제거하고 RLS를 활성화했습니다. 같은 DB 안의 복구 사본이므로 독립적인 전체 DB 백업을 대체하지 않습니다. 서비스 코드와 공개 API는 사용하지 않으며, 배포·데이터 보존 검증 및 복구 필요 여부 확인 후 제거합니다.
 
 **수신 제한**: FCM 발송 직전 수신 동의와 현재 계정에 연결된 profiles를 조회합니다. 표시/클릭 직전에도 현재 로그인 세션·기기 연결·동의를 확인합니다. 일반 users 삭제 시 알림은 보존하고 user_id만 해제하며, 본인 탈퇴는 수신 알림을 명시적으로 삭제합니다.
 

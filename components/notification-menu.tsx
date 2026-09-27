@@ -180,10 +180,21 @@ export function NotificationMenu({ userId, initialUnreadCount }: NotificationMen
             <p className="text-xs">아직 도착한 알림이 없습니다.</p>
           </div>
         ) : (
-          <div className="p-1" aria-busy={state.loading}>
+          <div className="space-y-1 p-1" aria-busy={state.loading}>
             {state.items.map((notification) => (
-              <div key={notification.id} className="flex items-start rounded-lg">
-                <DropdownMenuItem asChild disabled={state.deletingAll} textValue={notification.title ?? "알림"}>
+              <div key={notification.id} className={cn(
+                "flex items-start rounded-lg",
+                !notification.read_at && "bg-sky-50 dark:bg-sky-950/40",
+              )}>
+                <DropdownMenuItem
+                  asChild
+                  disabled={state.deletingAll}
+                  textValue={notification.title ?? "알림"}
+                  className={cn(
+                    "min-w-0 flex-1 scroll-mt-12 cursor-pointer items-start gap-2.5 rounded-lg px-3 py-3",
+                    !notification.read_at && "focus:bg-sky-100/70 dark:focus:bg-sky-900/40",
+                  )}
+                >
                   <Link
                     href={safeNotificationLink(notification.link)}
                     prefetch={false}
@@ -197,16 +208,12 @@ export function NotificationMenu({ userId, initialUnreadCount }: NotificationMen
                         });
                       }
                     }}
-                    className={cn(
-                      "flex min-w-0 flex-1 scroll-mt-12 cursor-pointer items-start gap-2.5 rounded-lg px-3 py-3 focus:bg-accent",
-                      !notification.read_at && "bg-primary/[0.04]",
-                    )}
                   >
-                    <span className={cn("mt-1.5 size-1.5 shrink-0 rounded-full", notification.read_at ? "bg-transparent" : "bg-primary")}>
+                    <span className={cn("mt-1.5 size-1.5 shrink-0 rounded-full", notification.read_at ? "bg-transparent" : "bg-sky-600 dark:bg-sky-400")}>
                       {!notification.read_at && <span className="sr-only">읽지 않음: </span>}
                     </span>
                     <span className="min-w-0 flex-1 space-y-1">
-                      <span className={cn("block break-words text-xs leading-relaxed", notification.read_at ? "font-medium text-foreground/80" : "font-semibold text-foreground")}>
+                      <span className={cn("block break-words text-xs leading-relaxed", notification.read_at ? "font-medium text-foreground/80" : "font-semibold text-sky-900 dark:text-sky-100")}>
                         {notification.title || "새 알림"}
                       </span>
                       {notification.body && <span className="block break-words text-xs leading-relaxed text-muted-foreground">{notification.body}</span>}
