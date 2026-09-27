@@ -64,6 +64,8 @@ export function createNotificationInbox(api: NotificationInboxApi, userId: strin
   let state = emptySnapshot(userId, unreadCount);
   let accountVersion = 0;
   let listVersion = 0;
+  let refreshRequest: { version: number; promise: Promise<void> } | null = null;
+  let lastRefresh: { version: number; completedAt: number } | null = null;
   let writes: Promise<unknown> = Promise.resolve();
   // A failed delete may already have committed before its count response failed.
   // Retrying after a refresh must keep the original boundary, not delete new arrivals.
@@ -105,6 +107,7 @@ export function createNotificationInbox(api: NotificationInboxApi, userId: strin
       const items = more
         ? [...new Map([...state.items, ...result.items].map((item) => [item.id, item])).values()]
         : result.items;
+      if (!more) lastRefresh = { version: request, completedAt: Date.now() };
       publish({ items, unreadCount: result.unreadCount, nextCursor: result.nextCursor, cutoff: result.cutoff });
     } catch {
       if (isCurrent(version, expectedUserId) && request === listVersion) {
@@ -115,6 +118,31 @@ export function createNotificationInbox(api: NotificationInboxApi, userId: strin
         publish({ loading: false, loadingMore: false });
       }
     }
+  }
+
+  function refresh({ background = false, invalidate = false }: { background?: boolean; invalidate?: boolean } = {}) {
+    if (!state.userId) return Promise.resolve();
+    // Only share requests that still belong to the current account and precede no mutation.
+    // A push signals new data, so it must not reuse a request sent before that notification.
+    if (!invalidate && refreshRequest?.version === listVersion) return refreshRequest.promise;
+    if (background && lastRefresh?.version === listVersion && Date.now() - lastRefresh.completedAt < 1_000) {
+      return Promise.resolve();
+    }
+    const promise = load(false);
+    const request = { version: listVersion, promise };
+    refreshRequest = request;
+    void promise.finally(() => {
+      if (refreshRequest === request) refreshRequest = null;
+    });
+    return promise;
+  }
+
+  async function refreshAfterReconnect(isActive: () => boolean) {
+    const interruptedVersion = refreshRequest?.version;
+    await refresh({ background: true });
+    // Online may have shared a request sent while offline. Retry its failure once,
+    // only while that request still owns this account's list and the menu is mounted.
+    if (interruptedVersion === listVersion && state.error && isActive()) await refresh();
   }
 
   function mutate(kind: "single" | "all" | "delete" | "deleteAll", id?: string) {
@@ -180,7 +208,8 @@ export function createNotificationInbox(api: NotificationInboxApi, userId: strin
       return () => { listeners.delete(listener); };
     },
     setUser,
-    refresh: () => load(false),
+    refresh,
+    refreshAfterReconnect,
     loadMore: () => load(true),
     remove: (id: string) => mutate("delete", id),
     removeAll: () => mutate("deleteAll"),

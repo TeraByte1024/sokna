@@ -50,12 +50,22 @@ export function NotificationMenu({ userId, initialUnreadCount }: NotificationMen
   const state = useSyncExternalStore(inbox.subscribe, inbox.getSnapshot, inbox.getSnapshot);
 
   useEffect(() => {
+    let active = true;
+    let reconnecting: Promise<void> | null = null;
     inbox.setUser(userId, initialUnreadCount);
     void inbox.refresh();
-    const refresh = () => { void inbox.refresh(); };
+    const refresh = () => {
+      if (document.visibilityState === "visible") void inbox.refresh({ background: true });
+    };
+    const onOnline = () => {
+      if (document.visibilityState !== "visible" || reconnecting) return;
+      const request = inbox.refreshAfterReconnect(() => active);
+      reconnecting = request;
+      void request.finally(() => { if (reconnecting === request) reconnecting = null; });
+    };
     const onVisible = () => { if (document.visibilityState === "visible") refresh(); };
     const onNotificationChanged = (event: MessageEvent) => {
-      if (event.data?.type === "SOKNA_NOTIFICATIONS_CHANGED") refresh();
+      if (event.data?.type === "SOKNA_NOTIFICATIONS_CHANGED") void inbox.refresh({ invalidate: true });
     };
     const onConfirmedNavigation = (event: Event) => {
       const navigation = (event as CustomEvent<ConfirmedLinkNavigation>).detail;
@@ -69,19 +79,21 @@ export function NotificationMenu({ userId, initialUnreadCount }: NotificationMen
     };
     const { data } = createClient().auth.onAuthStateChange((_event, session) => {
       if (inbox.setUser(session?.user.id ?? null)) {
+        reconnecting = null;
         setOpen(false);
         void inbox.refresh();
       }
     });
     window.addEventListener("focus", refresh);
-    window.addEventListener("online", refresh);
+    window.addEventListener("online", onOnline);
     window.addEventListener(CONFIRMED_LINK_NAVIGATION_EVENT, onConfirmedNavigation);
     document.addEventListener("visibilitychange", onVisible);
     navigator.serviceWorker?.addEventListener("message", onNotificationChanged);
     return () => {
+      active = false;
       data.subscription.unsubscribe();
       window.removeEventListener("focus", refresh);
-      window.removeEventListener("online", refresh);
+      window.removeEventListener("online", onOnline);
       window.removeEventListener(CONFIRMED_LINK_NAVIGATION_EVENT, onConfirmedNavigation);
       document.removeEventListener("visibilitychange", onVisible);
       navigator.serviceWorker?.removeEventListener("message", onNotificationChanged);

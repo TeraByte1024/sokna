@@ -36,6 +36,9 @@ let messagingSupported: boolean | null = null;
 let supportCheckRequested = false;
 let signingOut = false;
 let suspendedUserId: string | null = null;
+const PASSIVE_REFRESH_INTERVAL_MS = 1_000;
+let lastCheckedAt = -Infinity;
+let lastCheckedPermission: DeviceState["permission"] | null = null;
 
 export const getPushDeviceSnapshot = () => state;
 export const getServerPushDeviceSnapshot = () => initialState;
@@ -146,6 +149,8 @@ async function currentBrowserToken() {
 async function validateDevice(): Promise<DeviceState> {
 	if (isSigningOut()) return state;
 	const version = invalidationVersion;
+	const checkedPermission = browserPermission();
+	let checkFailed = false;
 	publish({ permission: permission(), hasRegisteredToken: false, isChecking: true });
 	try {
 		if (supportCheckRequested || browserPermission() === "granted") {
@@ -157,11 +162,13 @@ async function validateDevice(): Promise<DeviceState> {
 		const local = readLocalDevice();
 		const account = await getPushDeviceStatusAction(local?.token ?? null);
 		if (!account.ok) throw new Error(account.error);
+		if (isSigningOut() || version !== invalidationVersion) return state;
 		if (local && (!account.userId || (local.owner && local.owner !== account.userId))) {
 			await closeDisplayedPushNotifications().catch((error) => {
 				console.error("이전 계정의 알림 닫기 실패:", error);
 			});
 		}
+		if (isSigningOut() || version !== invalidationVersion) return state;
 		publish({ userId: account.userId, hasMarketingConsent: account.marketingOptIn });
 		if (!account.userId) clearLocalOwner();
 		else if (local && account.registered) saveLocalDevice(local.token, account.userId);
@@ -169,15 +176,24 @@ async function validateDevice(): Promise<DeviceState> {
 			|| permission() !== "granted" || isSigningOut() || version !== invalidationVersion) return state;
 
 		const token = await currentBrowserToken();
-		// UPDATE-only also checks ownership and that the registration was not removed mid-check.
-		const result = await refreshPushTokenAction(local.token, token, navigator.userAgent, account.userId);
-		if (!result.ok) throw new Error(result.error);
+		if (isSigningOut() || version !== invalidationVersion) return state;
+		// Status verification already bound this device. Only a rotated token needs a write.
+		if (token !== local.token) {
+			// UPDATE-only cannot recreate a registration removed while getToken was running.
+			const result = await refreshPushTokenAction(local.token, token, navigator.userAgent, account.userId);
+			if (!result.ok) throw new Error(result.error);
+		}
 		if (readLocalDevice()?.token === local.token) saveLocalDevice(token, account.userId);
 		if (version === invalidationVersion) publish({ permission: permission(), hasRegisteredToken: true });
 	} catch (error) {
+		checkFailed = true;
 		publish({ hasRegisteredToken: false });
 		console.error("기기 알림 상태 확인 실패:", error);
 	} finally {
+		if (version === invalidationVersion) {
+			lastCheckedAt = checkFailed ? -Infinity : Date.now();
+			lastCheckedPermission = checkedPermission;
+		}
 		publish({ isChecking: false });
 	}
 	return state;
@@ -301,27 +317,54 @@ export function startPushDeviceSync() {
 	if (typeof window === "undefined") return () => {};
 	let active = true;
 	let unsubscribeAuth: (() => void) | undefined;
+	let lastAuthUserId: string | null | undefined;
 	const refresh = () => {
 		invalidationVersion++;
 		publish({ hasRegisteredToken: false });
 		if (pendingRefresh) refreshAgain = true;
 		else void refreshPushDevice();
 	};
+	// Focus and visibility often describe the same resume. They must not invalidate
+	// an in-flight check or queue another one; identity/settings changes still do.
+	const onResume = () => {
+		if (lastCheckedPermission !== null && browserPermission() !== lastCheckedPermission) {
+			lastCheckedPermission = browserPermission();
+			refresh();
+			return;
+		}
+		if (pendingRefresh || Date.now() - lastCheckedAt < PASSIVE_REFRESH_INTERVAL_MS) return;
+		void refreshPushDevice();
+	};
+	const onOnline = () => {
+		const checking = pendingRefresh;
+		onResume();
+		// A request started offline can fail after the connection is already back.
+		if (checking) void checking.then(() => {
+			if (active && lastCheckedAt === -Infinity) void refreshPushDevice();
+		});
+	};
 	const onTokenChange = () => { if (!dispatchingChange) refresh(); };
-	const onVisible = () => { if (document.visibilityState === "visible") refresh(); };
+	const onVisible = () => { if (document.visibilityState === "visible") onResume(); };
 	const onStorage = (event: StorageEvent) => {
 		if (!event.key || event.key === PUSH_TOKEN_STORAGE_KEY || event.key === PUSH_TOKEN_OWNER_KEY || event.key === PUSH_SIGN_OUT_STORAGE_KEY) refresh();
 	};
-	window.addEventListener("focus", refresh);
-	window.addEventListener("online", refresh);
+	window.addEventListener("focus", onResume);
+	window.addEventListener("online", onOnline);
 	window.addEventListener("storage", onStorage);
 	window.addEventListener(PUSH_TOKEN_CHANGE_EVENT, onTokenChange);
 	document.addEventListener("visibilitychange", onVisible);
 	void import("@/lib/supabase/client").then(({ createClient }) => {
 		if (!active) return;
 		const { data } = createClient().auth.onAuthStateChange((event, session) => {
+			const nextUserId = session?.user.id ?? null;
+			const previousAuthUserId = lastAuthUserId === undefined ? state.userId : lastAuthUserId;
+			lastAuthUserId = nextUserId;
 			if (event === "INITIAL_SESSION") return;
-			if (event === "SIGNED_OUT" || (event === "SIGNED_IN" && session?.user.id !== state.userId)) {
+			// Compare observed auth events, not a potentially stale asynchronous check:
+			// A -> B -> A must invalidate B even while the displayed state still says A.
+			const accountChanged = nextUserId !== previousAuthUserId;
+			if ((event === "SIGNED_IN" || event === "TOKEN_REFRESHED") && !accountChanged) return;
+			if (event === "SIGNED_OUT" || accountChanged) {
 				notifyPushSessionChanged();
 			}
 			const previousUserId = suspendedUserId ?? readSignOutMarker()?.userId;
@@ -343,8 +386,8 @@ export function startPushDeviceSync() {
 	return () => {
 		active = false;
 		unsubscribeAuth?.();
-		window.removeEventListener("focus", refresh);
-		window.removeEventListener("online", refresh);
+		window.removeEventListener("focus", onResume);
+		window.removeEventListener("online", onOnline);
 		window.removeEventListener("storage", onStorage);
 		window.removeEventListener(PUSH_TOKEN_CHANGE_EVENT, onTokenChange);
 		document.removeEventListener("visibilitychange", onVisible);

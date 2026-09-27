@@ -24,12 +24,13 @@ function loadSource(relativePath, mocks, globals = {}) {
 }
 
 function fixture({ owner = null, registered = true, granted = true, supported = true, receipt = true } = {}) {
+  let now = Date.now();
   const values = new Map([["sokna-fcm-token", "old-token"]]);
   if (owner) values.set("sokna-fcm-token-owner", owner);
   const rows = new Map(registered ? [["old-token", "user-a"]] : []);
   const calls = [];
   const account = { userId: "user-a", consent: true, error: null };
-  const browser = { token: "old-token", beforeGetToken: null, authChanged: null, receipt, detachError: null, closedNotifications: 0, messages: [] };
+  const browser = { token: "old-token", beforeGetToken: null, beforeStatus: null, authChanged: null, receipt, detachError: null, closedNotifications: 0, messages: [] };
   const window = new EventTarget();
   window.Notification = { permission: granted ? "granted" : "default" };
   window.PushManager = {};
@@ -48,7 +49,9 @@ function fixture({ owner = null, registered = true, granted = true, supported = 
         browser.receipt = true;
         rows.set(token, account.userId);
       }
-      return { ok: true, userId: account.userId, marketingOptIn: Boolean(account.userId && account.consent), registered: Boolean(account.userId && rows.get(token) === account.userId) };
+      const result = { ok: true, userId: account.userId, marketingOptIn: Boolean(account.userId && account.consent), registered: Boolean(account.userId && rows.get(token) === account.userId) };
+      await browser.beforeStatus?.();
+      return result;
     },
     async detachPushDeviceAction(token) {
       calls.push("detach");
@@ -97,9 +100,10 @@ function fixture({ owner = null, registered = true, granted = true, supported = 
     },
   }, {
     window, document, Notification: window.Notification,
+    Date: class extends Date { static now() { return now; } },
     navigator: { userAgent: "test-browser", serviceWorker: { controller, getRegistration: async () => registration, register: async () => registration, ready: Promise.resolve(registration) } },
   });
-  return { device, calls, rows, values, account, browser, window };
+  return { device, calls, rows, values, account, browser, window, document, advance: (ms) => { now += ms; } };
 }
 
 test("legacy local tokens become ON only after current account, browser and server verification", async () => {
@@ -109,7 +113,7 @@ test("legacy local tokens become ON only after current account, browser and serv
   assert.equal(f.device.getPushDeviceSnapshot().hasRegisteredToken, true);
   assert.equal(f.values.get("sokna-fcm-token-owner"), "user-a");
   assert.ok(f.calls.includes("getToken"));
-  assert.ok(f.calls.includes("refresh"));
+  assert.ok(!f.calls.includes("refresh"), "an unchanged token does not need a server write");
   assert.ok(!f.calls.includes("register"));
 });
 
@@ -400,4 +404,175 @@ test("token deletion also unsubscribes the custom root worker through the public
   });
   assert.equal((await messaging.deleteFcmToken()).data, true);
   assert.deepEqual(calls, ["unsubscribeRoot", "deleteToken"]);
+});
+
+
+test("focus, visible and same-account auth events share one in-flight device check", async () => {
+  const f = fixture({ owner: "user-a" });
+  const cleanup = f.device.startPushDeviceSync();
+  try {
+    await f.device.refreshPushDevice();
+    f.calls.length = 0;
+    f.advance(1_001);
+    let startedToken;
+    let releaseToken;
+    const started = new Promise((resolve) => { startedToken = resolve; });
+    f.browser.beforeGetToken = () => {
+      startedToken();
+      return new Promise((resolve) => { releaseToken = resolve; });
+    };
+    f.window.dispatchEvent(new Event("focus"));
+    await started;
+    f.document.dispatchEvent(new Event("visibilitychange"));
+    f.window.dispatchEvent(new Event("online"));
+    f.browser.authChanged("SIGNED_IN", { user: { id: "user-a" } });
+    f.browser.authChanged("TOKEN_REFRESHED", { user: { id: "user-a" } });
+    const pending = f.device.refreshPushDevice();
+    releaseToken();
+    await pending;
+    await new Promise(setImmediate);
+    assert.equal(f.calls.filter((call) => call === "status").length, 1);
+    assert.equal(f.calls.filter((call) => call === "getToken").length, 1);
+    assert.equal(f.calls.filter((call) => call === "refresh").length, 0);
+    assert.equal(f.device.getPushDeviceSnapshot().hasRegisteredToken, true);
+  } finally { cleanup(); }
+});
+
+test("passive events inside one second reuse a finished check and later resumes query again", async () => {
+  const f = fixture();
+  const cleanup = f.device.startPushDeviceSync();
+  await f.device.refreshPushDevice();
+  f.calls.length = 0;
+  for (const type of ["focus", "online", "focus"]) f.window.dispatchEvent(new Event(type));
+  f.document.dispatchEvent(new Event("visibilitychange"));
+  await new Promise(setImmediate);
+  assert.equal(f.calls.length, 0);
+  f.advance(1_001);
+  f.window.dispatchEvent(new Event("focus"));
+  f.document.dispatchEvent(new Event("visibilitychange"));
+  await new Promise(setImmediate);
+  assert.equal(f.calls.filter((call) => call === "status").length, 1);
+  cleanup();
+  f.advance(1_001);
+  f.window.dispatchEvent(new Event("focus"));
+  f.document.dispatchEvent(new Event("visibilitychange"));
+  await new Promise(setImmediate);
+  assert.equal(f.calls.filter((call) => call === "status").length, 1, "unmount removes passive listeners");
+});
+
+test("account, permission and explicit settings changes bypass the passive cooldown", async () => {
+  const f = fixture({ owner: "user-a" });
+  const cleanup = f.device.startPushDeviceSync();
+  try {
+    await f.device.refreshPushDevice();
+    f.calls.length = 0;
+    f.account.userId = "user-b";
+    f.browser.authChanged("SIGNED_IN", { user: { id: "user-b" } });
+    await new Promise(setImmediate);
+    assert.equal(f.rows.get("old-token"), "user-b");
+    assert.equal(f.calls.filter((call) => call === "status").length, 1);
+    assert.equal(f.calls.filter((call) => call === "refresh").length, 0);
+    f.window.Notification.permission = "denied";
+    f.window.dispatchEvent(new Event("focus"));
+    f.document.dispatchEvent(new Event("visibilitychange"));
+    await new Promise(setImmediate);
+    assert.equal(f.device.getPushDeviceSnapshot().hasRegisteredToken, false);
+    assert.equal(f.calls.filter((call) => call === "status").length, 2);
+    f.account.consent = false;
+    f.window.dispatchEvent(new Event("sokna-push-token-change"));
+    await new Promise(setImmediate);
+    assert.equal(f.device.getPushDeviceSnapshot().hasMarketingConsent, false);
+    assert.equal(f.calls.filter((call) => call === "status").length, 3);
+  } finally { cleanup(); }
+});
+
+test("a token rotated during a later passive check is updated once despite duplicate resume events", async () => {
+  const f = fixture({ owner: "user-a" });
+  const cleanup = f.device.startPushDeviceSync();
+  try {
+    await f.device.refreshPushDevice();
+    f.calls.length = 0;
+    f.advance(1_001);
+    f.browser.token = "rotated-token";
+    f.window.dispatchEvent(new Event("focus"));
+    f.document.dispatchEvent(new Event("visibilitychange"));
+    await new Promise(setImmediate);
+    assert.equal(f.calls.filter((call) => call === "status").length, 1);
+    assert.equal(f.calls.filter((call) => call === "refresh").length, 1);
+    assert.equal(f.rows.get("rotated-token"), "user-a");
+    assert.equal(f.rows.has("old-token"), false);
+  } finally { cleanup(); }
+});
+
+
+test("rapid A to B to A auth changes discard B's delayed status instead of restoring its binding", async () => {
+  const f = fixture({ owner: "user-a" });
+  const cleanup = f.device.startPushDeviceSync();
+  try {
+    await f.device.refreshPushDevice();
+    f.browser.authChanged("INITIAL_SESSION", { user: { id: "user-a" } });
+    const publishedOwners = [];
+    f.device.subscribePushDevice(() => publishedOwners.push(f.device.getPushDeviceSnapshot().userId));
+    let releaseStatus;
+    let statusStarted;
+    const started = new Promise((resolve) => { statusStarted = resolve; });
+    f.browser.beforeStatus = () => {
+      f.browser.beforeStatus = null;
+      statusStarted();
+      return new Promise((resolve) => { releaseStatus = resolve; });
+    };
+    f.account.userId = "user-b";
+    f.browser.authChanged("SIGNED_IN", { user: { id: "user-b" } });
+    await started;
+    f.account.userId = "user-a";
+    f.browser.authChanged("SIGNED_IN", { user: { id: "user-a" } });
+    releaseStatus();
+    await f.device.refreshPushDevice();
+    await new Promise(setImmediate);
+    assert.equal(f.device.getPushDeviceSnapshot().userId, "user-a");
+    assert.equal(f.device.getPushDeviceSnapshot().hasRegisteredToken, true);
+    assert.equal(f.values.get("sokna-fcm-token-owner"), "user-a");
+    assert.equal(f.rows.get("old-token"), "user-a");
+    assert.ok(!publishedOwners.includes("user-b"), "the stale account response must never be published");
+  } finally { cleanup(); }
+});
+
+
+test("online recovery retries immediately after a failed device check instead of caching the failure", async () => {
+  const f = fixture();
+  f.account.error = "offline";
+  const cleanup = f.device.startPushDeviceSync();
+  try {
+    await f.device.refreshPushDevice();
+    assert.equal(f.device.getPushDeviceSnapshot().hasRegisteredToken, false);
+    f.account.error = null;
+    f.advance(100);
+    f.window.dispatchEvent(new Event("online"));
+    f.window.dispatchEvent(new Event("focus"));
+    await new Promise(setImmediate);
+    assert.equal(f.calls.filter((call) => call === "status").length, 2);
+    assert.equal(f.device.getPushDeviceSnapshot().hasRegisteredToken, true);
+  } finally { cleanup(); }
+});
+
+test("online events during a failing request arrange only one recovery check after it settles", async () => {
+  const f = fixture();
+  let startedStatus;
+  let rejectStatus;
+  const started = new Promise((resolve) => { startedStatus = resolve; });
+  f.browser.beforeStatus = () => {
+    f.browser.beforeStatus = null;
+    startedStatus();
+    return new Promise((_resolve, reject) => { rejectStatus = reject; });
+  };
+  const cleanup = f.device.startPushDeviceSync();
+  try {
+    await started;
+    f.window.dispatchEvent(new Event("online"));
+    f.window.dispatchEvent(new Event("online"));
+    rejectStatus(new Error("request started offline"));
+    await new Promise(setImmediate);
+    assert.equal(f.calls.filter((call) => call === "status").length, 2);
+    assert.equal(f.device.getPushDeviceSnapshot().hasRegisteredToken, true);
+  } finally { cleanup(); }
 });

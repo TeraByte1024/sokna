@@ -59,6 +59,81 @@ function fixture(overrides = {}, unreadCount = 3) {
   return { inbox: createNotificationInbox(api, "user-a", unreadCount), calls, api };
 }
 
+test("concurrent refreshes share a request, while a new push supersedes its stale response", async () => {
+  const replies = [deferred(), deferred()];
+  let requests = 0;
+  const { inbox } = fixture({ list: () => replies[requests++].promise });
+  const first = inbox.refresh();
+  assert.equal(inbox.refresh(), first);
+  assert.equal(inbox.refresh({ background: true }), first);
+  assert.equal(requests, 1);
+  const changed = inbox.refresh({ invalidate: true });
+  assert.notEqual(changed, first);
+  assert.equal(requests, 2);
+  assert.equal(inbox.refresh({ background: true }), changed);
+  replies[0].resolve(response([item("stale")]));
+  await first;
+  assert.equal(inbox.getSnapshot().loading, true);
+  assert.equal(inbox.refresh(), changed, "a stale request finishing must not clear the active request");
+  replies[1].resolve(response([item("new")]));
+  await changed;
+  assert.deepEqual(plain(inbox.getSnapshot().items.map((row) => row.id)), ["new"]);
+  assert.equal(inbox.getSnapshot().loading, false);
+});
+
+test("a refresh after a completed mutation does not share a pre-mutation request", async () => {
+  for (const kind of ["markRead", "remove"]) {
+    const stale = deferred();
+    const fresh = deferred();
+    let requests = 0;
+    const { inbox, api } = fixture();
+    await inbox.refresh();
+    api.list = () => (++requests === 1 ? stale.promise : fresh.promise);
+    const oldRequest = inbox.refresh();
+    assert.equal(await inbox[kind]("1"), true);
+    const nextRequest = inbox.refresh({ background: true });
+    assert.notEqual(nextRequest, oldRequest);
+    assert.equal(requests, 2);
+    fresh.resolve(response(kind === "remove" ? [] : [item("1", { read_at: readAt })]));
+    await nextRequest;
+    stale.resolve(response([item("1")]));
+    await oldRequest;
+    assert.equal(inbox.getSnapshot().unreadCount, 0);
+    assert.deepEqual(plain(inbox.getSnapshot().items), kind === "remove" ? [] : [item("1", { read_at: readAt })]);
+  }
+});
+
+test("background refreshes coalesce for one second without delaying explicit refreshes or failed retries", async () => {
+  let now = 0;
+  class ClockDate extends Date { static now() { return now; } }
+  const { createNotificationInbox: createTimedInbox } = loadSource("components/notification-menu-state.ts", {}, { Date: ClockDate });
+  let requests = 0;
+  let fail = false;
+  const { api } = fixture({ list: async ({ expectedUserId }) => {
+    requests++;
+    return fail ? { ok: false, error: "offline" } : response([item(String(requests))], { userId: expectedUserId });
+  } });
+  const inbox = createTimedInbox(api, "user-a", 0);
+  await inbox.refresh();
+  now = 999;
+  await inbox.refresh({ background: true });
+  assert.equal(requests, 1);
+  await inbox.refresh();
+  assert.equal(requests, 2, "opening the popup bypasses the passive interval");
+  now = 1_999;
+  fail = true;
+  await inbox.refresh({ background: true });
+  assert.equal(requests, 3);
+  fail = false;
+  await inbox.refresh({ background: true });
+  assert.equal(requests, 4, "a failed request does not suppress online recovery");
+  assert.equal(inbox.getSnapshot().error, null);
+  inbox.setUser("user-b");
+  await inbox.refresh({ background: true });
+  assert.equal(requests, 5, "the prior account's recent success must not suppress a new account");
+  assert.equal(inbox.getSnapshot().userId, "user-b");
+});
+
 test("a server-rendered count stays available until the inbox loads", async () => {
   const pending = deferred();
   const { inbox } = fixture({ list: () => pending.promise }, 120);
@@ -1146,4 +1221,106 @@ test("the bulk-delete header works with a fully read inbox, keeps the popup open
     assert.deepEqual(unrelatedWrites, []);
     hooks.cleanup();
   }
+});
+
+test("focus, visibility and online events issue one inbox request per return and ignore hidden windows", async () => {
+  const jsxRuntime = await import("react/jsx-runtime");
+  const hooks = hookRuntime();
+  const window = eventSurface();
+  const document = { ...eventSurface(), visibilityState: "visible" };
+  const serviceWorker = eventSurface();
+  let now = 0;
+  class ClockDate extends Date { static now() { return now; } }
+  const { createNotificationInbox: createTimedInbox } = loadSource("components/notification-menu-state.ts", {}, { Date: ClockDate });
+  let requests = 0;
+  let nextReply = null;
+  const { NotificationMenu } = loadSource("components/notification-menu.tsx", {
+    react: hooks.react, "react/jsx-runtime": jsxRuntime,
+    "next/link": { default: () => null, __esModule: true }, "lucide-react": {},
+    "@/app/notifications/actions": {
+      listNotificationsAction: async () => { requests++; return nextReply ?? response([item(String(requests))]); },
+      markAllNotificationsReadAction() {}, markNotificationReadAction() {}, deleteNotificationAction() {}, deleteAllNotificationsAction() {},
+    },
+    "@/lib/supabase/client": { createClient: () => ({ auth: { onAuthStateChange: () => ({
+      data: { subscription: { unsubscribe() {} } },
+    }) } }) },
+    "@/lib/confirmed-navigation": confirmedNavigation,
+    "@/lib/utils": { cn: (...values) => values.filter(Boolean).join(" ") },
+    "@/components/ui/sonner": { toast: { error() {} } }, "@/components/ui/dropdown-menu": {},
+    "./notification-menu-state": { createNotificationInbox: createTimedInbox, safeNotificationLink },
+  }, { window, document, navigator: { serviceWorker } });
+  const tree = hooks.render(() => NotificationMenu({ userId: "user-a", initialUnreadCount: 0 }));
+  await new Promise(setImmediate);
+  assert.equal(requests, 1);
+  now = 1_000;
+  const pending = deferred();
+  nextReply = pending.promise;
+  window.dispatchEvent({ type: "focus" });
+  document.dispatchEvent({ type: "visibilitychange" });
+  window.dispatchEvent({ type: "online" });
+  assert.equal(requests, 2);
+  pending.resolve(response([item("returned")]));
+  await new Promise(setImmediate);
+  now += 50;
+  window.dispatchEvent({ type: "focus" });
+  document.dispatchEvent({ type: "visibilitychange" });
+  assert.equal(requests, 2, "a late event after a fast response must also coalesce");
+  nextReply = null;
+  tree.props.onOpenChange(true);
+  await new Promise(setImmediate);
+  assert.equal(requests, 3, "the popup still explicitly refreshes during the passive interval");
+  now += 1_000;
+  document.visibilityState = "hidden";
+  window.dispatchEvent({ type: "focus" });
+  document.dispatchEvent({ type: "visibilitychange" });
+  window.dispatchEvent({ type: "online" });
+  assert.equal(requests, 3);
+  document.visibilityState = "visible";
+  document.dispatchEvent({ type: "visibilitychange" });
+  await new Promise(setImmediate);
+  assert.equal(requests, 4);
+  hooks.cleanup();
+  now += 1_000;
+  window.dispatchEvent({ type: "focus" });
+  document.dispatchEvent({ type: "visibilitychange" });
+  serviceWorker.dispatchEvent({ type: "message", data: { type: "SOKNA_NOTIFICATIONS_CHANGED" } });
+  assert.equal(requests, 4);
+});
+
+test("reconnecting retries a shared offline failure once without reviving a superseded account or unmounted menu", async () => {
+  for (const outcome of ["retry", "account-change", "new-notification", "unmount"]) {
+    const offline = deferred();
+    let requests = 0;
+    let active = true;
+    const { inbox } = fixture({ list: async () => {
+      requests++;
+      return requests === 1 ? offline.promise : { ok: false, error: "still offline" };
+    } });
+    const first = inbox.refresh();
+    const reconnect = inbox.refreshAfterReconnect(() => active);
+    const duplicateOnline = inbox.refreshAfterReconnect(() => active);
+    assert.equal(requests, 1);
+    if (outcome === "account-change") {
+      inbox.setUser("user-b");
+      await inbox.refresh();
+    } else if (outcome === "new-notification") {
+      await inbox.refresh({ invalidate: true });
+    } else if (outcome === "unmount") {
+      active = false;
+    }
+    offline.resolve({ ok: false, error: "offline request failed" });
+    await Promise.all([first, reconnect, duplicateOnline]);
+    assert.equal(requests, outcome === "unmount" ? 1 : 2, outcome);
+    assert.equal(inbox.getSnapshot().loading, false);
+    if (outcome === "account-change") assert.equal(inbox.getSnapshot().userId, "user-b");
+  }
+});
+
+test("a new online request that fails does not enter an automatic retry loop", async () => {
+  let requests = 0;
+  const { inbox } = fixture({ list: async () => { requests++; return { ok: false, error: "unavailable" }; } });
+  await inbox.refreshAfterReconnect(() => true);
+  assert.equal(requests, 1);
+  await inbox.refreshAfterReconnect(() => true);
+  assert.equal(requests, 2);
 });
