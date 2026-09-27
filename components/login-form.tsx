@@ -17,6 +17,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { GoogleSignInButton } from "@/components/google-sign-in-button";
+import { KakaoSignInButton } from "@/components/kakao-sign-in-button";
 import { UserPlus } from "lucide-react";
 
 export function LoginForm({
@@ -133,6 +134,7 @@ export function LoginForm({
               </div>
 
               <GoogleSignInButton text="Google 계정으로 로그인" />
+              <KakaoSignInButton disabled={isLoading} />
             </div>
             <div className="mt-6 pt-5 border-t border-border/60">
               <div className="rounded-lg border border-primary/25 bg-primary/5 p-4 text-center space-y-2.5">

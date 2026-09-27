@@ -117,11 +117,11 @@ function fixture(part = null, options = {}) {
     },
     window: { location: { assign: (url) => operations.push(["provider", url, guard.isSubmittingRef.current]) } },
     "./delete-account-section": { DeleteAccountSection },
-    "./login-method-actions": { startGoogleIdentityLinkAction: async (id) => {
-      linking.calls.push(id);
-      operations.push(["link", id]);
-      return linking.run(id);
-    }, unlinkGoogleIdentityAction: async (...args) => {
+    "./login-method-actions": { startSocialIdentityLinkAction: async (id, provider) => {
+      linking.calls.push([id, provider]);
+      operations.push(["link", id, provider]);
+      return linking.run(id, provider);
+    }, unlinkSocialIdentityAction: async (...args) => {
       unlinking.calls.push(args);
       operations.push(["unlink", ...args]);
       return unlinking.run(...args);
@@ -176,9 +176,10 @@ function fixture(part = null, options = {}) {
     assert.ok(section, "Profile must show the connected login methods");
     return LoginMethodsSection(section.props);
   };
-  const linkButton = () => elements(loginMethods(), (element) => element.type === "button" && element.props["aria-describedby"] === "login-methods-description")[0];
-  const unlinkButton = (email = "other@example.test") => elements(loginMethods(), (element) => element.type === "button" && element.props["aria-label"] === "Google " + email + " 연결 해제")[0];
-  const unlinkDialog = () => elements(loginMethods(), (element) => element.type === "dialog" && element.props.id === "unlink-google-dialog")[0];
+  const providerLabel = (provider) => provider === "kakao" ? "카카오" : "Google";
+  const linkButton = (provider = "google") => elements(loginMethods(), (element) => element.type === "button" && element.props["aria-label"] === providerLabel(provider) + " 계정 추가하기")[0];
+  const unlinkButton = (email = "other@example.test", provider = "google") => elements(loginMethods(), (element) => element.type === "button" && element.props["aria-label"] === providerLabel(provider) + " " + email + " 연결 해제")[0];
+  const unlinkDialog = () => elements(loginMethods(), (element) => element.type === "dialog" && element.props.id === "unlink-login-method-dialog")[0];
   const unlinkConfirm = () => elements(unlinkDialog(), (element) => element.type === "button" && element.props.variant === "destructive")[0];
   const unlinkCancel = () => elements(unlinkDialog(), (element) => element.type === "button" && textContent(element) === "취소")[0];
   return {
@@ -379,12 +380,12 @@ test("Google linking preserves unsaved edits until confirmation and disables nav
   f.render();
   f.leaveDialog().props.onConfirm();
   f.render();
-  assert.deepEqual(f.linking.calls, ["member-id"]);
+  assert.deepEqual(f.linking.calls, [["member-id", "google"]]);
   assert.equal(f.guard.isSubmittingRef.current, false);
   assert.equal(f.linkButton().props.disabled, true);
   pending.resolve({ ok: true, url: "https://accounts.google.test/authorize" });
   await f.settle();
-  assert.deepEqual(f.operations, [["link", "member-id"], ["provider", "https://accounts.google.test/authorize", true]]);
+  assert.deepEqual(f.operations, [["link", "member-id", "google"], ["provider", "https://accounts.google.test/authorize", true]]);
   assert.equal(f.saves.length, 0);
 });
 
@@ -403,7 +404,7 @@ test("Google link action failures preserve edits, restore guard and allow retry"
     assert.equal(f.guard.dirty, true, failure);
     assert.equal(f.linkButton().props.disabled, false, failure);
     assert.equal(elements(f.loginMethods(), (element) => element.props?.role === "alert").length, 1, failure);
-    assert.deepEqual(f.operations, [["link", "member-id"]], failure);
+    assert.deepEqual(f.operations, [["link", "member-id", "google"]], failure);
     f.linking.run = async () => ({ ok: true, url: "https://accounts.google.test/retry" });
     f.linkButton().props.onClick();
     f.render();
@@ -421,7 +422,7 @@ test("pending Google linking blocks duplicate linking, logout, saving, withdrawa
   initialButton.props.onClick();
   initialButton.props.onClick();
   f.render();
-  assert.deepEqual(f.linking.calls, ["member-id"]);
+  assert.deepEqual(f.linking.calls, [["member-id", "google"]]);
   assert.equal(f.logoutButton().props.disabled, true);
   assert.equal(f.deletion().props.disabled, true);
   assert.equal(f.find((element) => element.type === "button" && element.props.type === "submit")[0].props.disabled, true);
@@ -432,7 +433,7 @@ test("pending Google linking blocks duplicate linking, logout, saving, withdrawa
   await f.save();
   assert.equal(f.logout.calls, 0);
   assert.equal(f.saves.length, 0);
-  assert.deepEqual(f.operations, [["link", "member-id"]]);
+  assert.deepEqual(f.operations, [["link", "member-id", "google"]]);
   pending.resolve({ ok: false, error: "연결 취소" });
   await f.settle();
 });
@@ -609,7 +610,105 @@ test("Google unlink confirmation explains automatic relinking only when another 
     f.unlinkButton("member@example.test").props.onClick();
     f.render();
     assert.equal(f.textContent(f.unlinkDialog()).includes(note), shouldWarn, String(remainingEmail));
-    assert.equal(f.unlinkDialog().props["aria-describedby"].includes("unlink-google-relink-note"), shouldWarn, String(remainingEmail));
+    assert.equal(f.unlinkDialog().props["aria-describedby"].includes("unlink-login-method-relink-note"), shouldWarn, String(remainingEmail));
     assert.deepEqual(f.unlinking.calls, []);
   }
+});
+
+
+test("profile shows Kakao identity and both provider add buttons with their own logos", () => {
+  const f = fixture("기타", { identities: [
+    { id: "google-one", provider: "google", email: "member@example.test", canUnlink: true, unlinkDisabledReason: null },
+    { id: "kakao-one", provider: "kakao", email: "kakao@example.test", canUnlink: true, unlinkDisabledReason: null },
+  ] });
+  const { KakaoLogo } = f.load("components/kakao-logo.tsx");
+  const rows = elements(f.loginMethods(), (element) => element.type === "li");
+  assert.match(f.textContent(rows[1]), /카카오kakao@example.test연결 해제/);
+  assert.equal(elements(rows[1], (element) => element.type === KakaoLogo).length, 1);
+  assert.equal(elements(f.linkButton("kakao"), (element) => element.type === KakaoLogo).length, 1);
+  assert.equal(f.textContent(f.linkButton("google")), "Google 계정 추가하기");
+  assert.equal(f.textContent(f.linkButton("kakao")), "카카오 계정 추가하기");
+  assert.equal(f.unlinkButton("kakao@example.test", "kakao").props.disabled, false);
+});
+
+test("Kakao linking confirms unsaved changes and blocks both provider buttons until its URL is ready", async () => {
+  const pending = deferredLogout();
+  const f = fixture("기타", { link: () => pending.promise });
+  f.click("보컬(여)");
+  f.linkButton("kakao").props.onClick();
+  f.render();
+  assert.equal(f.leaveDialog().props.isOpen, true);
+  assert.deepEqual(f.linking.calls, []);
+  f.leaveDialog().props.onClose();
+  f.render();
+  assert.equal(f.guard.dirty, true);
+  f.linkButton("kakao").props.onClick();
+  f.render();
+  f.leaveDialog().props.onConfirm();
+  f.render();
+  assert.deepEqual(f.linking.calls, [["member-id", "kakao"]]);
+  assert.equal(f.guard.isSubmittingRef.current, false);
+  assert.equal(f.textContent(f.linkButton("kakao")), "카카오 연결 중...");
+  assert.equal(f.textContent(f.linkButton("google")), "Google 계정 추가하기");
+  assert.equal(f.linkButton("google").props.disabled, true);
+  assert.equal(f.linkButton("kakao").props.disabled, true);
+  f.linkButton("google").props.onClick();
+  f.linkButton("kakao").props.onClick();
+  assert.equal(f.linking.calls.length, 1);
+  pending.resolve({ ok: true, url: "https://kauth.kakao.test/oauth/authorize" });
+  await f.settle();
+  assert.deepEqual(f.operations, [["link", "member-id", "kakao"], ["provider", "https://kauth.kakao.test/oauth/authorize", true]]);
+});
+
+test("unavailable Kakao linking keeps the draft and allows another provider to be selected", async () => {
+  const f = fixture("기타", { link: async () => ({ ok: false, error: "카카오 로그인을 아직 사용할 수 없습니다." }) });
+  f.click("보컬(남)");
+  f.linkButton("kakao").props.onClick();
+  f.render();
+  f.leaveDialog().props.onConfirm();
+  await f.settle();
+  assert.equal(f.guard.isSubmittingRef.current, false);
+  assert.equal(f.guard.dirty, true);
+  assert.equal(f.linkButton("kakao").props.disabled, false);
+  assert.equal(f.linkButton("google").props.disabled, false);
+  assert.match(f.textContent(f.loginMethods()), /카카오 로그인을 아직 사용할 수 없습니다/);
+  f.linkButton("google").props.onClick();
+  f.render();
+  assert.equal(f.leaveDialog().props.isOpen, true);
+  f.leaveDialog().props.onConfirm();
+  await f.settle();
+  assert.deepEqual(f.linking.calls, [["member-id", "kakao"], ["member-id", "google"]]);
+  assert.equal(f.saves.length, 0);
+});
+
+test("Kakao unlink names its provider, explains same-email relinking and preserves unsaved edits", async () => {
+  const f = fixture("기타", { identities: [
+    { id: "google-one", provider: "google", email: "MEMBER@example.test", canUnlink: true, unlinkDisabledReason: null },
+    { id: "kakao-one", provider: "kakao", email: "member@example.test", canUnlink: true, unlinkDisabledReason: null },
+  ], unlink: async () => ({ ok: true, message: "카카오 계정 연결을 해제했습니다." }) });
+  f.click("보컬(여)");
+  f.unlinkButton("member@example.test", "kakao").props.onClick();
+  f.render();
+  assert.match(f.textContent(f.unlinkDialog()), /카카오 계정 연결을 해제할까요/);
+  assert.match(f.textContent(f.unlinkDialog()), /다음 카카오 로그인 때 자동으로 다시 연결될 수 있습니다/);
+  assert.equal(f.guard.open, false);
+  await f.unlinkConfirm().props.onClick();
+  await f.settle();
+  assert.deepEqual(f.unlinking.calls, [["member-id", "kakao-one"]]);
+  assert.equal(f.guard.dirty, true);
+  assert.equal(f.guard.isSubmittingRef.current, false);
+  assert.deepEqual(f.operations, [["unlink", "member-id", "kakao-one"], ["refresh"]]);
+  assert.match(f.textContent(f.loginMethods()), /카카오 계정 연결을 해제했습니다/);
+});
+
+test("a protected Kakao login method cannot open the unlink dialog", () => {
+  const f = fixture("기타", { identities: [
+    { id: "kakao-one", provider: "kakao", email: "kakao@example.test", canUnlink: false, unlinkDisabledReason: "다른 로그인 수단을 먼저 추가해 주세요." },
+  ] });
+  assert.equal(f.unlinkButton("kakao@example.test", "kakao").props.disabled, true);
+  assert.match(f.textContent(f.loginMethods()), /다른 로그인 수단을 먼저 추가/);
+  f.unlinkButton("kakao@example.test", "kakao").props.onClick();
+  f.render();
+  assert.equal(f.loginSection().props.unlinkTarget, null);
+  assert.deepEqual(f.unlinking.calls, []);
 });

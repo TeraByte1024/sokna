@@ -184,6 +184,7 @@ function signupFormFixture(user, options = {}) {
     "next/link": stub,
     "next/navigation": { useRouter: () => ({ push: (url) => navigation.push(url) }) },
     "@/components/google-sign-in-button": { GoogleSignInButton: stub },
+    "@/components/kakao-sign-in-button": { KakaoSignInButton: stub },
     "@/components/member-profile-fields": { MemberProfileFields: stub },
     "@/components/ui/leave-confirm-dialog": {
       LeaveConfirmDialog: stub,

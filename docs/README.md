@@ -84,7 +84,8 @@ docs/
 | :--- | :--- | :--- |
 | **Feature** | [roles-and-permissions.md](./features/roles-and-permissions.md) | **방문자 / 일반 회원 / 세션 참여자 / 관리자별 기능 매트릭스** |
 | **Feature** | [authentication.md](./features/authentication.md) | Supabase Auth, 쿠키 기반 세션 갱신, 관리자 권한 판별 |
-| **Feature** | [login-methods.md](./features/login-methods.md) | 여러 Google 계정 연결·해제, 마지막 수단 보호 및 Google 로고 |
+| **Feature** | [login-methods.md](./features/login-methods.md) | Google·카카오 계정 연결·해제, 마지막 수단 보호 및 제공자 로고 |
+| **Feature** | [kakao-login.md](./features/kakao-login.md) | 카카오 로그인·가입, 계정 연결/해제 및 앱 설정 |
 | **Feature** | [account-withdrawal.md](./features/account-withdrawal.md) | 프로필 회원 탈퇴, 계정·개인 데이터 삭제, 공유 공연 기록 보존 |
 | **Feature** | [gigs.md](./features/gigs.md) | 공연 생성, 목록/상세 조회, 참여 세션(Performer) 매핑 |
 | **Feature** | [gig-visibility.md](./features/gig-visibility.md) | 비공개·회원 공개·전체 공개 권한 및 기존 공연 전환 |

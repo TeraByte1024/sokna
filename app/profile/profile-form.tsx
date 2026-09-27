@@ -20,7 +20,8 @@ import { updateMyProfileAction } from "./actions";
 import { DeleteAccountSection } from "./delete-account-section";
 import { LoginMethodsSection } from "./login-methods-section";
 import type { LoginIdentity } from "@/lib/auth/login-methods";
-import { startGoogleIdentityLinkAction, unlinkGoogleIdentityAction } from "./login-method-actions";
+import { startSocialIdentityLinkAction, unlinkSocialIdentityAction } from "./login-method-actions";
+import { isSocialProvider, type SocialProvider } from "@/lib/auth/social-providers";
 import { getIdentityLinkErrorMessage } from "@/lib/auth/identity-linking";
 import { toast } from "@/components/ui/sonner";
 import { LeaveConfirmDialog, useUnsavedChangesWarning } from "@/components/ui/leave-confirm-dialog";
@@ -92,7 +93,8 @@ export function ProfileForm({ user, isAdmin, identities, identityLinkResult }: P
   const [isPending, startTransition] = useTransition();
   const [isDeleting, setIsDeleting] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const [isLinking, setIsLinking] = useState(false);
+  const [linkingProvider, setLinkingProvider] = useState<SocialProvider | null>(null);
+  const isLinking = linkingProvider !== null;
   const [identityLinkError, setIdentityLinkError] = useState<string | null>(null);
   const linkingRef = useRef(false);
   const [unlinkTarget, setUnlinkTarget] = useState<LoginIdentity | null>(null);
@@ -128,13 +130,13 @@ export function ProfileForm({ user, isAdmin, identities, identityLinkResult }: P
       if (!event.persisted || !linkingRef.current) return;
       linkingRef.current = false;
       isSubmittingRef.current = false;
-      setIsLinking(false);
+      setLinkingProvider(null);
     };
     window.addEventListener("pageshow", restoreAfterBackNavigation);
     return () => window.removeEventListener("pageshow", restoreAfterBackNavigation);
   }, [isSubmittingRef]);
 
-  const handleLinkGoogle = () => {
+  const handleLinkSocial = (provider: SocialProvider) => {
     if (isPending || push.isPending || isDeleting || isLoggingOut || isManagingLoginMethods || linkingRef.current || unlinkingRef.current || pushConsentDialogOpen) return;
     triggerConfirm(async () => {
       if (linkingRef.current) return;
@@ -142,17 +144,17 @@ export function ProfileForm({ user, isAdmin, identities, identityLinkResult }: P
       // Keep unsaved-change protection until the provider URL is ready.
       isSubmittingRef.current = false;
       linkingRef.current = true;
-      setIsLinking(true);
+      setLinkingProvider(provider);
       setIdentityLinkError(null);
       setIdentitySuccessMessage(null);
 
       try {
-        const result = await startGoogleIdentityLinkAction(user.id);
+        const result = await startSocialIdentityLinkAction(user.id, provider);
         if (!result.ok) {
           isSubmittingRef.current = false;
           setIdentityLinkError(result.error);
           linkingRef.current = false;
-          setIsLinking(false);
+          setLinkingProvider(null);
           return;
         }
         markSubmitting();
@@ -160,7 +162,7 @@ export function ProfileForm({ user, isAdmin, identities, identityLinkResult }: P
       } catch {
         isSubmittingRef.current = false;
         linkingRef.current = false;
-        setIsLinking(false);
+        setLinkingProvider(null);
         setIdentityLinkError(getIdentityLinkErrorMessage("failed"));
       }
     });
@@ -168,7 +170,7 @@ export function ProfileForm({ user, isAdmin, identities, identityLinkResult }: P
 
   const handleRequestUnlink = (identityId: string) => {
     if (isPending || push.isPending || isDeleting || isLoggingOut || isManagingLoginMethods || linkingRef.current || unlinkingRef.current || pushConsentDialogOpen) return;
-    const identity = identities.find((item) => item.id === identityId && item.provider === "google");
+    const identity = identities.find((item) => item.id === identityId && isSocialProvider(item.provider));
     if (!identity?.canUnlink) return;
     setIdentityLinkError(null);
     setIdentitySuccessMessage(null);
@@ -182,7 +184,7 @@ export function ProfileForm({ user, isAdmin, identities, identityLinkResult }: P
 
   const handleConfirmUnlink = async () => {
     if (!unlinkTarget || isPending || push.isPending || isDeleting || isLoggingOut || isLinking || isRefreshingMethods || linkingRef.current || unlinkingRef.current || pushConsentDialogOpen) return;
-    const identity = identities.find((item) => item.id === unlinkTarget.id && item.provider === "google");
+    const identity = identities.find((item) => item.id === unlinkTarget.id && isSocialProvider(item.provider));
     if (!identity?.canUnlink) {
       setIdentityLinkError(identity?.unlinkDisabledReason || "연결된 로그인 수단을 다시 확인해 주세요.");
       return;
@@ -193,7 +195,7 @@ export function ProfileForm({ user, isAdmin, identities, identityLinkResult }: P
     setIdentityLinkError(null);
     setIdentitySuccessMessage(null);
     try {
-      const result = await unlinkGoogleIdentityAction(user.id, identity.id);
+      const result = await unlinkSocialIdentityAction(user.id, identity.id);
       if (!result.ok) {
         setIdentityLinkError(result.error);
         return;
@@ -428,11 +430,11 @@ export function ProfileForm({ user, isAdmin, identities, identityLinkResult }: P
         result={identityLinkResult}
         error={identityLinkError}
         successMessage={identitySuccessMessage}
-        isPending={isLinking}
+        linkingProvider={linkingProvider}
         isUnlinking={isUnlinking}
         disabled={isPending || push.isPending || isDeleting || isLoggingOut || isRefreshingMethods || pushConsentDialogOpen}
         unlinkTarget={unlinkTarget}
-        onLinkGoogle={handleLinkGoogle}
+        onLinkSocial={handleLinkSocial}
         onRequestUnlink={handleRequestUnlink}
         onCancelUnlink={handleCancelUnlink}
         onConfirmUnlink={handleConfirmUnlink}

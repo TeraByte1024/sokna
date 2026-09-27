@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { getLoginIdentities, getIdentityUnlinkErrorMessage } from "@/lib/auth/login-methods";
 import { cookies, headers } from "next/headers";
+import { getSocialProviderLabel, isSocialProvider, KAKAO_AUTH_QUERY_PARAMS, type SocialProvider } from "@/lib/auth/social-providers";
 import { createClient } from "@/lib/supabase/server";
 import {
   getIdentityLinkErrorMessage,
@@ -11,9 +12,13 @@ import {
   IDENTITY_LINK_MAX_AGE,
 } from "@/lib/auth/identity-linking";
 
-export async function startGoogleIdentityLinkAction(
+export async function startSocialIdentityLinkAction(
   expectedUserId: string,
+  provider: SocialProvider,
 ): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  if (!isSocialProvider(provider)) {
+    return { ok: false, error: "지원하지 않는 로그인 방식입니다." };
+  }
   try {
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -34,11 +39,11 @@ export async function startGoogleIdentityLinkAction(
     callback.searchParams.set("intent", "link");
     callback.searchParams.set("link_state", nonce);
     const { data, error } = await supabase.auth.linkIdentity({
-      provider: "google",
+      provider,
       options: {
         redirectTo: callback.toString(),
         skipBrowserRedirect: true,
-        queryParams: { prompt: "select_account" },
+        queryParams: provider === "kakao" ? KAKAO_AUTH_QUERY_PARAMS : { prompt: "select_account" },
       },
     });
     if (error || !data.url) {
@@ -57,11 +62,11 @@ export async function startGoogleIdentityLinkAction(
     return { ok: false, error: getIdentityLinkErrorMessage() };
   }
 }
-export async function unlinkGoogleIdentityAction(
+export async function unlinkSocialIdentityAction(
   expectedUserId: string,
   identityId: string,
 ): Promise<{ ok: true; message: string } | { ok: false; error: string }> {
-  const success = "Google 계정 연결을 해제했습니다.";
+  let providerLabel = "계정";
   let supabase: Awaited<ReturnType<typeof createClient>>;
   try {
     supabase = await createClient();
@@ -74,9 +79,10 @@ export async function unlinkGoogleIdentityAction(
     if (!identity) {
       return { ok: false, error: getIdentityUnlinkErrorMessage("identity_not_found") };
     }
-    if (identity.provider !== "google") {
-      return { ok: false, error: "Google 계정만 연결을 해제할 수 있습니다." };
+    if (!isSocialProvider(identity.provider)) {
+      return { ok: false, error: "Google 또는 카카오 계정만 연결을 해제할 수 있습니다." };
     }
+    providerLabel = getSocialProviderLabel(identity.provider);
     const method = getLoginIdentities(user).find((item) => item.id === identityId);
     if (!method?.canUnlink) {
       return {
@@ -106,6 +112,7 @@ export async function unlinkGoogleIdentityAction(
   } catch {
     refreshFailed = true;
   }
+  const success = providerLabel + " 계정 연결을 해제했습니다.";
   return {
     ok: true,
     message: refreshFailed

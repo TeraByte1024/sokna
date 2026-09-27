@@ -144,7 +144,7 @@ Firebase Console의 프로젝트 설정 → 서비스 계정에서 확인한 자
 
 ### 2.6 Google 계정 추가 로그인 설정
 
-`/profile`의 Google 계정 추가는 Supabase의 수동 identity 연결을 사용합니다. 기존 회원 ID와 앱 DB 스키마는 유지하며, 이 기능 때문에 앱 DB 마이그레이션이나 타입 재생성이 필요하지 않습니다.
+`/profile`의 Google 계정 추가는 Supabase의 수동 identity 연결을 사용합니다. 기존 회원 ID를 유지합니다. 연결 해제를 지원하는 배포에는 대표 이메일 동기화·마지막 로그인 수단 보호 마이그레이션이 필요하며, 적용 상태는 로그인 수단 및 DB 명세를 확인합니다.
 
 1. Supabase Dashboard의 Authentication 설정에서 **Enable Manual Linking**을 활성화합니다. 자체 호스팅에서는 `GOTRUE_SECURITY_MANUAL_LINKING_ENABLED=true`를 사용합니다. [Supabase 공식 연결 안내](https://supabase.com/docs/guides/auth/auth-identity-linking)를 참고합니다.
 2. **Authentication > URL Configuration > Redirect URLs**에 각 환경의 기존 로그인 콜백과 연결 콜백을 허용합니다. 연결 콜백은 `intent=link`와 요청마다 다른 `link_state` 쿼리를 포함하므로 nonce까지 고정한 주소 한 개를 등록하면 안 됩니다.
@@ -161,6 +161,31 @@ Firebase Console의 프로젝트 설정 → 서비스 계정에서 확인한 자
 **확인 상태 (2026-09-27)**: `manual_linking_disabled` 오류의 원인인 Manual Linking 비활성과 연결 콜백 누락을 확인한 뒤 사용자 승인으로 수정했습니다. 연결된 SOKNA 프로젝트의 `security_manual_linking_enabled = true`와 허용 목록을 관리 API로 재조회했습니다. 기존 `http://localhost:3000/auth/callback`을 유지하고 `https://sokna-pink.vercel.app/auth/callback` 및 위 두 환경의 연결 콜백 패턴을 추가했습니다. 변경된 설정은 수동 연결 플래그와 `uri_allow_list` 두 항목뿐입니다. 로컬·운영 OAuth 요청을 만들고 즉시 취소하여 지정한 콜백 경로와 nonce가 보존되는 HTTP 302 응답을 확인했습니다. 실제 Google 계정 인증·연결 E2E는 미검증입니다. 코드 구현·정적 검사 성공과 운영 활성화 완료를 구분합니다. 상세 명세는 [여러 Google 계정 로그인](../features/login-methods.md)을 참고합니다.
 
 ---
+
+### 2.7 카카오 로그인 설정
+
+카카오계정 로그인은 Supabase의 Kakao 제공자를 사용합니다. 별도 Kakao JavaScript SDK나 앱 서버 환경 변수에 REST API 키·Client Secret을 넣지 않습니다. [Supabase 공식 설정](https://supabase.com/docs/guides/auth/social-login/auth-kakao)과 [카카오 사전 설정](https://developers.kakao.com/docs/ko/kakaologin/prerequisite)을 참고합니다.
+
+1. [카카오 Developers](https://developers.kakao.com/)에 로그인하고 SOKNA용 앱을 생성합니다. 앱 이름·아이콘·운영 주체 정보는 실제 서비스 정보를 입력하고 대표 도메인은 `https://sokna-pink.vercel.app`로 설정합니다.
+2. **카카오 로그인 사용 설정을 ON**으로 바꿉니다. 앱의 **REST API 키** 설정에서 아래 **카카오 로그인 Redirect URI**를 등록합니다. 앱 페이지 주소가 아니라 Supabase Auth가 카카오의 응답을 받을 주소입니다.
+
+   ```text
+   https://oqriqxejhwhkhghegpxc.supabase.co/auth/v1/callback
+   ```
+
+3. **[앱] → [일반] → [비즈니스 정보]**에서 비즈 앱으로 전환합니다. 사업자등록번호가 없는 개인·단체는 **[개인 개발자 비즈 앱]** 경로를 사용할 수 있으며 앱 소유자의 본인인증과 카카오비즈니스 통합 서비스 약관 동의가 필요합니다. 비즈 앱은 이메일을 필수 동의로 설정할 수 있습니다. [공식 비즈 앱 안내](https://developers.kakao.com/docs/ko/app-setting/app#biz-app)
+   - **[카카오 로그인] → [동의항목] → [카카오계정(이메일)]**에서 `account_email`을 **필수 동의**로 설정하고 실제 사용 목적을 입력합니다. 이 구현의 목적은 회원가입·로그인 및 계정 관리입니다.
+   - `profile_nickname`(닉네임)과 `profile_image`(프로필 사진)은 **사용 안 함**으로 둡니다. 회원 이름은 소크나 부원 정보 작성 화면에서 직접 입력합니다.
+   - 별도 개인정보 권한 심사가 필요한 항목은 **[추가 기능 신청] → [개인정보 동의항목]**에서 신청합니다. **[카카오톡 채널 연결]**은 이메일 권한 신청 경로가 아니며 이메일만 받기 위한 채널 연결은 필요하지 않습니다. [항목별 필요 권한](https://developers.kakao.com/docs/ko/kakaologin/utilize#scope-user), [개인정보 동의항목 신청](https://developers.kakao.com/docs/ko/kakaologin/prerequisite#consent-item)
+4. REST API 키의 **카카오 로그인 Client Secret을 활성화**합니다. REST API 키와 Secret은 **[Supabase Authentication → Sign In / Providers → Kakao](https://supabase.com/dashboard/project/oqriqxejhwhkhghegpxc/auth/providers)**에 각각 Client ID·Client Secret으로 입력하고 Kakao를 활성화합니다. 키 값은 채팅·소스 코드·스크린샷·Git에 넣지 않습니다.
+5. 이 구현은 이메일 제공을 전제로 하므로 **Allow users without an email은 끈 상태**로 둡니다. 앱의 일반 로그인·계정 연결은 단수형 `queryParams.scope: "account_email"`로 Auth 기본 scope를 덮어써 닉네임·사진 동의를 요청하지 않습니다. 복수형 `options.scopes`는 기본값에 추가하므로 사용하지 않습니다. 앱 코드 배포 후 실제 동의 화면에서도 프로필 항목이 없는지 확인합니다.
+6. Supabase의 앱 복귀 주소는 기존 Google과 동일합니다. 일반 로그인은 `http://localhost:3000/auth/callback`, `https://sokna-pink.vercel.app/auth/callback`이고 계정 추가는 앞 절의 `intent=link&link_state=*` 허용 패턴을 재사용합니다. **Enable Manual Linking**도 필요하며 이 프로젝트에는 이미 활성화되어 있습니다.
+7. DB의 `20260927040000_support_kakao_identities.sql`을 적용하고 앱 코드를 배포한 뒤, 신규 카카오 가입·기존 카카오 로그인·프로필에서 카카오 연결/해제·남은 Google 또는 카카오 로그인·마지막 수단 보호를 확인합니다. 카카오 콘솔에서 테스트 사용자/앱 멤버로 한정된 상태라면 일반 회원 공개 가능 상태도 확인합니다.
+
+**현재 상태 (2026-09-27)**: 제공자 활성화·이메일 전용 인가 요청·로컬 및 운영 복귀 콜백을 확인했습니다. 이후 사용자의 실제 인증 화면에서 **KOE205: 설정하지 않은 동의항목 account_email**을 확인했습니다. Supabase의 Kakao 활성화와 카카오 Developers의 이메일 동의항목 설정은 별도이므로 위 3번 설정이 필요합니다. 이전의 카카오 로그인 페이지 HTTP 200 확인은 동의 화면이나 토큰 교환 성공 검증이 아닙니다. 로컬에는 카카오 버튼이 있지만 운영 로그인 HTML에는 아직 없어 코드 배포도 필요합니다. 실제 인증 완료·연결·해제는 미검증입니다. 상세 검증 범위는 [카카오 로그인 명세](../features/kakao-login.md)를 참고합니다.
+
+---
+
 
 ## 3. 프로젝트 설치 및 실행 스크립트
 

@@ -19,6 +19,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { GoogleSignInButton } from "@/components/google-sign-in-button";
+import { KakaoSignInButton } from "@/components/kakao-sign-in-button";
 import { MemberProfileFields } from "@/components/member-profile-fields";
 import {
   LeaveConfirmDialog,
@@ -163,6 +164,7 @@ export function SignUpForm({
         <CardContent>
           <div className="space-y-4 mb-4">
             <GoogleSignInButton text="Google 계정으로 간편 가입" />
+            <KakaoSignInButton disabled={isLoading} />
             
             <div className="relative my-2">
               <div className="absolute inset-0 flex items-center">

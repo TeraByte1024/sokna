@@ -7,9 +7,13 @@ const {PGlite}=await import(modulePath?pathToFileURL(path.resolve(modulePath)).h
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"..");
 const read=(file)=>readFile(path.join(root,file),"utf8");
 const migration=await read("supabase/migrations/20260927030000_manage_login_identities.sql");
+const kakaoMigration=await read("supabase/migrations/20260927040000_support_kakao_identities.sql");
 const admin="00000000-0000-0000-0000-000000000001";
 const member="00000000-0000-0000-0000-000000000002";
 const other="00000000-0000-0000-0000-000000000003";
+const kakao="00000000-0000-0000-0000-000000000004";
+const mixed="00000000-0000-0000-0000-000000000005";
+const google="00000000-0000-0000-0000-000000000006";
 const setup=`
 CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role; CREATE ROLE supabase_auth_admin;
 CREATE SCHEMA auth;
@@ -26,14 +30,18 @@ GRANT USAGE ON SCHEMA auth,public TO anon,authenticated,service_role,supabase_au
 GRANT ALL ON auth.users,auth.identities TO supabase_auth_admin;
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.admins ENABLE ROW LEVEL SECURITY;
-INSERT INTO auth.users(id,email) VALUES ('${admin}','admin@example.test'),('${member}','member@example.test'),('${other}','other@example.test');
+INSERT INTO auth.users(id,email) VALUES ('${admin}','admin@example.test'),('${member}','member@example.test'),('${other}','other@example.test'),('${kakao}','kakao@example.test'),('${mixed}','mixed@example.test'),('${google}','google@example.test');
 INSERT INTO public.users(id,email,name) SELECT id,email,'Preserved member' FROM auth.users;
 INSERT INTO public.admins VALUES ('${admin}','admin@example.test','Preserved admin');
 INSERT INTO auth.identities(user_id,provider,identity_data) VALUES
 ('${admin}','google','{"email":"admin@example.test","email_verified":true}'),
 ('${admin}','google','{"email":"secondary@example.test","email_verified":true}'),
 ('${member}','google','{"email":"member@example.test","email_verified":true}'),
-('${other}','email','{"email":"other@example.test","email_verified":true}');
+('${other}','email','{"email":"other@example.test","email_verified":true}'),
+('${kakao}','kakao','{"email":"kakao@example.test","email_verified":true}'),
+('${mixed}','google','{"email":"mixed@example.test","email_verified":true}'),
+('${mixed}','kakao','{"email":"mixed-kakao@example.test","email_verified":true}'),
+('${google}','google','{"email":"google@example.test","email_verified":true}');
 `;
 const db=new PGlite();let checks=0;
 async function check(name,fn){await fn();checks++;console.log("PASS "+name)}
@@ -44,9 +52,16 @@ try {
  const approval=await read("supabase/migrations/20260927010000_require_approved_gig_membership.sql");
  await db.exec(approval.slice(0,approval.indexOf("ALTER POLICY "))+"\nCOMMIT;");
  await db.exec(migration);
+ await db.exec(kakaoMigration);
  await check("internal triggers cannot be invoked by API roles",async()=>{
-  for(const role of ["anon","authenticated"])for(const fn of ["sync_auth_user_email()","protect_last_google_identity()"])
+  for(const role of ["anon","authenticated"])for(const fn of ["sync_auth_user_email()","protect_last_social_identity()"])
    assert.equal(await scalar("SELECT has_function_privilege($1,$2,'EXECUTE')",[role,"public."+fn]),false);
+ });
+ await check("Kakao migration replaces only the identity guard",async()=>{
+  assert.equal(await scalar("SELECT to_regprocedure('public.protect_last_google_identity()') IS NULL"),true);
+  assert.equal(await scalar("SELECT count(*)::int FROM pg_trigger WHERE tgname='auth_identities_protect_last_google'"),0);
+  assert.equal(await scalar("SELECT count(*)::int FROM pg_trigger WHERE tgname='auth_identities_protect_last_social' AND tgenabled='O'"),1);
+  assert.equal(await scalar("SELECT count(*)::int FROM pg_trigger WHERE tgname='auth_users_sync_member_email' AND tgenabled='O'"),1);
  });
  await check("Auth role promotes email atomically while preserving membership and administrator ID",async()=>{
   await db.exec(`SET ROLE supabase_auth_admin; BEGIN;
@@ -69,8 +84,8 @@ try {
   assert.equal(await scalar(`SELECT count(*)::int FROM auth.identities WHERE user_id='${admin}' AND provider='google'`),1);
   await db.exec(`DELETE FROM auth.identities WHERE user_id='${admin}' AND provider='email'`);
  });
- await check("email collision rolls back unlink and all email copies",async()=>{
-  await db.exec(`INSERT INTO auth.identities(user_id,provider,identity_data) VALUES ('${admin}','google','{"email":"conflict@example.test"}');
+ await check("Kakao email collision rolls back Google unlink and all email copies",async()=>{
+  await db.exec(`INSERT INTO auth.identities(user_id,provider,identity_data) VALUES ('${admin}','kakao','{"email":"conflict@example.test","email_verified":true}');
     INSERT INTO public.admins VALUES ('${other}','conflict@example.test','Conflicting legacy grant');`);
   await assert.rejects(db.exec(`BEGIN; DELETE FROM auth.identities WHERE user_id='${admin}' AND identity_data->>'email'='secondary@example.test';
     UPDATE auth.users SET email='conflict@example.test' WHERE id='${admin}'; COMMIT;`),/unique constraint/);
@@ -78,6 +93,64 @@ try {
   assert.equal(await scalar(`SELECT count(*)::int FROM auth.identities WHERE user_id='${admin}'`),2);
   for(const table of ["auth.users","public.users","public.admins"])assert.equal(await scalar(`SELECT email FROM ${table} WHERE id='${admin}'`),"secondary@example.test");
   await db.exec(`DELETE FROM public.admins WHERE id='${other}'`);
+ });
+ await check("Google and Kakao can each remain as the alternative to the other",async()=>{
+  await db.exec(`DELETE FROM auth.identities WHERE user_id='${mixed}' AND provider='google'`);
+  assert.equal(await scalar(`SELECT provider FROM auth.identities WHERE user_id='${mixed}'`),"kakao");
+  await db.exec(`INSERT INTO auth.identities(user_id,provider,identity_data) VALUES ('${mixed}','google','{"email":"mixed@example.test","email_verified":true}');
+    DELETE FROM auth.identities WHERE user_id='${mixed}' AND provider='kakao';`);
+  assert.equal(await scalar(`SELECT provider FROM auth.identities WHERE user_id='${mixed}'`),"google");
+ });
+ await check("last Kakao identity survives unconfirmed email and explicitly unverified Google",async()=>{
+  await db.exec(`INSERT INTO auth.identities(user_id,provider,identity_data) VALUES
+    ('${kakao}','email','{"email":"unconfirmed@example.test","email_verified":false}'),
+    ('${kakao}','google','{"email":"unverified-google@example.test","email_verified":false}');`);
+  await assert.rejects(db.exec(`DELETE FROM auth.identities WHERE user_id='${kakao}' AND provider='kakao'`),/At least one login identity/);
+  assert.equal(await scalar(`SELECT count(*)::int FROM auth.identities WHERE user_id='${kakao}' AND provider='kakao'`),1);
+  await db.exec(`DELETE FROM auth.identities WHERE user_id='${kakao}' AND provider<>'kakao'`);
+ });
+ await check("Kakao alternatives require a verified nonempty string email, matching JavaScript trim",async()=>{
+  const unusable=[
+   {}, {email_verified:true}, {email:"valid@example.test"}, {email:"valid@example.test",email_verified:false},
+   {email:"valid@example.test",email_verified:"true"}, {email:null,email_verified:true},
+   {email:123,email_verified:true}, {email:"",email_verified:true},
+   {email:" \t\n\r\v\f\u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff",email_verified:true},
+  ];
+  for(const metadata of unusable){
+   await db.query("INSERT INTO auth.identities(user_id,provider,identity_data) VALUES ($1,'kakao',$2::jsonb)",[google,JSON.stringify(metadata)]);
+   await assert.rejects(db.exec(`DELETE FROM auth.identities WHERE user_id='${google}' AND provider='google'`),/At least one login identity/);
+   await db.exec(`DELETE FROM auth.identities WHERE user_id='${google}' AND provider='kakao'`);
+  }
+  await db.query("INSERT INTO auth.identities(user_id,provider,identity_data) VALUES ($1,'kakao',$2::jsonb)",[google,JSON.stringify({email:" \tusable@example.test\n ",email_verified:true})]);
+  await db.exec(`DELETE FROM auth.identities WHERE user_id='${google}' AND provider='google'`);
+  assert.equal(await scalar(`SELECT provider FROM auth.identities WHERE user_id='${google}'`),"kakao");
+ });
+ await check("confirmed current email remains a usable alternative to Kakao",async()=>{
+  await db.exec(`INSERT INTO auth.identities(user_id,provider,identity_data) VALUES ('${kakao}','email','{"email":"kakao@example.test","email_verified":false}');
+    DELETE FROM auth.identities WHERE user_id='${kakao}' AND provider='kakao';`);
+  assert.equal(await scalar(`SELECT provider FROM auth.identities WHERE user_id='${kakao}'`),"email");
+  await db.exec(`INSERT INTO auth.identities(user_id,provider,identity_data) VALUES ('${kakao}','kakao','{"email":"kakao@example.test","email_verified":true}');
+    DELETE FROM auth.identities WHERE user_id='${kakao}' AND provider='email';`);
+ });
+ await check("Kakao unlink and email promotion preserve the same administrator",async()=>{
+  await db.exec(`BEGIN; DELETE FROM auth.identities WHERE user_id='${admin}' AND provider='google';
+    UPDATE auth.users SET email='conflict@example.test' WHERE id='${admin}'; COMMIT;`);
+  for(const table of ["auth.users","public.users","public.admins"])assert.equal(await scalar(`SELECT email FROM ${table} WHERE id='${admin}'`),"conflict@example.test");
+  await db.exec(`INSERT INTO auth.identities(user_id,provider,identity_data) VALUES ('${admin}','google','{"email":"secondary@example.test","email_verified":true}');
+    BEGIN; DELETE FROM auth.identities WHERE user_id='${admin}' AND provider='kakao';
+    UPDATE auth.users SET email='secondary@example.test' WHERE id='${admin}'; COMMIT;`);
+  for(const table of ["auth.users","public.users","public.admins"])assert.equal(await scalar(`SELECT email FROM ${table} WHERE id='${admin}'`),"secondary@example.test");
+  await db.query("SELECT set_config('test.user_id',$1,false),set_config('test.email',$2,false)",[admin,"admin@example.test"]);
+  assert.equal(await scalar("SELECT public.is_admin()"),true);
+ });
+ await check("automatic Kakao replacement permits removing unconfirmed Google or Kakao",async()=>{
+  await db.exec(`UPDATE auth.identities SET identity_data=identity_data||'{"email_verified":false}'::jsonb WHERE user_id='${mixed}';
+    BEGIN; INSERT INTO auth.identities(user_id,provider,identity_data) VALUES ('${mixed}','kakao','{"email":"kakao-replacement@example.test","email_verified":true}');
+    DELETE FROM auth.identities WHERE user_id='${mixed}' AND provider='google'; COMMIT;
+    UPDATE auth.identities SET identity_data=identity_data||'{"email_verified":false}'::jsonb WHERE user_id='${mixed}';
+    BEGIN; INSERT INTO auth.identities(user_id,provider,identity_data) VALUES ('${mixed}','kakao','{"email":"new-kakao@example.test","email_verified":true}');
+    DELETE FROM auth.identities WHERE user_id='${mixed}' AND identity_data->'email_verified'='false'::jsonb; COMMIT;`);
+  assert.equal(await scalar(`SELECT identity_data->>'email' FROM auth.identities WHERE user_id='${mixed}'`),"new-kakao@example.test");
  });
  await check("automatic Google linking removes unconfirmed identity after replacement creation",async()=>{
   await db.exec(`BEGIN;
@@ -89,9 +162,18 @@ try {
   await db.exec(`UPDATE auth.users SET deleted_at=now() WHERE id='${member}'; DELETE FROM auth.identities WHERE user_id='${member}'`);
   assert.equal(await scalar(`SELECT count(*)::int FROM auth.identities WHERE user_id='${member}'`),0);
  });
- await check("withdrawal RPC cascades last identity and preserves shared records",async()=>{
+ await check("soft-deleted accounts may clean up their final Kakao identity",async()=>{
+  await db.exec(`UPDATE auth.users SET deleted_at=now() WHERE id='${kakao}'; DELETE FROM auth.identities WHERE user_id='${kakao}'`);
+  assert.equal(await scalar(`SELECT count(*)::int FROM auth.identities WHERE user_id='${kakao}'`),0);
+ });
+ await check("hard account deletion cascades its last Kakao identity",async()=>{
+  await db.exec(`DELETE FROM auth.users WHERE id='${google}'`);
+  assert.equal(await scalar(`SELECT count(*)::int FROM auth.identities WHERE user_id='${google}'`),0);
+ });
+ await check("withdrawal RPC cascades mixed identities and preserves shared records",async()=>{
   await db.exec(await read("supabase/migrations/20260926080436_add_account_withdrawal.sql"));
-  await db.exec(`INSERT INTO auth.identities(user_id,provider,identity_data) VALUES ('${member}','google','{"email":"replacement@example.test"}');
+  await db.exec(`INSERT INTO auth.identities(user_id,provider,identity_data) VALUES ('${member}','google','{"email":"replacement@example.test"}'),
+    ('${member}','kakao','{"email":"replacement-kakao@example.test","email_verified":true}');
    UPDATE auth.users SET deleted_at=NULL WHERE id='${member}'; INSERT INTO public.performers VALUES (1,'${member}','Before','photo');`);
   await db.query("SELECT set_config('test.user_id',$1,false)",[member]);
   assert.equal(await scalar("SELECT public.delete_my_account('탈퇴')"),true);

@@ -33,13 +33,16 @@ function load(relativePath, mocks = {}) {
   return loadedModule.exports;
 }
 
-const helpers = load("lib/auth/identity-linking.ts");
+const socialProviders = load("lib/auth/social-providers.ts");
+const helperMocks = { "@/lib/auth/social-providers": socialProviders };
+const helpers = load("lib/auth/identity-linking.ts", helperMocks);
 const memberApplication = load("lib/member-application.ts");
-const loginMethods = load("lib/auth/login-methods.ts");
+const loginMethods = load("lib/auth/login-methods.ts", helperMocks);
 const validContext = { userId, nonce, createdAt: now };
 
 function fixture({
   user = { id: userId, email: "original@example.com" },
+  provider = "google",
   authError = null,
   authException = null,
   clientException = null,
@@ -113,6 +116,7 @@ function fixture({
     "node:crypto": { randomUUID: () => nonce },
     "@/lib/auth/identity-linking": helpers,
     "@/lib/auth/login-methods": loginMethods,
+    "@/lib/auth/social-providers": socialProviders,
     "next/cache": {
       revalidatePath(...args) {
         operations.push(["revalidatePath", ...args]);
@@ -137,11 +141,12 @@ function fixture({
     "next/server": { NextResponse: { redirect: (url) => ({ location: String(url) }) } },
   };
   const actions = load("app/profile/login-method-actions.ts", mocks);
-  const action = actions.startGoogleIdentityLinkAction;
+  const action = (expectedUserId, ...clientArgs) => actions.startSocialIdentityLinkAction(expectedUserId, provider, ...clientArgs);
   const callback = load("app/auth/callback/route.ts", mocks).GET;
   return {
     action,
-    unlink: actions.unlinkGoogleIdentityAction,
+    socialAction: actions.startSocialIdentityLinkAction,
+    unlink: actions.unlinkSocialIdentityAction,
     operations,
     cookieWrites,
     callback(params = { intent: "link", code: "auth-code", link_state: nonce }) {
@@ -244,7 +249,7 @@ test("local development HTTP origins keep the nonce cookie usable without wideni
 });
 
 test("disabled linking, identity conflicts and unexpected provider errors return only fixed user messages", async () => {
-  for (const code of ["manual_linking_disabled", "identity_already_exists", "unknown-provider-error"]) {
+  for (const code of ["manual_linking_disabled", "provider_disabled", "identity_already_exists", "unknown-provider-error"]) {
     const f = fixture({ linkError: { code, message: "PRIVATE OAuth provider error details" } });
     const result = await f.action(userId);
     assert.deepEqual(result, { ok: false, error: helpers.getIdentityLinkErrorMessage(code) });
@@ -514,7 +519,7 @@ test("unlink rechecks live identities so a removed alternate cannot permit a sta
 });
 
 test("unlink Auth failures use allowlisted messages and do not refresh a failed mutation", async () => {
-  for (const code of ["single_identity_not_deletable", "email_conflict_identity_not_deletable", "private-unexpected-code"]) {
+  for (const code of ["single_identity_not_deletable", "email_conflict_identity_not_deletable", "provider_disabled", "private-unexpected-code"]) {
     const f = fixture({
       user: userWithIdentities([primaryGoogleIdentity, alternateGoogleIdentity]),
       unlinkError: { code, message: "private provider database details" },
@@ -597,4 +602,128 @@ test("cache invalidation failure cannot turn a committed unlink into a failed de
   assert.equal(f.operations.filter(([name]) => name === "unlinkIdentity").length, 1);
   assert.equal(did(f, "refreshSession"), true);
   assert.equal(did(f, "signOut"), false);
+});
+const kakaoIdentity = {
+  identity_id: "kakao-identity-one",
+  id: "kakao-provider-subject-one",
+  user_id: userId,
+  provider: "kakao",
+  identity_data: { email: "kakao@example.com", email_verified: true, sub: "private-kakao-subject" },
+};
+
+test("social providers use an exact allowlist and recognizable display labels", () => {
+  assert.deepEqual(socialProviders.SOCIAL_PROVIDERS, ["google", "kakao"]);
+  assert.deepEqual(socialProviders.KAKAO_AUTH_QUERY_PARAMS, { prompt: "select_account", scope: "account_email" });
+  assert.equal(socialProviders.getSocialProviderLabel("google"), "Google");
+  assert.equal(socialProviders.getSocialProviderLabel("kakao"), "카카오");
+  assert.equal(socialProviders.getSocialProviderLabel("unsupported-provider"), "unsupported-provider");
+  for (const provider of ["google", "kakao"]) assert.equal(socialProviders.isSocialProvider(provider), true);
+  for (const provider of [undefined, null, "", "Google", "KAKAO", "kakao ", "email", "github", {}, ["kakao"]]) {
+    assert.equal(socialProviders.isSocialProvider(provider), false);
+  }
+});
+
+test("unrecognized social providers cannot initiate OAuth or write a linking cookie", async () => {
+  for (const provider of [undefined, null, "", "Google", "kakao ", "email", "github", { provider: "kakao" }]) {
+    const f = fixture();
+    assert.equal((await f.socialAction(userId, provider)).ok, false);
+    assert.equal(did(f, "linkIdentity"), false);
+    assert.deepEqual(f.cookieWrites, []);
+  }
+});
+
+test("Google and Kakao link requests use the selected provider with identical session-bound callbacks", async () => {
+  for (const provider of ["google", "kakao"]) {
+    const providerUrl = `https://provider.example/${provider}/authorize`;
+    const f = fixture({ provider, linkData: { url: providerUrl } });
+    assert.deepEqual(await f.action(userId, "https://untrusted.example/callback"), { ok: true, url: providerUrl });
+    assert.deepEqual(f.operations.find(([name]) => name === "linkIdentity"), ["linkIdentity", {
+      provider,
+      options: {
+        redirectTo: `${origin}/auth/callback?intent=link&link_state=${nonce}`,
+        skipBrowserRedirect: true,
+        queryParams: provider === "kakao"
+          ? { prompt: "select_account", scope: "account_email" }
+          : { prompt: "select_account" },
+      },
+    }]);
+    const [, payload] = f.operations.find(([name]) => name === "linkIdentity");
+    assert.equal(Object.hasOwn(payload.options, "scopes"), false, "Plural scopes must not append provider defaults");
+    assert.doesNotMatch(JSON.stringify(payload), /profile_nickname|profile_image/);
+    assert.deepEqual(JSON.parse(f.cookieWrites[0][1]), validContext);
+    assert.equal(f.cookieWrites[0][2].httpOnly, true);
+    assert.equal(f.cookieWrites[0][2].sameSite, "lax");
+    assert.equal(did(f, "getUser"), true);
+    const callback = fixture({ context: f.cookieWrites[0][1], exchangeUser: { id: userId, email: `${provider}@example.com` } });
+    assertLinkResult(await callback.callback(), "success");
+    assertCookieConsumed(callback);
+    assert.equal(did(callback, "from"), false);
+  }
+});
+
+test("Kakao linking enforces session ownership and hides disabled-provider details", async () => {
+  for (const options of [{ user: null }, { user: { id: "different-member" } }, { authError: { message: "private auth detail" } }]) {
+    const f = fixture({ ...options, provider: "kakao" });
+    assert.equal((await f.action(userId)).ok, false);
+    assert.equal(did(f, "linkIdentity"), false);
+    assert.deepEqual(f.cookieWrites, []);
+  }
+  const f = fixture({ provider: "kakao", linkError: { code: "provider_disabled", message: "private provider configuration" } });
+  const result = await f.action(userId);
+  assert.deepEqual(result, { ok: false, error: helpers.getIdentityLinkErrorMessage("provider_disabled") });
+  assert.doesNotMatch(result.error, /private provider/);
+  const callback = fixture();
+  assertLinkResult(await callback.callback({ intent: "link", link_state: nonce, error: "provider_disabled", error_description: "private provider configuration" }), "provider_disabled");
+  assert.equal(did(callback, "exchange"), false);
+});
+
+test("a verified Kakao login and a Google login can each remain when the other is unlinked", async () => {
+  for (const target of [primaryGoogleIdentity, kakaoIdentity]) {
+    const f = fixture({ user: userWithIdentities([primaryGoogleIdentity, kakaoIdentity]) });
+    const display = loginMethods.getLoginIdentities(userWithIdentities([primaryGoogleIdentity, kakaoIdentity]));
+    assert.equal(display.find((identity) => identity.id === target.identity_id).canUnlink, true);
+    assert.equal((await f.unlink(userId, target.identity_id)).ok, true);
+    assert.deepEqual(f.operations.find(([name]) => name === "unlinkIdentity"), ["unlinkIdentity", target]);
+    assert.equal(did(f, "refreshSession"), true);
+    assert.equal(did(f, "from"), false);
+    assert.doesNotMatch(JSON.stringify(display), /private-kakao-subject/);
+  }
+});
+
+test("Kakao only protects an alternate login when it has a nonempty email explicitly verified by the provider", async () => {
+  for (const identity_data of [
+    undefined, {}, { email: "kakao@example.com" },
+    { email: "kakao@example.com", email_verified: false },
+    { email: "kakao@example.com", email_verified: "true" },
+    { email: "kakao@example.com", email_verified: 1 },
+    { email: "", email_verified: true },
+    { email: " \t\n", email_verified: true },
+    { email: null, email_verified: true },
+    { email: 123, email_verified: true },
+  ]) {
+    const alternate = { ...kakaoIdentity, identity_data };
+    const currentUser = userWithIdentities([primaryGoogleIdentity, alternate]);
+    const f = fixture({ user: currentUser });
+    assert.equal((await f.unlink(userId, primaryGoogleIdentity.identity_id)).ok, false, JSON.stringify(identity_data));
+    assertNoUnlinkSideEffects(f);
+    const identities = loginMethods.getLoginIdentities(currentUser);
+    assert.equal(identities.find((identity) => identity.id === primaryGoogleIdentity.identity_id).canUnlink, false);
+    assert.equal(identities.find((identity) => identity.id === alternate.identity_id).canUnlink, true);
+  }
+});
+
+test("a Kakao identity cannot be removed as the last usable method and unsupported targets remain protected", async () => {
+  for (const identities of [
+    [kakaoIdentity],
+    [kakaoIdentity, { ...primaryGoogleIdentity, identity_data: { email_verified: false } }],
+    [kakaoIdentity, { ...emailIdentity, identity_data: { email: "password@example.com", email_verified: false } }],
+  ]) {
+    const f = fixture({ user: userWithIdentities(identities) });
+    assert.equal((await f.unlink(userId, kakaoIdentity.identity_id)).ok, false);
+    assertNoUnlinkSideEffects(f);
+  }
+  const unsupportedIdentity = { ...kakaoIdentity, provider: "github" };
+  const f = fixture({ user: userWithIdentities([primaryGoogleIdentity, unsupportedIdentity]) });
+  assert.equal((await f.unlink(userId, unsupportedIdentity.identity_id)).ok, false);
+  assertNoUnlinkSideEffects(f);
 });
