@@ -3,6 +3,7 @@ import { SiteLayout } from "@/components/site-layout";
 import { PageContainer } from "@/components/page-container";
 import { createClient } from "@/lib/supabase/server";
 import { getIsAdmin } from "@/lib/auth-admin";
+import { getLoginIdentities } from "@/lib/auth/login-methods";
 import { hasCompletedMemberProfile } from "@/lib/member-application";
 import { ProfileForm, ProfileUser } from "./profile-form";
 import type { Metadata } from "next";
@@ -28,7 +29,11 @@ function formatConsentTime(value: string | null | undefined) {
   }).format(date);
 }
 
-export default async function ProfilePage() {
+export default async function ProfilePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ identity_link?: string | string[] }>;
+}) {
   const supabase = await createClient();
 
   const {
@@ -59,7 +64,7 @@ export default async function ProfilePage() {
 
   const profileUser: ProfileUser = {
     id: user.id,
-    email: userRow?.email ?? user.email ?? null,
+    email: user.email ?? userRow?.email ?? null,
     name: userRow?.name ?? (user.user_metadata?.full_name || user.user_metadata?.name || ""),
     generation: userRow?.generation ? Number(userRow.generation) : null,
     part: userRow?.part ?? null,
@@ -70,10 +75,18 @@ export default async function ProfilePage() {
     marketing_opted_in_label: formatConsentTime(userRow?.marketing_opted_in_at),
   };
 
+  const identities = getLoginIdentities(user);
+  const { identity_link: identityLinkResult } = await searchParams;
+
   return (
     <SiteLayout>
       <PageContainer>
-        <ProfileForm user={profileUser} isAdmin={isAdmin} />
+        <ProfileForm
+          user={profileUser}
+          isAdmin={isAdmin}
+          identities={identities}
+          identityLinkResult={typeof identityLinkResult === "string" ? identityLinkResult : undefined}
+        />
       </PageContainer>
     </SiteLayout>
   );

@@ -139,10 +139,24 @@ erDiagram
 
 | 컬럼명 | 데이터 타입 | Nullable | 기본값 | 설명 |
 | :--- | :--- | :--- | :--- | :--- |
-| `id` | `uuid` | NO | - | 관리자 레코드 ID |
-| `email` | `text` | NO | - | 관리자 이메일 (Unique) |
+| `id` | `uuid` | NO | - | 관리자 계정 ID (Supabase auth.users.id와 일치) |
+| `email` | `text` | NO | - | 현재 계정 이메일 (Unique), 권한 판별은 id 사용 |
 | `name` | `text` | YES | null | 관리자 이름 |
 | `created_at` | `timestamptz` | NO | `now()` | 생성 일시 |
+
+#### 로그인 수단 해제와 계정 이메일·관리자 권한
+
+`20260927030000_manage_login_identities.sql`은 대표 Google identity 해제로 Auth 이메일이 바뀌어도 회원과 관리자 계정을 유지하기 위한 변경입니다.
+
+- 적용 전 `auth.users`와 `public.admins`를 잠그고 모든 관리자 ID·이메일이 같은 Auth 계정과 일치하는지 확인합니다. 불일치·미연결 관리자 레코드가 있으면 적용을 중단합니다. 기존 권한이나 데이터를 임의로 병합·보정하지 않습니다. 마이그레이션 잠금 대기는 5초, 실행은 30초로 제한합니다.
+- `is_admin()`은 `admins.id = auth.uid()`로 판별합니다. JWT 이메일 비교를 제거하여 이전 이메일을 다른 사용자가 소유하더라도 관리자 권한을 얻지 않습니다. `getIsAdmin()`과 관리자 명부 표시·중복 임명 확인·본인 권한 해제 차단도 같은 ID를 사용합니다.
+- `auth_users_sync_member_email` AFTER UPDATE OF email 트리거는 실제 Auth 이메일이 달라진 경우에만 `sync_auth_user_email()`을 호출합니다. 동일 ID의 `public.users.email`과 `public.admins.email`을 Auth 변경과 같은 트랜잭션에서 갱신합니다. 이름·가입 상태·승인일·동의·활동 기록은 유지합니다. 관리자 이메일 고유 제약 충돌 등으로 실패하면 Auth 변경과 identity 해제도 함께 롤백됩니다.
+- `auth_identities_protect_last_google` BEFORE DELETE 트리거는 Google identity를 지울 때 부모 `auth.users` 행을 `FOR UPDATE`로 잠근 뒤 남은 사용 가능한 로그인 수단을 다시 검사합니다. Google은 `email_verified`가 명시적인 JSON boolean false가 아닌 경우, 이메일은 명시적으로 검증되었거나 현재 Auth 이메일과 같고 `email_confirmed_at`이 있는 경우에 사용 가능한 것으로 봅니다. 서버의 해제 가능 조건과 일치시킵니다.
+- 이 잠금은 서로 다른 Google identity의 동시 삭제를 계정별로 직렬화합니다. 다른 provider의 직접 삭제는 이 트리거의 보호 범위가 아닙니다. 전체 계정 hard delete의 부모 없는 cascade 및 `deleted_at`이 있는 soft delete는 허용합니다. Google 자동 연결은 새 identity를 만든 뒤 미확인 identity를 삭제하는 순서를 유지합니다.
+- 두 내부 트리거 함수는 빈 `search_path`와 `SECURITY DEFINER`를 사용하며 `PUBLIC`·`anon`·`authenticated` 직접 실행 권한을 허용하지 않습니다. 이메일만 갱신하므로 신청 알림·수신 동의 관련 UPDATE OF 트리거는 실행되지 않습니다.
+- 테이블 컬럼·외래키 추가나 기존 데이터 일괄 변경은 없습니다. 기존 `users.email`은 nullable이며 unique 제약이 없고, `admins.email`의 NOT NULL·UNIQUE 제약을 유지합니다.
+
+격리 PostgreSQL 검증은 `tests/run-login-identities-sql.mjs`에서 실제 마이그레이션을 실행합니다. Auth 역할의 이메일 승격과 RLS 우회 범위, 승인·관리자 보존, 이전 이메일 권한 차단, 마지막 사용 가능한 수단 보호, 이메일 충돌 롤백, Google 자동 교체, soft delete, 기존 회원 탈퇴 RPC의 마지막 identity cascade, 레거시 관리자 preflight 거부를 확인했습니다. 단일 연결 PGlite이므로 두 독립 DB 세션의 실제 잠금 경합은 실행하지 않았습니다. `tests/admin-identity.test.mjs`에서 계정 ID 기반 서버 관리자 판별·중복 임명·본인 해제 차단 4개를 검증했습니다. 2026-09-27 연결된 SOKNA 운영 DB에 해당 마이그레이션만 적용하고 이력·트리거 활성화·함수 권한·빈 search_path를 재확인했습니다. 관리자 7명의 ID와 이메일 정합성은 모두 유지되었습니다. npm run types를 실행했으며 공개 타입 내용은 동일합니다. 운영 코드 배포와 실제 Google 계정 연결·해제 E2E는 확인하지 않았습니다.
 
 ### 2.3 `gigs` (공연 정보)
 정기 공연, 버스킹, 축제 등 각 공연 이벤트를 정의합니다.

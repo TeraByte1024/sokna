@@ -191,12 +191,12 @@ test("incomplete accounts stay on registration and cannot use the ordinary profi
   const f = fixture([draft()], { isAdmin: false, userId: "social-draft" });
   const registration = await f.load("app/auth/complete-profile/page.tsx").default();
   assert.match(renderToStaticMarkup(registration), /registration-form/);
-  await assert.rejects(f.load("app/profile/page.tsx").default(), /redirect:\/auth\/complete-profile/);
+  await assert.rejects(f.load("app/profile/page.tsx").default({ searchParams: Promise.resolve({}) }), /redirect:\/auth\/complete-profile/);
 });
 
 test("approved members with optional missing sessions keep profile access", async () => {
   const f = fixture([member("approved", { status: "approved", part: null })], { isAdmin: false, userId: "approved" });
-  assert.match(renderToStaticMarkup(await f.load("app/profile/page.tsx").default()), /profile-form/);
+  assert.match(renderToStaticMarkup(await f.load("app/profile/page.tsx").default({ searchParams: Promise.resolve({}) })), /profile-form/);
 });
 
 test("OAuth callback uses the same completion rule as the approval queue", async () => {

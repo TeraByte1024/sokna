@@ -13,7 +13,7 @@
 | **미신청·반려 계정** | 로그인했지만 가입 신청을 제출하지 않았거나 반려된 사용자 | 미완성 프로필 또는 `users.status = 'rejected'` |
 | **일반 회원 (Member)** | 동아리 가입 승인이 완료된 회원 | Supabase `users.status = 'approved'` |
 | **공연 참여자 (Performer)** | 특정 공연(`gigs`)에 연주 세션(보컬, 악기 등)으로 배정된 회원 | `public.performers` 테이블에 `gig_id`와 매핑된 회원 |
-| **관리자 (Admin)** | 동아리 운영진 또는 시스템 관리자 | `public.admins` 테이블에 등록된 이메일 소유자 |
+| **관리자 (Admin)** | 동아리 운영진 또는 시스템 관리자 | `public.admins` 테이블의 ID가 검증된 Auth 사용자 ID와 일치하는 사용자 |
 
 ---
 
@@ -84,7 +84,7 @@
 ## 4. 관리자 관점의 기능 가이드 (Admin Operations)
 
 ### 4.1 관리자 자격 요건
-- Supabase DB의 `admins` 테이블에 등록된 이메일 계정으로 로그인한 사용자만 관리자 기능을 수행할 수 있습니다.
+- Supabase DB의 `admins` 테이블의 ID와 검증된 Auth 사용자 ID가 일치하는 사용자만 관리자 기능을 수행할 수 있습니다. Google 로그인 수단이나 대표 이메일이 바뀌어도 권한은 같은 계정 ID에 유지됩니다.
 - 백엔드 Server Action에서 `getIsAdmin()` 유틸리티를 호출하여 이중으로 접근을 통제합니다.
 
 ### 4.2 신규 공연 개설 (`/gigs/new`)
@@ -125,4 +125,4 @@ flowchart TD
 ```
 
 - **서버 사이드 방어 (`Server Actions`)**:
-  - 클라이언트 UI가 변조되더라도 서버 액션(`app/gigs/actions.ts`, `app/gigs/[id]/nominations/actions.ts`) 레벨에서 세션 유저의 UUID 및 이메일을 DB와 직접 대조하여 권한이 없는 요청을 완벽히 차단합니다.
+  - 클라이언트 UI가 변조되더라도 서버 액션(`app/gigs/actions.ts`, `app/gigs/[id]/nominations/actions.ts`) 레벨에서 검증된 세션 사용자 ID를 DB의 관리자·공연 참여자 ID와 대조하여 권한이 없는 요청을 차단합니다.

@@ -164,7 +164,7 @@ export async function grantAdminAction(
     const { data: existing } = await supabase
       .from("admins")
       .select("id")
-      .eq("email", trimmedEmail)
+      .eq("id", user.id)
       .maybeSingle();
 
     if (existing) {
@@ -243,7 +243,7 @@ export async function revokeAdminAction(
       return { ok: false, error: "해당 관리자 레코드를 찾을 수 없습니다." };
     }
 
-    if (user?.email && user.email.toLowerCase() === targetAdmin.email.toLowerCase()) {
+    if (user?.id === targetAdmin.id) {
       return {
         ok: false,
         error: "본인의 관리자 권한은 스스로 해제할 수 없습니다. 다른 관리자에게 요청하세요.",

@@ -8,17 +8,15 @@ async function getIsAdminUncached(): Promise<boolean> {
   const supabase = await createClient();
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser();
 
-  if (!user?.email) return false;
+  if (authError || !user) return false;
 
-  const email = user.email.trim();
-
-  const client = await createClient();
-  const { data, error } = await client
+  const { data, error } = await supabase
     .from(SUPABASE_ADMINS_TABLE)
     .select("id")
-    .eq("email", email)
+    .eq("id", user.id)
     .maybeSingle();
 
   if (error || !data) return false;

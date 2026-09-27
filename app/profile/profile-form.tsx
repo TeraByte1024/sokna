@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { signOutWithPushSession } from "@/lib/supabase/logout";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,10 @@ import {
 } from "@/components/ui/card";
 import { updateMyProfileAction } from "./actions";
 import { DeleteAccountSection } from "./delete-account-section";
+import { LoginMethodsSection } from "./login-methods-section";
+import type { LoginIdentity } from "@/lib/auth/login-methods";
+import { startGoogleIdentityLinkAction, unlinkGoogleIdentityAction } from "./login-method-actions";
+import { getIdentityLinkErrorMessage } from "@/lib/auth/identity-linking";
 import { toast } from "@/components/ui/sonner";
 import { LeaveConfirmDialog, useUnsavedChangesWarning } from "@/components/ui/leave-confirm-dialog";
 import {
@@ -55,9 +59,11 @@ export interface ProfileUser {
 interface ProfileFormProps {
   user: ProfileUser;
   isAdmin: boolean;
+  identities: LoginIdentity[];
+  identityLinkResult?: string;
 }
 
-export function ProfileForm({ user, isAdmin }: ProfileFormProps) {
+export function ProfileForm({ user, isAdmin, identities, identityLinkResult }: ProfileFormProps) {
   const router = useRouter();
   const [name, setName] = useState(user.name || "");
   const [generation, setGeneration] = useState(
@@ -86,6 +92,15 @@ export function ProfileForm({ user, isAdmin }: ProfileFormProps) {
   const [isPending, startTransition] = useTransition();
   const [isDeleting, setIsDeleting] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [isLinking, setIsLinking] = useState(false);
+  const [identityLinkError, setIdentityLinkError] = useState<string | null>(null);
+  const linkingRef = useRef(false);
+  const [unlinkTarget, setUnlinkTarget] = useState<LoginIdentity | null>(null);
+  const [isUnlinking, setIsUnlinking] = useState(false);
+  const unlinkingRef = useRef(false);
+  const [identitySuccessMessage, setIdentitySuccessMessage] = useState<string | null>(null);
+  const [isRefreshingMethods, startMethodsRefresh] = useTransition();
+  const isManagingLoginMethods = isLinking || isUnlinking || isRefreshingMethods || Boolean(unlinkTarget);
   const [message, setMessage] = useState<{
     type: "success" | "error";
     text: string;
@@ -108,8 +123,94 @@ export function ProfileForm({ user, isAdmin }: ProfileFormProps) {
     isSubmittingRef,
   } = useUnsavedChangesWarning({ isDirty });
 
+  useEffect(() => {
+    const restoreAfterBackNavigation = (event: PageTransitionEvent) => {
+      if (!event.persisted || !linkingRef.current) return;
+      linkingRef.current = false;
+      isSubmittingRef.current = false;
+      setIsLinking(false);
+    };
+    window.addEventListener("pageshow", restoreAfterBackNavigation);
+    return () => window.removeEventListener("pageshow", restoreAfterBackNavigation);
+  }, [isSubmittingRef]);
+
+  const handleLinkGoogle = () => {
+    if (isPending || push.isPending || isDeleting || isLoggingOut || isManagingLoginMethods || linkingRef.current || unlinkingRef.current || pushConsentDialogOpen) return;
+    triggerConfirm(async () => {
+      if (linkingRef.current) return;
+      // The shared leave dialog marks navigation before invoking this action.
+      // Keep unsaved-change protection until the provider URL is ready.
+      isSubmittingRef.current = false;
+      linkingRef.current = true;
+      setIsLinking(true);
+      setIdentityLinkError(null);
+      setIdentitySuccessMessage(null);
+
+      try {
+        const result = await startGoogleIdentityLinkAction(user.id);
+        if (!result.ok) {
+          isSubmittingRef.current = false;
+          setIdentityLinkError(result.error);
+          linkingRef.current = false;
+          setIsLinking(false);
+          return;
+        }
+        markSubmitting();
+        window.location.assign(result.url);
+      } catch {
+        isSubmittingRef.current = false;
+        linkingRef.current = false;
+        setIsLinking(false);
+        setIdentityLinkError(getIdentityLinkErrorMessage("failed"));
+      }
+    });
+  };
+
+  const handleRequestUnlink = (identityId: string) => {
+    if (isPending || push.isPending || isDeleting || isLoggingOut || isManagingLoginMethods || linkingRef.current || unlinkingRef.current || pushConsentDialogOpen) return;
+    const identity = identities.find((item) => item.id === identityId && item.provider === "google");
+    if (!identity?.canUnlink) return;
+    setIdentityLinkError(null);
+    setIdentitySuccessMessage(null);
+    setUnlinkTarget(identity);
+  };
+
+  const handleCancelUnlink = () => {
+    if (unlinkingRef.current) return;
+    setUnlinkTarget(null);
+  };
+
+  const handleConfirmUnlink = async () => {
+    if (!unlinkTarget || isPending || push.isPending || isDeleting || isLoggingOut || isLinking || isRefreshingMethods || linkingRef.current || unlinkingRef.current || pushConsentDialogOpen) return;
+    const identity = identities.find((item) => item.id === unlinkTarget.id && item.provider === "google");
+    if (!identity?.canUnlink) {
+      setIdentityLinkError(identity?.unlinkDisabledReason || "연결된 로그인 수단을 다시 확인해 주세요.");
+      return;
+    }
+
+    unlinkingRef.current = true;
+    setIsUnlinking(true);
+    setIdentityLinkError(null);
+    setIdentitySuccessMessage(null);
+    try {
+      const result = await unlinkGoogleIdentityAction(user.id, identity.id);
+      if (!result.ok) {
+        setIdentityLinkError(result.error);
+        return;
+      }
+      setIdentitySuccessMessage(result.message);
+      setUnlinkTarget(null);
+      startMethodsRefresh(() => router.refresh());
+    } catch {
+      setIdentityLinkError("로그인 수단 연결을 해제하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+    } finally {
+      unlinkingRef.current = false;
+      setIsUnlinking(false);
+    }
+  };
+
   const handleLogout = () => {
-    if (isPending || push.isPending || isDeleting || isLoggingOut || pushConsentDialogOpen) return;
+    if (isPending || push.isPending || isDeleting || isLoggingOut || isManagingLoginMethods || pushConsentDialogOpen) return;
     triggerConfirm(async () => {
       setIsLoggingOut(true);
       try {
@@ -145,7 +246,7 @@ export function ProfileForm({ user, isAdmin }: ProfileFormProps) {
   };
 
   const handleDevicePushToggle = () => {
-    if (isPending || push.isPending || isDeleting || isLoggingOut) return;
+    if (isPending || push.isPending || isDeleting || isLoggingOut || isManagingLoginMethods) return;
     if (push.enabled) {
       void push.disablePush();
     } else if (!push.hasMarketingConsent) {
@@ -157,7 +258,7 @@ export function ProfileForm({ user, isAdmin }: ProfileFormProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (isPending || push.isPending || isDeleting || isLoggingOut) return;
+    if (isPending || push.isPending || isDeleting || isLoggingOut || isManagingLoginMethods) return;
     setMessage(null);
 
     const trimmedName = name.trim();
@@ -311,7 +412,7 @@ export function ProfileForm({ user, isAdmin }: ProfileFormProps) {
               type="button"
               variant="outline"
               size="sm"
-              disabled={isPending || push.isPending || isDeleting || isLoggingOut || pushConsentDialogOpen}
+              disabled={isPending || push.isPending || isDeleting || isLoggingOut || isManagingLoginMethods || pushConsentDialogOpen}
               onClick={handleLogout}
               className="h-9 gap-2"
             >
@@ -321,6 +422,21 @@ export function ProfileForm({ user, isAdmin }: ProfileFormProps) {
           </div>
         </CardContent>
       </Card>
+
+      <LoginMethodsSection
+        identities={identities}
+        result={identityLinkResult}
+        error={identityLinkError}
+        successMessage={identitySuccessMessage}
+        isPending={isLinking}
+        isUnlinking={isUnlinking}
+        disabled={isPending || push.isPending || isDeleting || isLoggingOut || isRefreshingMethods || pushConsentDialogOpen}
+        unlinkTarget={unlinkTarget}
+        onLinkGoogle={handleLinkGoogle}
+        onRequestUnlink={handleRequestUnlink}
+        onCancelUnlink={handleCancelUnlink}
+        onConfirmUnlink={handleConfirmUnlink}
+      />
 
       {/* 2. 회원 정보 수정 폼 카드 */}
       <Card className="border-border/60 shadow-sm">
@@ -332,7 +448,7 @@ export function ProfileForm({ user, isAdmin }: ProfileFormProps) {
         </CardHeader>
 
         <CardContent>
-          <fieldset disabled={isDeleting || isLoggingOut} className="min-w-0">
+          <fieldset disabled={isDeleting || isLoggingOut || isManagingLoginMethods} className="min-w-0">
           <form
             id="profile-update-form"
             onSubmit={handleSubmit}
@@ -434,7 +550,7 @@ export function ProfileForm({ user, isAdmin }: ProfileFormProps) {
               onCustomPartChange={setCustomPart}
               onClear={handleClearSession}
               required={false}
-              disabled={isDeleting || isLoggingOut}
+              disabled={isDeleting || isLoggingOut || isManagingLoginMethods}
             />
 
             {/* 앱 푸시 알림 수신 동의 */}
@@ -482,7 +598,7 @@ export function ProfileForm({ user, isAdmin }: ProfileFormProps) {
                   aria-labelledby="devicePushLabel"
                   aria-describedby={push.permission === "unsupported" || push.permission === "denied" ? "devicePushDescription" : undefined}
                   title={push.enabled ? "이 기기 알림 끄기" : "이 기기 알림 켜기"}
-                  disabled={isPending || push.isPending || isDeleting || isLoggingOut || push.permission === "unsupported" || push.permission === "denied"}
+                  disabled={isPending || push.isPending || isDeleting || isLoggingOut || isManagingLoginMethods || push.permission === "unsupported" || push.permission === "denied"}
                   onClick={handleDevicePushToggle}
                   className="inline-flex h-11 w-14 shrink-0 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                 >
@@ -515,14 +631,14 @@ export function ProfileForm({ user, isAdmin }: ProfileFormProps) {
 
           <div className="flex flex-wrap items-center justify-between gap-x-8 gap-y-6 pt-6">
             <DeleteAccountSection
-              disabled={isPending || push.isPending || isLoggingOut || pushConsentDialogOpen}
+              disabled={isPending || push.isPending || isLoggingOut || isManagingLoginMethods || pushConsentDialogOpen}
               onPendingChange={setIsDeleting}
               onDeleted={markSubmitting}
             />
             <Button
               type="submit"
               form="profile-update-form"
-              disabled={isPending || push.isPending || isDeleting || isLoggingOut}
+              disabled={isPending || push.isPending || isDeleting || isLoggingOut || isManagingLoginMethods}
               className="ml-auto h-10 w-auto min-w-32 bg-primary text-primary-foreground font-semibold shadow-sm"
             >
               {isPending ? (

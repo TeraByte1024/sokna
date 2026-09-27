@@ -14,6 +14,7 @@ SOKNA 애플리케이션은 **Supabase Auth**와 `@supabase/ssr`을 결합하여
    - 신청 완료 시 `public.users`에 `status = 'pending'` 상태로 저장되며, 관리자(`admins`)에게 `notifications` 알림이 자동 생성됩니다. 관리자 계정이 마케팅 알림에 동의하고 기기 토큰을 등록한 경우 cron 주기와 무관하게 웹 푸시를 즉시 발송합니다.
 2. **구글 소셜 로그인 (`Google OAuth`)**:
    - 로그인/가입 화면에서 Google 계정으로 1초 만에 간편 로그인할 수 있습니다.
+   - 일반 Google 로그인은 `prompt: "select_account consent"`로 계정 선택을 명시적으로 요청합니다. 여러 Google 계정을 연결한 회원은 사용할 계정을 선택할 수 있으며 기존 OAuth 동의 절차를 유지합니다.
    - OAuth 콜백(`app/auth/callback/route.ts`)에서 세션을 교환하며, 기수/세션 정보가 없는 신규 소셜 가입자는 프로필 등록 화면(`/auth/complete-profile`)으로 자동 안내됩니다.
    - 클라이언트는 현재 origin의 `/auth/callback`을 `redirectTo`로 전달합니다. 따라서 로컬 테스트 시 Supabase Auth Redirect URLs에 `http://localhost:3000/auth/callback`이 반드시 허용되어야 하며, 누락 시 운영 Site URL로 fallback될 수 있습니다.
    - 프로필 입력 화면에서도 세션 프리셋의 보컬을 `보컬(남)`과 `보컬(여)`로 구분하여 입력받습니다.
@@ -39,6 +40,14 @@ SOKNA 애플리케이션은 **Supabase Auth**와 `@supabase/ssr`을 결합하여
    - `signOutWithPushSession()`으로 현재 기기의 수신 계정 연결만 정지한 뒤 `signOut({ scope: "local" })`을 실행합니다. 기기 토큰과 푸시 구독은 보존하고 다른 기기의 로그인은 유지합니다.
    - 다음 사용자가 로그인하면 서버가 기기 증명 쿠키를 검증하여 동일 기기를 새 계정에 연결합니다. 로그인 계정의 수신 동의를 적용하며, 알림 표시와 클릭 직전에 세션을 다시 검사하므로 이전 계정의 지연 알림은 차단합니다.
    - 연결 정지 오류가 로그아웃을 막지는 않습니다. 세션 종료 자체가 실패하면 기기 연결 확인을 재개하고 사용자에게 오류를 알립니다.
+
+8. **여러 Google 계정으로 같은 계정 로그인 및 연결 해제**:
+   - `/profile`에서 기존 이메일 로그인과 Google 계정들을 확인하고 다른 이메일의 Google 계정을 추가·해제합니다. 공통 4색 Google 로고를 로그인 버튼·목록·추가 버튼에 사용합니다.
+   - 화면 사용자 ID와 서버의 검증된 사용자를 대조한 뒤 Google 계정 선택창을 엽니다. HttpOnly 일회성 연결 컨텍스트와 콜백 세션의 사용자 ID를 확인하고 결과는 프로필에서 안내합니다.
+   - 해제 시 대상 이메일을 확인하고 서버에서 본인 소유 Google identity와 대체 로그인 수단을 다시 검사합니다. 마지막 로그인 수단은 해제할 수 없으며, 기존 이메일 로그인은 유지합니다.
+   - 기존 사용자 ID·회원 승인·관리자 권한·공연 기록을 유지합니다. 대표 Google 해제 시 Supabase가 대표 이메일을 바꿀 수 있으며 회원·관리자 이메일은 DB 트리거에서 동기화합니다. 관리자 권한은 이메일이 아닌 변하지 않는 사용자 ID에 연결합니다.
+   - 다른 회원 계정에 연결된 Google identity의 연결과 기존 계정 데이터 병합은 지원하지 않습니다. 같은 이메일의 다른 수단이 남으면 향후 Google 로그인에서 자동 연결될 수 있으며 연결 해제는 다른 기기의 세션을 종료하지 않습니다.
+   - 2026-09-27 사용자 승인으로 Manual Linking과 연결 콜백 Redirect URLs를 적용·재확인했습니다. 실제 Google 계정 연결·해제 E2E는 미확인입니다. 상세 규칙은 [로그인 수단 관리 명세](./login-methods.md)를 따릅니다.
 
 #### 가입 부원 정보 입력 UI
 
@@ -77,7 +86,7 @@ SOKNA 애플리케이션은 **Supabase Auth**와 `@supabase/ssr`을 결합하여
    - 자신이 `performer`로 등록된 공연에 한해 곡(Setlist) 추가 및 본인 등록 곡 삭제/수정 가능.
 - **승인 상태 보호**: `users_protect_member_approval` DB 트리거가 일반 사용자의 `status`·`approved_at` 임의 변경을 차단합니다. 신규 본인 프로필은 `pending`으로만 등록할 수 있으며, 기존 반려 계정의 `rejected → pending` 재신청과 일반 프로필 수정은 허용합니다. 관리자 승인·반려 및 검증된 관리자 전용 RPC는 기존대로 동작합니다.
 - **관리자 (Admin)**:
-   - `public.admins` 테이블에 등록된 이메일을 소유한 사용자.
+   - `public.admins` 테이블의 ID가 검증된 Auth 사용자 ID와 일치하는 사용자.
    - 공연 등록 (`/gigs/new`) 권한 보유.
    - 회원 가입 승인/거절, 관리자 권한 부여/해제 및 회원 정보 수정 권한 보유 (`/admin/members`).
    - `lib/auth-admin.ts`의 `getIsAdmin()` 함수를 통해 서버 사이드에서 판별:

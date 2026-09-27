@@ -79,10 +79,8 @@ export function AdminMembersClient({
     "직접 입력",
   ] as const;
 
-  // 빠른 확인을 위한 관리자 이메일 Set
-  const adminEmailSet = new Set(
-    admins.map((a) => a.email.toLowerCase().trim())
-  );
+  // 계정 ID로 관리자 표시를 유지합니다.
+  const adminIdSet = new Set(admins.map((admin) => admin.id));
 
   const showAlert = (type: "success" | "error", text: string) => {
     if (type === "success") {
@@ -607,9 +605,7 @@ export function AdminMembersClient({
                   </tr>
                 ) : (
                   filteredApprovedMembers.map((m) => {
-                    const isUserAdmin = Boolean(
-                      m.email && adminEmailSet.has(m.email.toLowerCase().trim())
-                    );
+                    const isUserAdmin = adminIdSet.has(m.id);
                     const isProcessingGrant = processingId === `grant-${m.id}`;
 
                     return (

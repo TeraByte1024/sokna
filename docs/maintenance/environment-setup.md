@@ -142,6 +142,26 @@ Firebase Console의 프로젝트 설정 → 서비스 계정에서 확인한 자
 
 ---
 
+### 2.6 Google 계정 추가 로그인 설정
+
+`/profile`의 Google 계정 추가는 Supabase의 수동 identity 연결을 사용합니다. 기존 회원 ID와 앱 DB 스키마는 유지하며, 이 기능 때문에 앱 DB 마이그레이션이나 타입 재생성이 필요하지 않습니다.
+
+1. Supabase Dashboard의 Authentication 설정에서 **Enable Manual Linking**을 활성화합니다. 자체 호스팅에서는 `GOTRUE_SECURITY_MANUAL_LINKING_ENABLED=true`를 사용합니다. [Supabase 공식 연결 안내](https://supabase.com/docs/guides/auth/auth-identity-linking)를 참고합니다.
+2. **Authentication > URL Configuration > Redirect URLs**에 각 환경의 기존 로그인 콜백과 연결 콜백을 허용합니다. 연결 콜백은 `intent=link`와 요청마다 다른 `link_state` 쿼리를 포함하므로 nonce까지 고정한 주소 한 개를 등록하면 안 됩니다.
+
+   | 환경 | 일반 로그인 주소 | Google 계정 추가 허용 패턴 |
+   | :--- | :--- | :--- |
+   | 로컬 | `http://localhost:3000/auth/callback` | `http://localhost:3000/auth/callback\?intent=link&link_state=*` |
+   | 운영 | `https://<운영 도메인>/auth/callback` | `https://<운영 도메인>/auth/callback\?intent=link&link_state=*` |
+
+   실제 사용 포트·도메인과 `redirectTo`에 맞춰 등록합니다. 위 패턴의 `\?`는 glob에서 물음표 문자 자체를, `*`는 변하는 nonce를 뜻합니다. 사이트 전체를 허용하는 `/**`보다 콜백 경로와 쿼리 접두사를 제한한 패턴을 사용합니다. 별도 preview 도메인을 쓰면 해당 환경도 등록합니다. 이 패턴은 [Redirect URLs 공식 문서](https://supabase.com/docs/guides/auth/redirect-urls)의 glob 이스케이프 규칙을 적용한 예시이며 2026-09-27 연결된 SOKNA 프로젝트의 로컬·운영 주소에서 설정 저장과 OAuth 취소 리다이렉트 매칭을 확인했습니다.
+3. 같은 브라우저에서 소크나 계정으로 로그인한 뒤 프로필의 추가 버튼으로 시작합니다. Google 설정의 OAuth callback은 Supabase Auth의 기존 callback을 유지하며, 위 앱 콜백은 Supabase가 인증 후 돌아올 주소입니다.
+4. 두 번째 Google 계정을 연결한 후 로그아웃하고 각각의 Google 계정으로 로그인하여 같은 사용자 ID·회원 승인·공연 참가 기록이 유지되는지 확인합니다. 이미 다른 소크나 계정에 연결된 Google 계정은 병합되지 않고 오류가 안내되어야 합니다.
+
+**확인 상태 (2026-09-27)**: `manual_linking_disabled` 오류의 원인인 Manual Linking 비활성과 연결 콜백 누락을 확인한 뒤 사용자 승인으로 수정했습니다. 연결된 SOKNA 프로젝트의 `security_manual_linking_enabled = true`와 허용 목록을 관리 API로 재조회했습니다. 기존 `http://localhost:3000/auth/callback`을 유지하고 `https://sokna-pink.vercel.app/auth/callback` 및 위 두 환경의 연결 콜백 패턴을 추가했습니다. 변경된 설정은 수동 연결 플래그와 `uri_allow_list` 두 항목뿐입니다. 로컬·운영 OAuth 요청을 만들고 즉시 취소하여 지정한 콜백 경로와 nonce가 보존되는 HTTP 302 응답을 확인했습니다. 실제 Google 계정 인증·연결 E2E는 미검증입니다. 코드 구현·정적 검사 성공과 운영 활성화 완료를 구분합니다. 상세 명세는 [여러 Google 계정 로그인](../features/login-methods.md)을 참고합니다.
+
+---
+
 ## 3. 프로젝트 설치 및 실행 스크립트
 
 ```bash
