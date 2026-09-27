@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { processPendingPushNotifications } from "@/lib/push-notifications";
+import { savePushConsent } from "@/lib/push-consent";
 
 export type CompleteProfileResult =
   | { ok: true }
@@ -40,15 +41,14 @@ export async function completeProfileAction(
 
     const appliedAt = new Date().toISOString();
     // 신청과 관리자 알림을 DB 트리거가 같은 트랜잭션으로 저장합니다.
-    const { error: upsertError } = await supabase.from("users").upsert({
-      id: user.id,
-      email: user.email ?? null,
-      name: trimmedName,
-      generation,
-      part: trimmedPart,
-      status: "pending",
-      marketing_opt_in: marketingOptIn,
-      applied_at: appliedAt,
+    const { error: upsertError } = await savePushConsent(supabase, user.id, marketingOptIn, {
+      application: {
+        email: user.email ?? null,
+        name: trimmedName,
+        generation,
+        part: trimmedPart,
+        applied_at: appliedAt,
+      },
     });
 
     if (upsertError) {

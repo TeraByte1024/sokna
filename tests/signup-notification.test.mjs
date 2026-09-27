@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { test } from "node:test";
@@ -22,6 +22,11 @@ function loadSource(relativePath, mocks) {
   const loadedModule = { exports: {} };
   const localRequire = (name) => {
     if (Object.hasOwn(mocks, name)) return mocks[name];
+    if (name.startsWith("@/")) {
+      const base = path.join(root, name.slice(2));
+      const resolved = [base, base + ".ts", base + ".tsx"].find(existsSync);
+      if (resolved) return loadSource(path.relative(root, resolved), mocks);
+    }
     return requireDependency(name);
   };
   vm.runInThisContext(`(function(require,module,exports,window,console){${source}\n})`, { filename })(
@@ -152,22 +157,25 @@ test("invalid stored timestamps cannot fall back to a broad event-type dispatch"
   assert.deepEqual(f.dispatches, []);
 });
 
-function signupFormFixture(user) {
+function signupFormFixture(user, options = {}) {
+  const consent = Object.hasOwn(options, "consent") ? options.consent : false;
+  const signups = [];
   const dispatches = [];
   const navigation = [];
   const submitted = [];
   const stateValues = [
     "new@example.test", "secure-password", "secure-password", "New member", "42",
-    "기타", "", true, false, null, false,
+    "기타", "", true, consent, null, false,
   ];
   let stateIndex = 0;
   const stub = () => null;
   const mocks = {
     react: { useState: () => [stateValues[stateIndex++], () => {}] },
     "@/lib/utils": { cn: (...items) => items.filter(Boolean).join(" ") },
-    "@/lib/supabase/client": { createClient: () => ({ auth: { signUp: async () => ({
-      data: { user, session: null }, error: null,
-    }) } }) },
+    "@/lib/supabase/client": { createClient: () => ({ auth: { signUp: async (payload) => {
+      signups.push(payload);
+      return { data: { user, session: null }, error: null };
+    } } }) },
     "@/components/ui/button": { Button: stub },
     "@/components/ui/card": { Card: stub, CardContent: stub, CardDescription: stub, CardHeader: stub, CardTitle: stub },
     "@/components/ui/input": { Input: stub },
@@ -198,7 +206,7 @@ function signupFormFixture(user) {
     }
     return null;
   };
-  return { form: findForm(tree), dispatches, navigation, submitted };
+  return { form: findForm(tree), dispatches, navigation, submitted, signups };
 }
 
 test("the signup form forwards the returned applicant ID even when email confirmation creates no session", async () => {
@@ -215,4 +223,28 @@ test("a signup response without a user ID still completes through the action's n
   await f.form.props.onSubmit({ preventDefault() {} });
   assert.deepEqual(f.dispatches, [undefined]);
   assert.deepEqual(f.navigation, ["/auth/sign-up-success"]);
+});
+
+
+test("email signup sends the explicit consent choice with profile metadata and no client timestamp", async () => {
+  for (const consent of [false, true]) {
+    const f = signupFormFixture({ id: APPLICANT_ID }, { consent });
+    await f.form.props.onSubmit({ preventDefault() {} });
+    assert.equal(f.signups.length, 1);
+    assert.deepEqual(f.signups[0].options.data, {
+      name: "New member", generation: 42, part: "기타", marketing_opt_in: consent,
+    });
+    assert.deepEqual(f.dispatches, [APPLICANT_ID]);
+  }
+});
+
+test("email signup does not create an account when consent is missing or malformed", async () => {
+  for (const consent of [undefined, null, "false", "true", 0, 1]) {
+    const f = signupFormFixture({ id: APPLICANT_ID }, { consent });
+    await f.form.props.onSubmit({ preventDefault() {} });
+    assert.deepEqual(f.signups, []);
+    assert.deepEqual(f.dispatches, []);
+    assert.deepEqual(f.navigation, []);
+    assert.deepEqual(f.submitted, []);
+  }
 });

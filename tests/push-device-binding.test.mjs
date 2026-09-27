@@ -14,6 +14,9 @@ const otherProfileId = "e5f4d63f-7200-421c-9132-d6d24b5a791e";
 const files = {
   diagnostics: "lib/firebase/push-device-diagnostics.ts",
   binding: "lib/firebase/push-device-binding.ts",
+  service: "lib/firebase/push-device-service.ts",
+  consent: "lib/push-consent.ts",
+  device: "lib/firebase/push-device.ts",
   actions: "app/profile/notification-actions.ts",
   authorize: "app/api/push/authorize/route.ts",
 };
@@ -103,7 +106,11 @@ function fixture({ owner = "user-b", token = "browser-token", userId = "user-b",
       "@/lib/supabase/service": { createServiceClient: () => service },
     };
     if (key !== "diagnostics") dependencies["@/lib/firebase/push-device-diagnostics"] = load("diagnostics");
-    if (key === "actions" || key === "authorize") dependencies["@/lib/firebase/push-device-binding"] = load("binding");
+    if (["actions", "authorize", "service"].includes(key)) dependencies["@/lib/firebase/push-device-binding"] = load("binding");
+    if (key === "actions") {
+      dependencies["@/lib/firebase/push-device-service"] = load("service");
+      dependencies["@/lib/push-consent"] = load("consent");
+    }
     vm.runInThisContext(`(function(require,module,exports,process,console){${source[key]}\n})`, { filename: files[key] })(
       (name) => { assert.ok(Object.hasOwn(dependencies, name), `Unexpected dependency ${name}`); return dependencies[name]; },
       loadedModule, loadedModule.exports, { env }, { error: (...args) => logs.push(args) },
@@ -113,6 +120,25 @@ function fixture({ owner = "user-b", token = "browser-token", userId = "user-b",
   }
   return {
     profiles, users, notifications, cookies, writes, operations, env, logs,
+    loadDevice() {
+      const values = new Map([["sokna-fcm-token", token], ["sokna-fcm-token-owner", userId]]);
+      let deletedTokens = 0;
+      const window = new EventTarget();
+      window.localStorage = {
+        getItem: (key) => values.get(key) ?? null,
+        setItem: (key, value) => values.set(key, value),
+        removeItem: (key) => values.delete(key),
+      };
+      const loadedModule = { exports: {} };
+      const dependencies = {
+        "@/app/profile/notification-actions": load("actions"),
+        "@/lib/firebase/pushNotification": { deleteFcmToken: async () => { deletedTokens++; return { data: true, error: null }; } },
+      };
+      vm.runInNewContext(`(function(require,module,exports){${source.device}\n})`, {
+        window, navigator: {}, Event, console: { error() {} },
+      })((name) => { assert.ok(Object.hasOwn(dependencies, name), name); return dependencies[name]; }, loadedModule, loadedModule.exports);
+      return { device: loadedModule.exports, values, deletedTokens: () => deletedTokens };
+    },
     diagnostics: load("diagnostics"),
     binding: load("binding"), actions: load("actions"), authorize: load("authorize"),
     signIn: (id) => { currentUser = id; authError = null; authException = null; },
@@ -424,4 +450,94 @@ test("unknown error codes, arbitrary statuses and raw provider text never enter 
     assert.equal((await f.actions.getPushDeviceStatusAction("browser-token")).ok, false);
     assert.deepEqual(f.logs, [["[push-device] operation failed", { action: "status", stage: "session" }]]);
   }
+});
+
+
+test("consent-trigger deletion followed by real client disable completes and can be repeated", async () => {
+  const f = fixture();
+  await f.actions.getPushDeviceStatusAction("browser-token");
+  const browser = f.loadDevice();
+  // Model the committed database trigger before the profile UI performs local cleanup.
+  f.users[0].marketing_opt_in = false;
+  f.profiles.splice(0);
+  f.profiles.push({ id: otherProfileId, user_id: "user-c", fcm_token: "other-device" });
+  await browser.device.disablePushDevice();
+  assert.equal(browser.values.size, 0);
+  assert.equal(browser.deletedTokens(), 1);
+  assert.equal(f.cookies.has(f.binding.PUSH_DEVICE_COOKIE), false);
+  assert.equal((await f.actions.unregisterPushTokenAction("browser-token")).ok, true);
+  await browser.device.disablePushDevice();
+  assert.equal(browser.deletedTokens(), 2);
+  assert.deepEqual(f.profiles.map((row) => row.fcm_token), ["other-device"]);
+});
+
+test("idempotent unregister still rejects signed-out callers and existing foreign registrations", async () => {
+  for (const mode of ["signed-out", "foreign", "foreign-receipt", "blank"]) {
+    const f = fixture({ withProfile: mode !== "signed-out" });
+    if (mode === "foreign-receipt") await f.actions.getPushDeviceStatusAction("browser-token");
+    if (mode === "signed-out") f.signIn(null);
+    if (mode.startsWith("foreign")) f.signIn("user-c");
+    const before = structuredClone(f.profiles);
+    assert.equal((await f.actions.unregisterPushTokenAction(mode === "blank" ? " " : "browser-token")).ok, false, mode);
+    assert.deepEqual(f.profiles, before);
+    assert.equal(f.operations.some((operation) => operation.kind === "delete"), false);
+  }
+});
+
+test("unregister distinguishes absent rows from read failures and preserves local state on failure", async () => {
+  const f = fixture({ withProfile: false });
+  const browser = f.loadDevice();
+  f.failQuery((query) => query.table === "profiles" && query.service && query.kind === "select"
+    ? { code: "PGRST003", status: 503 } : null);
+  await assert.rejects(browser.device.disablePushDevice());
+  assert.equal(browser.values.get("sokna-fcm-token"), "browser-token");
+  assert.equal(browser.deletedTokens(), 0);
+  assert.deepEqual(f.logs, [["[push-device] operation failed", { action: "unregister", stage: "own-profile-read", code: "PGRST003", status: 503 }]]);
+});
+
+test("unregister compare-and-delete preserves concurrent ownership and token changes", async () => {
+  for (const field of ["user_id", "fcm_token"]) {
+    const f = fixture();
+    await f.actions.getPushDeviceStatusAction("browser-token");
+    f.failQuery((query) => {
+      if (query.kind === "delete") f.profiles[0][field] = field === "user_id" ? "user-c" : "replacement-token";
+      return null;
+    });
+    assert.equal((await f.actions.unregisterPushTokenAction("browser-token")).ok, false, field);
+    assert.equal(f.profiles.length, 1);
+    assert.equal(f.profiles[0][field], field === "user_id" ? "user-c" : "replacement-token");
+    assert.equal(f.cookies.has(f.binding.PUSH_DEVICE_COOKIE), true);
+  }
+});
+
+test("unregister of a stale token cannot clear the receipt of its live replacement", async () => {
+  const f = fixture();
+  await f.actions.getPushDeviceStatusAction("browser-token");
+  await f.actions.refreshPushTokenAction("browser-token", "replacement-token", "browser", "user-b");
+  const receipt = f.cookies.get(f.binding.PUSH_DEVICE_COOKIE);
+  assert.equal((await f.actions.unregisterPushTokenAction("browser-token")).ok, false);
+  assert.equal(f.profiles[0].fcm_token, "replacement-token");
+  assert.equal(f.cookies.get(f.binding.PUSH_DEVICE_COOKIE), receipt);
+});
+
+
+test("failed receipt write after rotation cannot make a live replacement look absent during unregister", async () => {
+  const f = fixture();
+  await f.actions.getPushDeviceStatusAction("browser-token");
+  const browser = f.loadDevice();
+  const receipt = f.cookies.get(f.binding.PUSH_DEVICE_COOKIE);
+  f.failCookies("set", new Error("receipt write failed"));
+  assert.equal((await f.actions.refreshPushTokenAction("browser-token", "replacement-token", "browser", "user-b")).ok, false);
+  assert.equal(f.profiles[0].fcm_token, "replacement-token");
+  assert.equal(f.cookies.get(f.binding.PUSH_DEVICE_COOKIE), receipt);
+  // The old receipt grants no access to the rotated token, but still proves its row exists.
+  assert.equal(await f.binding.getReceiptPushProfile("browser-token"), null);
+  assert.equal(await f.binding.hasPushDeviceReceiptProfile(), true);
+  await assert.rejects(browser.device.disablePushDevice());
+  assert.equal(browser.values.get("sokna-fcm-token"), "browser-token");
+  assert.equal(browser.deletedTokens(), 0);
+  assert.equal(f.profiles[0].fcm_token, "replacement-token");
+  assert.equal(f.cookies.get(f.binding.PUSH_DEVICE_COOKIE), receipt);
+  assert.equal(f.operations.some((operation) => operation.kind === "delete"), false);
+  assert.deepEqual(f.logs, [["[push-device] operation failed", { action: "refresh", stage: "receipt-write" }]]);
 });

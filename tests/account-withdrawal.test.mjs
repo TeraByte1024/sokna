@@ -12,6 +12,14 @@ const source = ts.transpileModule(readFileSync(filename, "utf8"), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, esModuleInterop: true },
 }).outputText;
 
+const consentModule = { exports: {} };
+const consentSource = ts.transpileModule(readFileSync(path.join(root, "lib/push-consent.ts"), "utf8"), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS },
+}).outputText;
+vm.runInThisContext("(function(module,exports){" + consentSource + "\n})")(
+  consentModule, consentModule.exports,
+);
+
 function fixture({
   user = { id: "current-member" },
   authError = null,
@@ -46,6 +54,7 @@ function fixture({
     },
   };
   const mocks = {
+    "@/lib/push-consent": consentModule.exports,
     "@/lib/supabase/server": {
       async createClient() {
         operations.push(["createClient"]);

@@ -88,22 +88,20 @@ export async function getReceiptPushProfile(token?: string | null): Promise<Veri
 	return data;
 }
 
+/** Presence alone can reject deletion-as-absent; it never authorizes use of a stale token. */
+export async function hasPushDeviceReceiptProfile(): Promise<boolean> {
+	const receipt = await readReceipt();
+	if (!receipt) return false;
+	const { data, error } = await atPushDeviceStage("receipt-profile-read", () => createServiceClient().from("profiles")
+		.select("id").eq("id", receipt.profileId).maybeSingle());
+	if (error) throw new PushDeviceError("receipt-profile-read", error);
+	return Boolean(data);
+}
+
 /** Only a confirmed missing session means signed out; auth/network failures must not rebind devices. */
 export async function getPushSession() {
 	const supabase = await atPushDeviceStage("session", createClient);
 	const { data: { user }, error } = await atPushDeviceStage("session", () => supabase.auth.getUser());
 	if (error && error.name !== "AuthSessionMissingError") throw new PushDeviceError("session", error);
 	return { supabase, user: error ? null : user };
-}
-
-export async function bindPushProfile(profile: VerifiedPushProfile, userId: string | null): Promise<boolean> {
-	if (profile.user_id === userId) return true;
-	const { data, error } = await atPushDeviceStage("profile-bind", () => {
-		let query = createServiceClient().from("profiles").update({ user_id: userId, updated_at: new Date().toISOString() })
-			.eq("id", profile.id).eq("fcm_token", profile.fcm_token);
-		query = profile.user_id === null ? query.is("user_id", null) : query.eq("user_id", profile.user_id);
-		return query.select("id").maybeSingle();
-	});
-	if (error) throw new PushDeviceError("profile-bind", error);
-	return Boolean(data);
 }

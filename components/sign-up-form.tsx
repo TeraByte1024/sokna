@@ -1,5 +1,7 @@
 "use client";
 
+import { pushConsentFields } from "@/lib/push-consent";
+
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -125,7 +127,7 @@ export function SignUpForm({
             name: trimmedName,
             generation: genNum,
             part,
-            marketing_opt_in: agreeMarketing,
+            ...pushConsentFields(agreeMarketing),
           },
         },
       });

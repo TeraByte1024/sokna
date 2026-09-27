@@ -41,10 +41,11 @@ const member = (id, overrides = {}) => ({
 const draft = () => member("social-draft", { generation: null, part: null });
 const fragment = ({ children }) => React.createElement(React.Fragment, null, children);
 
-function fixture(rows, { isAdmin = true, userId = "admin", queryError = null, saveError = null } = {}) {
+function fixture(rows, { isAdmin = true, userId = "admin", queryError = null, saveError = null, hiddenSave = false } = {}) {
   const notifications = [];
   const invalidations = [];
   const pushBatches = [];
+  const writes = [];
   const client = {
     auth: {
       getClaims: async () => ({ data: { claims: { sub: userId, email: `${userId}@example.com` } } }),
@@ -54,6 +55,7 @@ function fixture(rows, { isAdmin = true, userId = "admin", queryError = null, sa
     from(table) {
       let items = table === "users" ? rows : table === "admins" ? [{ id: "admin" }] : [];
       const predicates = [];
+      let pendingUpsert = null;
       const result = () => ({ data: queryError ? null : items.filter((item) => predicates.every((predicate) => predicate(item))), error: queryError });
       const query = {
         select() { return query; },
@@ -65,12 +67,21 @@ function fixture(rows, { isAdmin = true, userId = "admin", queryError = null, sa
         order() { return query; },
         maybeSingle: async () => ({ ...result(), data: result().data?.[0] ?? null }),
         then(resolve, reject) { return Promise.resolve(result()).then(resolve, reject); },
-        async upsert(payload) {
-          if (saveError) return { error: saveError };
-          const existing = rows.find((item) => item.id === payload.id);
-          if (existing) Object.assign(existing, payload);
-          else rows.push(payload);
-          return { error: null };
+        async single() {
+          if (saveError || hiddenSave) {
+            return { data: null, error: saveError ?? { code: "PGRST116", message: "No visible row" } };
+          }
+          assert.ok(pendingUpsert, "A profile upsert must precede its single-row confirmation");
+          const existing = rows.find((item) => item.id === pendingUpsert.id);
+          if (existing) Object.assign(existing, pendingUpsert);
+          else rows.push(pendingUpsert);
+          return { data: { id: pendingUpsert.id }, error: null };
+        },
+        upsert(payload) {
+          assert.equal(table, "users");
+          pendingUpsert = payload;
+          writes.push({ table, payload });
+          return query;
         },
         insert(payload) {
           assert.equal(table, "notifications");
@@ -104,7 +115,7 @@ function fixture(rows, { isAdmin = true, userId = "admin", queryError = null, sa
     "./complete-profile-form": { CompleteProfileForm: () => React.createElement("div", null, "registration-form") },
     "./profile-form": { ProfileForm: () => React.createElement("div", null, "profile-form") },
   };
-  return { client, notifications, invalidations, pushBatches, load: (file) => loadSource(file, mocks) };
+  return { client, notifications, invalidations, pushBatches, writes, load: (file) => loadSource(file, mocks) };
 }
 
 test("admin initial and refreshed lists exclude social drafts and malformed profiles", async () => {
@@ -172,6 +183,7 @@ test("failed profile saves leave the draft hidden and do not notify admins", asy
   assert.equal(result.ok, false);
   assert.equal(rows[0].generation, null);
   assert.equal(f.notifications.length, 0);
+  assert.deepEqual(f.pushBatches, []);
   assert.equal(f.invalidations.length, 0);
 });
 
@@ -206,4 +218,48 @@ test("pending member queries retain admin authorization and report database erro
   const response = await failed.load("app/admin/members/actions.ts").getPendingMembersAction();
   assert.equal(response.ok, false);
   assert.equal(response.error, "query failed");
+});
+
+
+test("social application saves explicit consent with pending status and all application fields", async () => {
+  for (const choice of [false, true]) {
+    const rows = [draft()];
+    const f = fixture(rows, { isAdmin: false, userId: "social-draft" });
+    const result = await f.load("app/auth/complete-profile/actions.ts").completeProfileAction(" Applicant ", 42, " Guitar ", choice);
+    assert.deepEqual(result, { ok: true });
+    assert.deepEqual(f.writes, [{ table: "users", payload: {
+      email: "social-draft@example.com", name: "Applicant", generation: 42,
+      part: "Guitar", applied_at: rows[0].applied_at,
+      id: "social-draft", status: "pending", marketing_opt_in: choice,
+    } }]);
+    assert.ok(Number.isFinite(Date.parse(rows[0].applied_at)));
+    assert.equal(rows[0].marketing_opt_in, choice);
+    assert.equal(f.pushBatches.length, 1);
+    assert.equal(f.pushBatches[0].eventKey, "member-application:social-draft:" + rows[0].applied_at);
+  }
+});
+
+test("social application rejects omitted or malformed consent before saving or dispatching", async () => {
+  for (const choice of [undefined, null, "false", "true", 0, 1]) {
+    const rows = [draft()];
+    const before = structuredClone(rows);
+    const f = fixture(rows, { isAdmin: false, userId: "social-draft" });
+    const result = await f.load("app/auth/complete-profile/actions.ts").completeProfileAction("Applicant", 42, "Guitar", choice);
+    assert.equal(result.ok, false);
+    assert.deepEqual(rows, before);
+    assert.deepEqual(f.writes, []);
+    assert.deepEqual(f.pushBatches, []);
+    assert.deepEqual(f.invalidations, []);
+  }
+});
+
+test("an application save without a visible affected row cannot dispatch admin notifications", async () => {
+  const rows = [draft()];
+  const before = structuredClone(rows);
+  const f = fixture(rows, { isAdmin: false, userId: "social-draft", hiddenSave: true });
+  const result = await f.load("app/auth/complete-profile/actions.ts").completeProfileAction("Applicant", 42, "Guitar", true);
+  assert.deepEqual(result, { ok: false, error: "No visible row" });
+  assert.deepEqual(rows, before);
+  assert.deepEqual(f.pushBatches, []);
+  assert.deepEqual(f.invalidations, []);
 });

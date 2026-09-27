@@ -9,7 +9,7 @@ import ts from "typescript";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const nativeRequire = createRequire(import.meta.url);
-const sources = Object.fromEntries(["push-notifications"].map((name) => [name,
+const sources = Object.fromEntries(["push-notifications", "firebase/push-device-service", "firebase/push-device-diagnostics"].map((name) => [name,
   ts.transpileModule(readFileSync(path.join(root, "lib", `${name}.ts`), "utf8"), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, esModuleInterop: true },
   }).outputText,
@@ -84,6 +84,11 @@ function fixture(seed = {}, responses = []) {
         }),
       },
     };
+    if (name === "push-notifications") mocks["@/lib/firebase/push-device-service"] = load("firebase/push-device-service");
+    if (name === "firebase/push-device-service") {
+      mocks["@/lib/firebase/push-device-diagnostics"] = load("firebase/push-device-diagnostics");
+      mocks["@/lib/firebase/push-device-binding"] = {};
+    }
     const fakeMath = Object.create(Math);
     fakeMath.random = () => jitter;
     vm.runInThisContext(`(function(require,module,exports,console,Date,Math){${sources[name]}\n})`, { filename: `${name}.ts` })(
@@ -434,4 +439,17 @@ test("missing Firebase Admin configuration preserves the device and retries afte
   assert.deepEqual(row.push_progress, { successfulProfileIds: ["phone"], failures: [] });
   assert.equal(row.push_attempts, 2);
   assert.equal(f.sends[0].data.tag, f.sends[1].data.tag);
+});
+
+
+test("invalid-token cleanup is idempotent after another operation already deleted that device", async () => {
+  const f = fixture(basic({ profiles: [device("phone"), device("other", "other-account")] }), [() => {
+    f.db.profiles = f.db.profiles.filter((row) => row.id !== "phone");
+    return [failure("messaging/registration-token-not-registered")];
+  }]);
+  await f.push.processPendingPushNotifications();
+  assert.deepEqual(f.db.profiles.map((row) => row.id), ["other"]);
+  assert.equal(f.db.notifications[0].push_status, "failed");
+  assert.equal(f.db.notifications[0].push_progress.failures[0].retryable, false);
+  assert.equal(f.logs.length, 0);
 });

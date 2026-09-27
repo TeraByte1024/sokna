@@ -357,7 +357,8 @@ function serverFixture({ userId = "user-a", rowOwner = "user-a", rowPresent = tr
       return query;
     },
   };
-  const actions = loadSource("app/profile/notification-actions.ts", {
+  const boundaries = {
+    "server-only": {},
     "next/cache": { revalidatePath() {} },
     "@/lib/firebase/push-device-diagnostics": loadSource("lib/firebase/push-device-diagnostics.ts", { "server-only": {} }),
     "@/lib/supabase/service": { createServiceClient: () => client },
@@ -366,8 +367,12 @@ function serverFixture({ userId = "user-a", rowOwner = "user-a", rowPresent = tr
       getReceiptPushProfile: async () => null,
       issuePushDeviceReceipt: async () => {},
       clearPushDeviceReceipt: async () => {},
-      bindPushProfile: async () => true,
     },
+  };
+  const actions = loadSource("app/profile/notification-actions.ts", {
+    ...boundaries,
+    "@/lib/push-consent": loadSource("lib/push-consent.ts", {}),
+    "@/lib/firebase/push-device-service": loadSource("lib/firebase/push-device-service.ts", boundaries),
   });
   return { actions, writes, row };
 }

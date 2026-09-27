@@ -2,6 +2,7 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import { getFirebaseAdminMessaging } from "@/lib/firebase/admin";
+import { removeInvalidPushDevice } from "@/lib/firebase/push-device-service";
 import { createServiceClient } from "@/lib/supabase/service";
 
 const PUSH_LEASE_MS = 5 * 60_000;
@@ -160,18 +161,8 @@ export async function sendPushToUsers(
 		// A concurrent refresh may replace the token on the same profile. Delete only
 		// the exact token we attempted, and retry a replacement instead of excluding it.
 		try {
-			const { data: deleted, error } = await supabase.from("profiles").delete()
-				.eq("id", failure.profileId).eq("fcm_token", sentToken).select("id");
-			if (error) {
-				console.warn("Expired push token cleanup failed:", errorCode(error));
-				continue;
-			}
-			if (!deleted?.length) {
-				const { data: current, error: currentError } = await supabase.from("profiles")
-					.select("fcm_token").eq("id", failure.profileId).maybeSingle();
-				if (currentError) console.warn("Push token rotation check failed:", errorCode(currentError));
-				else if (current?.fcm_token && current.fcm_token !== sentToken) failure.retryable = true;
-			}
+			const { replaced } = await removeInvalidPushDevice(failure.profileId, sentToken);
+			if (replaced) failure.retryable = true;
 		} catch (error) {
 			console.warn("Expired push token cleanup failed:", errorCode(error));
 		}

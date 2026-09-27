@@ -132,6 +132,8 @@ erDiagram
 
 > `users_track_marketing_opted_in_at` 트리거가 가입 시 동의, 프로필 저장, 기기 알림 동의 다이얼로그의 동의 전환을 서버 시각으로 기록합니다. 동의 철회 시 null로 지우고, 동의 상태가 변하지 않는 회원 정보 수정에서는 기존 시각을 유지합니다. 새 컬럼을 직접 쓰더라도 트리거가 값을 덮어씁니다. 마이그레이션 이전에 이미 동의한 회원의 시각은 소급 추정하지 않습니다.
 
+> `20260927020000_unify_push_consent.sql`은 수신 동의가 true → false로 바뀐 뒤 본인 `profiles`를 삭제하는 `users_delete_push_profiles_on_opt_out` AFTER UPDATE 트리거를 추가합니다. 동의·동의 시각 변경과 모든 기기 삭제는 같은 트랜잭션이며, 삭제 실패 시 모두 롤백됩니다. `delete_push_profiles_on_opt_out()`은 고정 search_path의 SECURITY DEFINER로 실행하고 PUBLIC·anon·authenticated 직접 실행 권한을 허용하지 않습니다. users 갱신의 기존 RLS와 회원 승인 보호 규칙은 유지합니다. 같은 false 값 저장이나 미동의 계정으로의 기기 연결은 철회로 취급하지 않습니다. 신규 컬럼·공개 RPC·기존 데이터 보정은 없습니다. 2026-09-27 공유 운영 DB 적용과 기존 데이터 건수 보존을 확인했으며 `npm run types`의 공개 타입 내용은 동일합니다.
+
 ### 2.2 `admins` (관리자 목록)
 공연 생성, 공지 발송 등 관리자 권한을 부여받은 사용자 목록입니다.
 

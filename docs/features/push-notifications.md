@@ -71,6 +71,17 @@ FCM Web Push로 모바일/데스크톱 브라우저에 다음 이벤트를 알�
 - 증명 쿠키가 없는 기존 등록은 **원래 소유 계정의 로그인 세션으로 본인 토큰임을 확인한 뒤** 쿠키를 발급합니다. 쿠키 없이 이미 다른 계정으로 전환한 오래된 등록은 자동 이전하지 않고 OFF로 처리합니다. 원래 계정에서 한 번 확인하거나 브라우저 구독을 초기화한 뒤 명시적으로 재등록해야 합니다.
 - `GET /api/push/authorize`는 로그인 리다이렉트에서 제외하지만 자체 세션·기기·동의 검증을 수행합니다. 상태를 변경하지 않으며 `{ userId: string | null }`을 `private, no-store`/`Vary: Cookie`로 응답합니다. 선택 입력 `notificationId`가 있으면 본인 알림과 24시간 유효기간도 확인하고 복구용 `notification`(`id`, `title`, `body`, `link`, `created_at`)을 추가합니다. 인증/DB 오류는 503이며 서비스 워커는 개인 내용을 표시하지 않습니다. 기기 연결에는 기존 nullable 컬럼을 사용하고 새 환경 변수는 필요하지 않습니다.
 
+### 2.4 동의 저장과 기기 수명주기 일원화 (2026-09-27)
+
+- 이메일 가입 metadata는 공통 `pushConsentFields()`로 구성합니다. Auth의 `handle_new_user()`는 최초 계정을 만들며, Google 가입 정보 완성·프로필 수정·알림 동의 다이얼로그는 `lib/push-consent.ts`의 `savePushConsent()`를 사용합니다. 가입 정보·프로필 필드와 동의 값은 하나의 users INSERT/UPDATE로 저장합니다.
+- 동의 입력은 실제 boolean만 허용합니다. 누락·null·문자열을 false로 변환하지 않습니다. 저장은 반환된 본인 행 한 개를 확인하며 없는 계정이나 RLS로 갱신되지 않은 요청을 성공 처리하지 않습니다.
+- 동의 시각은 기존 `users_track_marketing_opted_in_at` BEFORE 트리거가 관리합니다. 신규 동의·false → true는 서버 시각, 철회는 null, 변경 없는 저장은 기존 값(과거 시각을 모르는 null 포함)을 유지합니다. 이 변경은 날짜 소급 보정이나 임의 시각 입력을 허용하지 않습니다.
+- 동의 철회(true → false) 시 해당 계정의 모든 `profiles` 삭제는 `users_delete_push_profiles_on_opt_out` AFTER UPDATE 트리거가 수행합니다. 동의·시각 변경과 기기 삭제가 같은 DB 트랜잭션에서 완료되거나 함께 롤백됩니다. 프로필 액션은 별도 DELETE를 하지 않으며, Google 가입 정보 저장이나 허용된 직접 DB 갱신에도 같은 규칙이 적용됩니다. 이미 미동의인 계정의 무관한 저장은 계정 전환으로 보존된 기기 등록을 삭제하지 않습니다.
+- `lib/firebase/push-device-service.ts`가 기기 등록·토큰 갱신·계정 연결/정지·기기 해제를 담당하고 서버 액션은 인증된 진입점과 결과/진단 처리만 제공합니다. 발송 중 무효 토큰 삭제도 같은 서비스의 ID·발송 토큰 비교 삭제를 사용합니다. 회원 탈퇴의 전체 삭제는 기존 탈퇴 RPC 트랜잭션 안에서 유지합니다.
+- 기기 해제는 서버에서 이미 제거된 등록을 확인하면 정상 완료합니다. 동의 철회 후 후속 해제나 반복 해제에서도 브라우저 FCM 토큰과 로컬 저장소 정리를 진행합니다. 조회 오류나 다른 계정의 살아 있는 등록은 삭제 완료로 간주하지 않으며, 갱신된 토큰은 보존합니다.
+- 기기 재연결과 토큰 등록의 동시 요청까지 전부 직렬화하는 변경은 아닙니다. 현재 동의 확인은 등록·발송·표시 단계에서 계속 수행하며, 계정 전환 후 미동의 기기의 등록 보존 정책도 유지합니다.
+- 새 서버 코드 전에 `20260927020000_unify_push_consent.sql`을 적용해야 합니다. 컬럼·공개 RPC는 변경하지 않고 철회 트리거만 추가합니다. 기존 행을 수정하거나 알림을 발송하는 데이터 보정은 없습니다.
+
 ## 3. 발송 파이프라인
 
 `notifications`를 계정 알림함과 유일한 영속 발송 outbox로 사용합니다. 메시지 제목·본문·링크는 비공개 실행 권한의 DB 헬퍼 `create_app_notification()` 한곳에서 생성하고 완성된 문구를 저장합니다. 이후 템플릿 변경은 새 알림에만 적용됩니다. 이 함수는 `public` 스키마에 있지만 `PUBLIC`·`anon`·`authenticated`의 직접 실행 권한이 없으며, 검증된 트리거와 승인 함수만 호출합니다.
@@ -156,7 +167,9 @@ FCM Web Push로 모바일/데스크톱 브라우저에 다음 이벤트를 알�
 ## 6. 관련 파일
 
 - 브라우저 FCM: `lib/firebase/firebase.ts`, `lib/firebase/pushNotification.ts`
-- 기기 상태 동기화: `lib/firebase/push-device.ts`, `app/profile/notification-actions.ts`
+- 동의 저장: `lib/push-consent.ts`
+- 기기 상태 동기화 및 액션: `lib/firebase/push-device.ts`, `app/profile/notification-actions.ts`
+- 서버 기기 수명주기: `lib/firebase/push-device-service.ts`
 - 기기 증명 및 수신 계정 검사: `lib/firebase/push-device-binding.ts`, `app/api/push/authorize/route.ts`
 - 공통 로그아웃: `lib/supabase/logout.ts`
 - Firebase Admin: `lib/firebase/admin.ts`
@@ -210,3 +223,12 @@ FCM Web Push로 모바일/데스크톱 브라우저에 다음 이벤트를 알�
 - 이번 변경은 브라우저 요청 동기화이며 DB 스키마와 알림 발송·표시 권한 검증은 변경하지 않습니다.
 
 - 창 복귀 중복 제거 통합 검증: 전체 모의 테스트 322개, TypeScript 검사 및 변경 소스·테스트 ESLint 통과. 온라인 복구와 계정 전환의 마지막 보완 후 알림함 테스트 42개도 다시 통과했습니다.
+
+### 동의·기기 수명주기 통합 검증 (2026-09-27)
+
+- 전체 Node 회귀 테스트 **362개**, 변경 소스·테스트 ESLint, TypeScript 및 프로덕션 빌드를 통과했습니다.
+- `tests/push-consent.test.mjs`는 실제 공통 저장 함수를 통해 동의 누락·잘못된 타입, 없는/RLS 비가시 계정, 가입·프로필 단일 저장, DB 실패 시 후속 발송 중단을 검증합니다.
+- `tests/push-device-binding.test.mjs`는 서버에서 이미 삭제된 기기의 반복 해제와 실제 클라이언트 로컬 정리를 연결해 검증합니다. 타 계정·조회 오류·토큰 교체 경합·토큰 갱신 후 증명 쿠키 저장 실패 시 살아 있는 등록을 보존합니다.
+- `tests/push-consent.sql`을 실제 PostgreSQL 기반 격리 PGlite에서 실행했습니다. 기존 timestamp/NULL 보존, 동의·철회·재동의·가입 upsert, 타 계정 격리, 관리자/service-role, 승인 보호, 기기 삭제 실패·후속 트리거 실패 시 전체 롤백, UPDATE가 취소된 경우 기기 보존을 확인했습니다. `tests/run-push-consent-sql.mjs`에 기존 PGlite 모듈을 `PGLITE_MODULE_PATH`로 지정하여 실행할 수 있습니다.
+- `20260927020000_unify_push_consent.sql`을 공유 운영 DB에 적용하고 원격 마이그레이션 이력을 확인했습니다. 적용 전후 회원 12건·기기 5건·알림 35건을 REST HEAD로 비교했으며 모두 유지됐습니다. 운영 사용자 동의 변경이나 실제 알림 발송 테스트는 하지 않았습니다.
+- `npm run types`로 적용 후 DB 타입을 재생성했습니다. 트리거 추가만 포함하므로 생성된 공개 타입의 내용은 동일합니다. 새 애플리케이션 코드는 별도 배포가 필요합니다.

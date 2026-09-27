@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { savePushConsent } from "@/lib/push-consent";
 
 export type ProfileActionResult =
   | { ok: true; message?: string }
@@ -59,8 +60,8 @@ export async function deleteMyAccountAction(
 export async function updateMyProfileAction(
   name: string,
   generation: number,
-  part?: string | null,
-  marketingOptIn?: boolean
+  part: string | null | undefined,
+  marketingOptIn: boolean
 ): Promise<ProfileActionResult> {
   try {
     const supabase = await createClient();
@@ -85,32 +86,20 @@ export async function updateMyProfileAction(
     const trimmedPart = part?.trim() || null;
 
     // 본인(auth.uid() = id)의 users 정보 업데이트 (status나 id 등 보안 필드는 수정하지 않음)
-    const { error: updateError } = await supabase
-      .from("users")
-      .update({
+    const { error: updateError } = await savePushConsent(supabase, user.id, marketingOptIn, {
+      profile: {
         name: trimmedName,
         generation,
         part: trimmedPart,
-        marketing_opt_in: Boolean(marketingOptIn),
-      })
-      .eq("id", user.id);
+      },
+    });
 
     if (updateError) {
       console.error("내 프로필 업데이트 실패:", updateError);
       return { ok: false, error: updateError.message };
     }
 
-    // 수신 동의를 철회하면 등록된 모든 기기 토큰도 즉시 제거합니다.
-    if (!marketingOptIn) {
-      const { error: tokenDeleteError } = await supabase
-        .from("profiles")
-        .delete()
-        .eq("user_id", user.id);
-      if (tokenDeleteError) {
-        console.error("푸시 토큰 삭제 실패:", tokenDeleteError);
-        return { ok: false, error: "수신 동의는 변경됐지만 푸시 토큰 해제에 실패했습니다." };
-      }
-    }
+    // 동의 철회와 기기 삭제는 DB 트리거가 같은 트랜잭션에서 처리합니다.
 
     // 만약 사용자가 관리자(admins 테이블)인 경우 이름 동기화
     try {
