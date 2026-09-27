@@ -38,15 +38,16 @@ function actionsFixture(options = {}) {
   const writes = [];
   const invalidations = [];
   const client = {
-    auth: { getUser: async () => ({ data: { user: options.signedOut ? null : { id: "member-id" } } }) },
+    auth: { getUser: async () => ({ data: { user: options.signedOut ? null : { id: "member-id" } }, error: options.authError ?? null }) },
     from(table) {
       const query = {
         select() { return query; }, eq() { return query; }, limit() { return query; },
         maybeSingle: async () => ({
           data: table === "gigs"
             ? options.gig ?? { visibility: options.privateGig ? "private" : "public", is_public: !options.privateGig }
-            : options.performer ?? null,
-          error: table === "gigs" ? options.gigError ?? null : options.performerError ?? null,
+            : table === "users" ? (options.missingProfile ? null : { status: options.memberStatus ?? "approved", part: null })
+              : options.performer ?? null,
+          error: table === "gigs" ? options.gigError ?? null : table === "users" ? options.profileError ?? null : options.performerError ?? null,
         }),
         upsert: async (payload) => { writes.push({ table, payload }); return { error: null }; },
       };
@@ -55,6 +56,7 @@ function actionsFixture(options = {}) {
     rpc: async (name, payload) => { writes.push({ name, payload }); return { data: options.reviewed ?? true, error: options.rpcError ?? null }; },
   };
   const actions = loadSource("app/gigs/actions.ts", {
+    "server-only": {},
     "next/cache": { revalidatePath: (value) => invalidations.push(value) },
     "@/lib/auth-admin": { getIsAdmin: async () => Boolean(options.admin) },
     "@/lib/supabase/server": { createClient: async () => client },
@@ -266,4 +268,26 @@ test("RSVP query failures block saving without misreporting schema setup", async
     assert.deepEqual(fixture.writes, []);
     assert.deepEqual(fixture.invalidations, []);
   }
+});
+
+
+test("unapproved accounts cannot submit RSVP even to a public gig", async () => {
+  for (const options of [
+    { memberStatus: "pending" }, { memberStatus: "rejected" }, { missingProfile: true },
+    { profileError: { code: "DB_UNAVAILABLE" } }, { authError: { message: "Session unavailable" } },
+  ]) {
+    for (const visibility of ["public", "members"]) {
+      const fixture = actionsFixture({ ...options, gig: { visibility } });
+      const result = await fixture.actions.submitGigRsvp(form());
+      assert.equal(result.ok, false);
+      assert.deepEqual(fixture.writes, []);
+      assert.deepEqual(fixture.invalidations, []);
+    }
+  }
+});
+
+test("administrators retain RSVP access independently of membership status", async () => {
+  const fixture = actionsFixture({ admin: true, memberStatus: "pending", privateGig: true });
+  assert.deepEqual(await fixture.actions.submitGigRsvp(form()), { ok: true });
+  assert.equal(fixture.writes.length, 1);
 });

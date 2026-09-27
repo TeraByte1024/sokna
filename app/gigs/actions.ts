@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getIsAdmin } from "@/lib/auth-admin";
+import { getGigViewer } from "@/lib/gig-viewer";
 import { SUPABASE_GIGS_TABLE } from "@/lib/supabase/gigs";
 import { getGigVisibility, isGigVisibility } from "@/lib/gig-visibility";
 
@@ -412,12 +413,14 @@ export async function updateGig(formData: FormData): Promise<GigActionResult> {
 /** 회원의 공연 참가 여부(RSVP) 제출 또는 수정 */
 export async function submitGigRsvp(formData: FormData): Promise<{ ok: true } | { ok: false; error: string }> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const viewer = await getGigViewer();
+  const { user } = viewer;
 
   if (!user) {
     return { ok: false, error: "로그인이 필요합니다." };
+  }
+  if (!viewer.isAdmin && !viewer.isApprovedMember) {
+    return { ok: false, error: "가입 승인이 완료된 회원만 공연 참가 신청을 할 수 있습니다." };
   }
 
   const gigId = Number(formData.get("gig_id"));
@@ -453,7 +456,7 @@ export async function submitGigRsvp(formData: FormData): Promise<{ ok: true } | 
   if (performer) {
     return { ok: false, error: "이미 공연 참여자로 등록되어 있습니다." };
   }
-  if (getGigVisibility(gig) === "private" && !(await getIsAdmin())) {
+  if (getGigVisibility(gig) === "private" && !viewer.isAdmin) {
     return { ok: false, error: "비공개 공연에는 참가 신청을 할 수 없습니다." };
   }
 

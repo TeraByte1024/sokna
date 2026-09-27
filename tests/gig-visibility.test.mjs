@@ -42,27 +42,37 @@ const legacyPublicGig = { id: 5, title: "기존 공개 공연", is_public: true,
 const allGigs = [publicGig, membersGig, privateGig, legacyMembersGig, legacyPublicGig];
 const viewerCases = [
   { name: "guests", options: { signedOut: true }, visibleIds: [1, 5] },
-  { name: "ordinary members", options: {}, visibleIds: [1, 2, 4, 5] },
+  { name: "approved members", options: {}, visibleIds: [1, 2, 4, 5] },
+  { name: "approved members with no session", options: { profile: { status: "approved", generation: 40, part: null } }, visibleIds: [1, 2, 4, 5] },
+  { name: "unsubmitted OAuth accounts", options: { profile: { status: "pending", generation: null, part: null } }, visibleIds: [1, 5] },
+  { name: "completed but pending applicants", options: { profile: { status: "pending", generation: 40, part: "기타" } }, visibleIds: [1, 5] },
+  { name: "rejected accounts", options: { profile: { status: "rejected", generation: 40, part: "기타" } }, visibleIds: [1, 5] },
+  { name: "accounts without a member profile", options: { profile: null }, visibleIds: [1, 5] },
+  { name: "accounts whose membership lookup failed", options: { profileError: { message: "unavailable" } }, visibleIds: [1, 5] },
+  { name: "unapproved performers", options: { performer: true, profile: { status: "pending", generation: null, part: null } }, visibleIds: [1, 5] },
   { name: "performers", options: { performer: true }, visibleIds: [1, 2, 4, 5] },
-  { name: "administrators", options: { admin: true }, visibleIds: [1, 2, 3, 4, 5] },
+  { name: "administrators without a member profile", options: { admin: true, profile: null }, visibleIds: [1, 2, 3, 4, 5] },
 ];
 
-function visibilityFixture({ signedOut = false, admin = false, performer = false, gig = membersGig } = {}) {
+function visibilityFixture({
+  signedOut = false, admin = false, performer = false, gig = membersGig,
+  profile = { name: "일반 회원", status: "approved", generation: 40, part: "기타" }, profileError = null,
+} = {}) {
   const queries = [];
   const client = {
     auth: { getUser: async () => ({ data: { user: signedOut ? null : { id: "ordinary-member" } }, error: null }) },
     from(table) {
-      const entry = { table, fields: null };
+      const entry = { table, fields: null, filters: [] };
       queries.push(entry);
       const query = {
         select(fields) { entry.fields = fields; return query; },
-        eq() { return query; },
+        eq(field, value) { entry.filters.push([field, value]); return query; },
         order() { return query; },
         limit() { return query; },
         maybeSingle: async () => ({
-          data: table === "users" ? { name: "일반 회원", part: "기타" }
+          data: table === "users" ? profile
             : table === "performers" && performer ? { id: 4 } : null,
-          error: null,
+          error: table === "users" ? profileError : null,
         }),
         then(resolve, reject) {
           const data = table === "gigs" ? allGigs
@@ -76,6 +86,7 @@ function visibilityFixture({ signedOut = false, admin = false, performer = false
     },
   };
   const mocks = {
+    "server-only": {},
     "@/lib/auth-admin": { getIsAdmin: async () => admin },
     "@/lib/supabase/server": { createClient: async () => client },
     "@/lib/gig-server-data": { getGigRow: async () => ({ data: gig, error: null }) },
@@ -99,8 +110,12 @@ test("visibility preserves legacy audiences and explicit settings take precedenc
   assert.equal(getGigVisibility({ visibility: "private", is_public: true }), "private");
   assert.equal(getGigVisibility({ visibility: "public", is_public: false }), "public");
   assert.equal(getGigVisibility({ visibility: "unknown", is_public: true }), "private");
-  assert.equal(canViewGig("private", { isLoggedIn: true, isAdmin: false, isPerformer: true }), false);
-  assert.equal(canViewGig("private", { isLoggedIn: false, isAdmin: true }), false);
+  assert.equal(canViewGig("private", { isLoggedIn: true, isAdmin: false, isApprovedMember: true, isPerformer: true }), false);
+  assert.equal(canViewGig("private", { isLoggedIn: false, isAdmin: true, isApprovedMember: true }), false);
+  assert.equal(canViewGig("members", { isLoggedIn: true, isAdmin: false, isApprovedMember: false }), false);
+  assert.equal(canViewGig("members", { isLoggedIn: false, isAdmin: false, isApprovedMember: true }), false);
+  assert.equal(canViewGig("members", { isLoggedIn: true, isAdmin: false, isApprovedMember: true }), true);
+  assert.equal(canViewGig("members", { isLoggedIn: true, isAdmin: true, isApprovedMember: false }), true);
 });
 
 for (const viewer of viewerCases) {
@@ -113,7 +128,7 @@ for (const viewer of viewerCases) {
       assert.equal(html.includes(gig.title), allowed, `${viewer.name}: ${gig.title}`);
       assert.equal(html.includes(`href="/gigs/${gig.id}"`), allowed);
     }
-    assert.equal(html.includes("회원 공개</div>"), !viewer.options.signedOut);
+    assert.equal(html.includes("회원 공개</div>"), viewer.visibleIds.includes(membersGig.id));
     assert.equal(html.includes("비공개</div>"), Boolean(viewer.options.admin));
     assert.equal(html.includes('href="/gigs/new"'), Boolean(viewer.options.admin));
   });
@@ -133,10 +148,18 @@ for (const viewer of viewerCases) {
         assert.doesNotMatch(html, /공연입니다/);
         assert.equal(html.includes("회원 공개</div>"), [2, 4].includes(gig.id));
         assert.equal(html.includes("비공개</div>"), gig.id === 3);
+        const canParticipate = viewer.visibleIds.includes(membersGig.id);
+        assert.equal(html.includes("data-member-actions"), canParticipate);
+        if (!canParticipate) {
+          assert.equal(fixture.queries.some((query) => query.table === "gig_rsvps"), false);
+          assert.equal(fixture.queries.some((query) => query.table === "performers" && query.filters.some(([field]) => field === "user_id")), false);
+          assert.equal(fixture.queries.some((query) => query.table === "users" && query.fields?.includes("name")), false);
+        }
       } else {
         assert.match(html, gig.id === 3 ? /비공개 공연입니다/ : /회원 공개 공연입니다/);
         assert.doesNotMatch(html, /data-member-actions/);
-        assert.deepEqual(fixture.queries, []);
+        assert.deepEqual(fixture.queries.filter((query) => query.table !== "users"), [], "denied requests must not query performers, setlists or RSVP data");
+        if (gig.id !== privateGig.id) assert.match(html, /가입 승인이 완료된 회원만/);
         assert.equal(html.includes(`href="/auth/login?redirect=/gigs/${gig.id}"`), Boolean(viewer.options.signedOut));
       }
     }

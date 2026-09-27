@@ -63,6 +63,7 @@ function actionsFixture({ admin = true } = {}) {
     },
   };
   const actions = loadSource("app/gigs/actions.ts", {
+    "server-only": {},
     "next/cache": { revalidatePath: (value) => invalidations.push(value) },
     "@/lib/auth-admin": { getIsAdmin: async () => admin },
     "@/lib/supabase/server": { createClient: async () => client },

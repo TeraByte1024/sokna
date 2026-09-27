@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getGigRow } from "@/lib/gig-server-data";
-import { getIsAdmin } from "@/lib/auth-admin";
+import { getGigViewer } from "@/lib/gig-viewer";
 import { mapGigRow, parseSessionSlots, type Gig, type GigPerformer, type GigRsvp } from "@/lib/gig";
 import { canViewGig } from "@/lib/gig-visibility";
 import { getDDay, formatKoreanDateTime } from "@/lib/utils";
@@ -50,12 +50,12 @@ export async function GigDetailInner({ gigId }: GigDetailInnerProps) {
   }
 
   const supabase = await createClient();
-  const [isAdmin, { data: { user } }, { data: gigRow, error: gigError }] = await Promise.all([
-    getIsAdmin(),
-    supabase.auth.getUser(),
+  const [viewer, { data: gigRow, error: gigError }] = await Promise.all([
+    getGigViewer(),
     getGigRow(numericId),
   ]);
-  const isLoggedIn = Boolean(user);
+  const { user, isLoggedIn, isAdmin, isApprovedMember } = viewer;
+  const canParticipate = isLoggedIn && (isAdmin || isApprovedMember);
   if (gigError || !gigRow) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center gap-4">
@@ -70,7 +70,7 @@ export async function GigDetailInner({ gigId }: GigDetailInnerProps) {
   const gig: Gig = mapGigRow(gigRow as Record<string, unknown>);
 
   // 공개 범위를 먼저 확인하고 허용된 사용자에게만 상세 데이터를 조회합니다.
-  if (!canViewGig(gig.visibility, { isLoggedIn, isAdmin })) {
+  if (!canViewGig(gig.visibility, viewer)) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center gap-4 max-w-md mx-auto">
         <div className="size-12 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center">
@@ -83,7 +83,7 @@ export async function GigDetailInner({ gigId }: GigDetailInnerProps) {
           <p className="text-xs text-muted-foreground">
             {gig.visibility === "private"
               ? "관리자만 공연 정보를 확인할 수 있습니다."
-              : "로그인한 회원만 공연 정보를 확인할 수 있습니다."}
+              : "가입 승인이 완료된 회원만 공연 정보를 확인할 수 있습니다."}
           </p>
         </div>
         <div className="flex items-center gap-2 pt-2">
@@ -102,10 +102,10 @@ export async function GigDetailInner({ gigId }: GigDetailInnerProps) {
 
   let isCurrentUserPerformer = false;
 
-  // 1-1. 로그인 유저의 프로필 및 본 공연 참가 신청(RSVP) 내역 조회
+  // 1-1. 승인 회원 또는 관리자의 본인 프로필 및 공연 참가 신청 내역 조회
   let userRsvp: GigRsvp | null = null;
   let userProfile: { name: string | null; part: string | null } | null = null;
-  if (user) {
+  if (user && canParticipate) {
     const [{ data: rsvpRow }, { data: profileRow }, { data: performerRow }] = await Promise.all([
       supabase
         .from("gig_rsvps")
@@ -347,8 +347,8 @@ export async function GigDetailInner({ gigId }: GigDetailInnerProps) {
               </div>
             </div>
 
-            {/* 주요 액션 버튼 (공연 참여 & 선곡회의 + 참가 신청 Dialog) - 비회원일 경우 렌더링하지 않음 */}
-            {isLoggedIn && (
+            {/* 주요 액션 버튼 (공연 참여 & 선곡회의 + 참가 신청 Dialog) - 승인 회원 또는 관리자에게 표시 */}
+            {canParticipate && (
               <div className="pt-2">
                 <GigDetailActions
                   gig={gig}

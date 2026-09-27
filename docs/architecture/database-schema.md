@@ -128,6 +128,8 @@ erDiagram
 | `marketing_opted_in_at` | `timestamptz` | YES | null | 마지막으로 수신 동의가 `false`에서 `true`로 바뀐 시각. 기존 동의자는 과거 시각을 확인할 수 없어 null 유지 |
 | `created_at` | `timestamptz` | NO | `now()` | 레코드 생성 일시 |
 
+> `users_protect_member_approval` 트리거는 일반 API 사용자의 자가 승인과 승인 시각 변경을 차단합니다. 본인 신규 프로필은 `pending`·`approved_at = null`만 가능하며, 상태 변경은 반려 후 재신청(`rejected → pending`)만 허용합니다. 일반 프로필 수정과 관리자 승인/반려, 신뢰된 Auth·관리자 전용 함수의 변경은 유지합니다.
+
 > `users_track_marketing_opted_in_at` 트리거가 가입 시 동의, 프로필 저장, 기기 알림 동의 다이얼로그의 동의 전환을 서버 시각으로 기록합니다. 동의 철회 시 null로 지우고, 동의 상태가 변하지 않는 회원 정보 수정에서는 기존 시각을 유지합니다. 새 컬럼을 직접 쓰더라도 트리거가 값을 덮어씁니다. 마이그레이션 이전에 이미 동의한 회원의 시각은 소급 추정하지 않습니다.
 
 ### 2.2 `admins` (관리자 목록)
@@ -157,11 +159,13 @@ erDiagram
 | `location` | `text` | YES | null | 공연 장소 (예: 한양대학교 학생회관 콘서트홀) |
 | `meeting_location` | `text` | YES | null | 선곡회의 장소 (예: 동아리방, 학생회관 301호 등) |
 | `poster_url` | `text` | YES | null | 공연 공식 포스터 이미지 공개 URL (Supabase Storage: gigs/posters) |
-| `visibility` | `text` | NO | `'members'` | 공개 범위: `private`(관리자만), `members`(로그인 회원), `public`(모든 방문자), CHECK 제약 적용 |
+| `visibility` | `text` | NO | `'members'` | 공개 범위: `private`(관리자만), `members`(승인 완료 회원), `public`(모든 방문자), CHECK 제약 적용 |
 | `is_public` | `bool` | NO | `false` | 호환용 전체 공개 여부. 트리거가 `visibility = 'public'`과 동기화 |
 | `created_at` | `timestamptz` | NO | `now()` | 생성 일시 |
 
 > `20260926083828_add_gig_visibility_levels.sql`은 기존 `is_public=false`를 `members`, `true`를 `public`으로 전환합니다. `gigs` SELECT에는 공개 범위별 허용형·제한형 RLS를 적용하고, 관리자 관리 정책을 제공합니다. 공연자·확정 셋리스트·후보곡·응답의 SELECT에는 상위 공연 조회 권한을 추가로 검사합니다. 세부 규칙과 적용 순서는 [공연 공개 범위 명세](../features/gig-visibility.md)를 참고하십시오.
+
+> `20260927010000_require_approved_gig_membership.sql`은 2026-09-27 공유 운영 DB에 적용했습니다. 회원 공개 조회를 `is_approved_member()`(`users.status = 'approved'`) 또는 관리자에게만 허용합니다. 기존 허용형·제한형 정책을 함께 강화하므로 공연 하위 테이블의 조회에도 동일하게 적용됩니다. 미신청·승인 대기·반려·프로필 누락 계정은 전체 공개만 조회합니다.
 
 > 2026-09-26 운영 DB 적용 및 REST API 컬럼 인식 확인 완료. 기존 공연 4개의 공개 범위를 보존했고, 비로그인·회원·관리자 조회 권한을 검증했습니다.
 
@@ -187,7 +191,7 @@ erDiagram
 > - `SECURITY DEFINER`, 빈 `search_path`, 명시적 스키마 참조 및 `auth.uid()`/`is_admin()` 권한 검사. PUBLIC 실행 권한을 회수하고, `20260926001000_restrict_gig_rsvp_rpc.sql`로 Supabase 기본 권한에 포함될 수 있는 `anon`의 직접 실행 권한도 회수합니다. 사용자 역할 중 authenticated만 실행 가능하며 관리자 여부는 함수 내부에서 다시 검사합니다.
 > - `FOR UPDATE`로 신청을 잠그고 `updated_at`을 비교합니다. 이미 공연자이거나 신청이 없거나 변경되었거나 `going`이 아니면 `false`를 반환하며 데이터를 변경하지 않습니다. 세션이 없는 신청은 승인할 수 없습니다.
 > - RSVP SELECT RLS는 본인 또는 `public.is_admin()`으로 관리자 전체 조회를 허용합니다. 다른 회원은 타인의 신청/비고를 읽을 수 없습니다.
-> - 기존 컬럼 및 INSERT/UPDATE/DELETE RLS는 유지합니다. `submitGigRsvp`는 실제 공연자의 재제출과 접근 권한 없는 비공개 공연 신청을 서버에서 거부합니다.
+> - INSERT/UPDATE에는 승인 완료 회원·관리자이며 상위 공연을 조회할 수 있어야 한다는 제한형 RLS를 추가합니다. SELECT/DELETE의 기존 본인·관리자 권한은 유지하여 승인이나 공연 접근 권한을 잃어도 본인의 이전 신청을 확인·삭제할 수 있습니다. `submitGigRsvp`도 가입 승인 여부와 실제 공연자의 재제출, 비공개 공연 권한을 검사합니다.
 > - 2026-09-26 운영 DB 적용 및 마이그레이션 이력 기록 완료. 기존 신청/공연자 레코드는 변경하지 않았습니다.
 
 ### 2.5 `performers` (공연 참여자 매핑)
@@ -270,8 +274,9 @@ erDiagram
 
 > **고유 제약**: `UNIQUE (nomination_id, user_id, session_part)` (후보곡 세션별 1인 1상태 보장)  
 > **RLS**:
-> - SELECT: 인증된 사용자(`auth.role() = 'authenticated'`) 조회 허용
-> - INSERT / UPDATE / DELETE: 본인(`auth.uid() = user_id`)만 가능
+> - SELECT: 인증된 사용자이며 상위 후보곡과 공연을 조회할 수 있어야 합니다.
+> - INSERT / UPDATE: 본인(`auth.uid() = user_id`)이며 승인 완료 회원·관리자이고 상위 후보곡을 조회할 수 있어야 합니다. 제한형 정책으로 기존 정책의 우회를 막습니다.
+> - DELETE: 기존 본인 정책을 유지합니다.
 
 
 

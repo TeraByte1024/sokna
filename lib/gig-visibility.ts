@@ -19,9 +19,9 @@ export function getGigVisibility(row: { visibility?: unknown; is_public?: unknow
 
 export function canViewGig(
   visibility: GigVisibility,
-  viewer: { isLoggedIn: boolean; isAdmin: boolean },
+  viewer: { isLoggedIn: boolean; isAdmin: boolean; isApprovedMember: boolean },
 ): boolean {
   if (visibility === "public") return true;
   if (!viewer.isLoggedIn) return false;
-  return visibility === "members" || viewer.isAdmin;
+  return viewer.isAdmin || (visibility === "members" && viewer.isApprovedMember);
 }

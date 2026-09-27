@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ResponsiveImage } from "@/components/ui/responsive-image";
 import { Badge } from "@/components/ui/badge";
-import { getIsAdmin } from "@/lib/auth-admin";
+import { getGigViewer } from "@/lib/gig-viewer";
 import { mapGigRow, type Gig } from "@/lib/gig";
 import { canViewGig } from "@/lib/gig-visibility";
 import { getDDay } from "@/lib/utils";
@@ -28,15 +28,13 @@ export async function GigsInner() {
 	const supabase = await createClient();
 	const [
 		{ data: rows, error },
-		{ data: { user } },
-		isAdmin,
+		viewer,
 	] = await Promise.all([
 		supabase
 			.from(SUPABASE_GIGS_TABLE)
 			.select("*")
 			.order("perform_date", { ascending: false }),
-		supabase.auth.getUser(),
-		getIsAdmin(),
+		getGigViewer(),
 	]);
 
 	if (error)
@@ -44,12 +42,13 @@ export async function GigsInner() {
 			<p className="text-center py-10 text-destructive">문제가 발생했습니다.</p>
 		);
 
+	const { isAdmin } = viewer;
 	const allGigs: Gig[] = (rows ?? []).map((r) =>
 		mapGigRow(r as Record<string, unknown>),
 	);
 
 	const gigs = allGigs.filter((gig) =>
-		canViewGig(gig.visibility, { isLoggedIn: Boolean(user), isAdmin }),
+		canViewGig(gig.visibility, viewer),
 	);
 
 	// 현재 날짜 기준으로 공연 분류

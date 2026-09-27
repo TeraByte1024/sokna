@@ -70,10 +70,12 @@ SOKNA 애플리케이션은 **Supabase Auth**와 `@supabase/ssr`을 결합하여
 회원은 `/profile`에서 확인 문구를 입력하여 본인 계정을 탈퇴할 수 있습니다. `deleteMyAccountAction`은 `auth.getUser()`로 확인한 세션으로 `delete_my_account` RPC를 호출합니다. 계정·개인 데이터는 단일 트랜잭션으로 삭제하며, 마지막 관리자 탈퇴는 차단합니다. 성공 후 세션을 정리하고 홈으로 이동합니다. 상세 정책은 [회원 탈퇴 명세](./account-withdrawal.md)를 따릅니다.
 
 - **일반 회원 (User)**:
-   - 로그인된 인증 사용자.
-   - 공연 목록 및 상세 조회 가능.
+   - 관리자 승인이 완료된 인증 사용자(`public.users.status = 'approved'`). 로그인·가입 신청 완료 여부와 회원 승인은 별개입니다.
+   - 회원 공개·전체 공개 공연의 목록과 상세 조회 가능. 미신청·승인 대기·반려·프로필 누락 계정은 전체 공개 공연만 조회하며 참가 신청을 할 수 없습니다.
+   - 공연 접근은 `getGigViewer()`와 DB RLS에서 승인 상태를 검사합니다. 승인 후 선택 항목인 세션을 비워도 회원 권한은 유지됩니다.
    - 본인의 프로필(`name`, `generation`, `part`, `marketing_opt_in`) 조회 및 수정 가능 (`/profile`).
    - 자신이 `performer`로 등록된 공연에 한해 곡(Setlist) 추가 및 본인 등록 곡 삭제/수정 가능.
+- **승인 상태 보호**: `users_protect_member_approval` DB 트리거가 일반 사용자의 `status`·`approved_at` 임의 변경을 차단합니다. 신규 본인 프로필은 `pending`으로만 등록할 수 있으며, 기존 반려 계정의 `rejected → pending` 재신청과 일반 프로필 수정은 허용합니다. 관리자 승인·반려 및 검증된 관리자 전용 RPC는 기존대로 동작합니다.
 - **관리자 (Admin)**:
    - `public.admins` 테이블에 등록된 이메일을 소유한 사용자.
    - 공연 등록 (`/gigs/new`) 권한 보유.

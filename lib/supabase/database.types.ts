@@ -604,6 +604,7 @@ export type Database = {
       }
       delete_my_account: { Args: { p_confirmation: string }; Returns: boolean }
       is_admin: { Args: never; Returns: boolean }
+      is_approved_member: { Args: never; Returns: boolean }
       review_gig_rsvp: {
         Args: {
           p_decision: string
