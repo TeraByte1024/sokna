@@ -24,5 +24,5 @@ export function LogoutButton() {
     }
   };
 
-  return <Button onClick={logout} disabled={isPending} variant={"ghost"}>로그아웃 </Button>;
+  return <Button type="button" onClick={logout} disabled={isPending} variant="ghost" size="sm">{isPending ? "로그아웃 중..." : "로그아웃"}</Button>;
 }

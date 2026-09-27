@@ -37,13 +37,20 @@ function elements(tree, predicate) {
   return [...(predicate(tree) ? [tree] : []), ...elements(tree.props?.children, predicate)];
 }
 
-function fixture(part = null) {
+function fixture(part = null, options = {}) {
   const state = [];
   const transitions = [];
   const saves = [];
+  const operations = [];
+  const errors = [];
+  const busy = { saving: false, push: false };
+  const guard = { dirty: false, open: false, pending: null, isSubmittingRef: { current: false } };
+  const logout = { calls: 0, run: options.logout ?? (async () => {}) };
   let stateIndex = 0;
   const noop = () => {};
   const stub = () => null;
+  const LeaveConfirmDialog = () => null;
+  const DeleteAccountSection = () => null;
   const mocks = {
     react: {
       useId: () => "session-test",
@@ -53,9 +60,16 @@ function fixture(part = null) {
         if (!(index in state)) state[index] = typeof initial === "function" ? initial() : initial;
         return [state[index], (value) => { state[index] = typeof value === "function" ? value(state[index]) : value; }];
       },
-      useTransition: () => [false, (callback) => transitions.push(callback())],
+      useTransition: () => [busy.saving, (callback) => transitions.push(callback())],
     },
-    "next/navigation": { useRouter: () => ({ refresh: noop }) },
+    "next/navigation": { useRouter: () => ({
+      push: (path) => operations.push(["navigate", path]), refresh: () => operations.push(["refresh"]),
+    }) },
+    "@/lib/supabase/logout": { signOutWithPushSession: async () => {
+      logout.calls++;
+      operations.push(["logout"]);
+      return logout.run();
+    } },
     "@/lib/utils": { cn: (...classes) => classes.filter(Boolean).join(" ") },
     "@/components/ui/button": { Button: "button" },
     "@/components/ui/input": { Input: "input" },
@@ -63,18 +77,40 @@ function fixture(part = null) {
     "@/components/ui/badge": { Badge: "span" },
     "@/components/ui/checkbox": { Checkbox: stub },
     "@/components/ui/card": { Card: "div", CardContent: "div", CardDescription: "p", CardHeader: "div", CardTitle: "h2" },
-    "@/components/ui/sonner": { toast: { error: noop, success: noop } },
+    "@/components/ui/sonner": { toast: { error: (message) => errors.push(message), success: noop } },
     "@/components/ui/leave-confirm-dialog": {
-      LeaveConfirmDialog: stub,
-      useUnsavedChangesWarning: () => ({ showLeaveModal: false, cancelLeave: noop, confirmLeave: noop, markSubmitting: noop }),
+      LeaveConfirmDialog,
+      useUnsavedChangesWarning: ({ isDirty }) => {
+        guard.dirty = isDirty;
+        return {
+          showLeaveModal: guard.open,
+          cancelLeave: () => { guard.open = false; guard.pending = null; },
+          confirmLeave: () => {
+            guard.isSubmittingRef.current = true;
+            guard.open = false;
+            const action = guard.pending;
+            guard.pending = null;
+            action?.();
+          },
+          triggerConfirm: (action) => {
+            if (guard.dirty) { guard.pending = action; guard.open = true; }
+            else action();
+          },
+          markSubmitting: () => { guard.isSubmittingRef.current = true; },
+          isSubmittingRef: guard.isSubmittingRef,
+        };
+      },
     },
     "@/components/push-notification-settings": {
       MarketingPushConsentDialog: stub,
-      usePushNotificationDevice: () => ({ isPending: false, hasRegisteredToken: false, permission: "default" }),
+      usePushNotificationDevice: () => ({
+        isPending: busy.push, enabled: false, hasMarketingConsent: true, hasRegisteredToken: false, permission: "default",
+        enablePush: () => operations.push(["enablePush"]), disablePush: () => operations.push(["disablePush"]),
+      }),
     },
-    "./delete-account-section": { DeleteAccountSection: stub },
+    "./delete-account-section": { DeleteAccountSection },
     "./actions": { updateMyProfileAction: async (...args) => { saves.push(args); return { ok: true }; } },
-    "lucide-react": Object.fromEntries(["User", "Mail", "Sparkles", "ShieldCheck", "Crown", "Clock", "Loader2", "CheckCircle2", "AlertCircle", "Bell"].map((name) => [name, stub])),
+    "lucide-react": Object.fromEntries(["User", "Mail", "Sparkles", "ShieldCheck", "Crown", "Clock", "Loader2", "CheckCircle2", "AlertCircle", "Bell", "LogOut"].map((name) => [name, stub])),
   };
   const cache = new Map();
   const load = (file) => loadSource(file, mocks, cache);
@@ -107,7 +143,17 @@ function fixture(part = null) {
     return saves.at(-1)?.[2];
   };
   render();
-  return { load, MemberSessionField, session, chips, click, customInput, render, save };
+  const textContent = (node) => typeof node === "string" ? node
+    : Array.isArray(node) ? node.map(textContent).join("") : node?.props ? textContent(node.props.children) : "";
+  const logoutButton = () => elements(tree, (element) => element.type === "button" && textContent(element).includes("로그아웃"))[0];
+  const leaveDialog = () => elements(tree, (element) => element.type === LeaveConfirmDialog)[0];
+  const deletion = () => elements(tree, (element) => element.type === DeleteAccountSection)[0];
+  return {
+    load, MemberSessionField, session, chips, click, customInput, render, save,
+    busy, guard, logout, logoutButton, leaveDialog, deletion, operations, errors, saves,
+    find: (predicate) => elements(tree, predicate),
+    settle: async () => { await new Promise(setImmediate); render(); },
+  };
 }
 
 test("registration shares the vocal presets and keeps custom session entry required", () => {
@@ -167,4 +213,105 @@ test("profile session deselecting and empty custom input both save null", async 
   f.customInput().props.onChange({ target: { value: "   " } });
   f.render();
   assert.equal(await f.save(), null);
+});
+
+function deferredLogout() {
+  let resolve;
+  let reject;
+  const promise = new Promise((done, fail) => { resolve = done; reject = fail; });
+  return { promise, resolve, reject };
+}
+
+test("profile logout without edits ends the session before navigation and never submits the form", async () => {
+  const f = fixture("기타");
+  assert.equal(f.logoutButton().props.type, "button");
+  f.logoutButton().props.onClick();
+  await f.settle();
+  assert.equal(f.guard.open, false);
+  assert.deepEqual(f.operations, [["logout"], ["navigate", "/auth/login"], ["refresh"]]);
+  assert.equal(f.guard.isSubmittingRef.current, true);
+  assert.equal(f.saves.length, 0);
+});
+
+test("dirty profile logout waits for confirmation, cancellation preserves edits, and approval logs out once", async () => {
+  const pending = deferredLogout();
+  const f = fixture("기타", { logout: () => pending.promise });
+  f.click("보컬(여)");
+  f.logoutButton().props.onClick();
+  f.render();
+  assert.equal(f.leaveDialog().props.isOpen, true);
+  assert.equal(f.logout.calls, 0);
+  f.leaveDialog().props.onClose();
+  f.render();
+  assert.equal(f.leaveDialog().props.isOpen, false);
+  assert.equal(f.guard.isSubmittingRef.current, false);
+  assert.equal(f.chips().find((chip) => chip.props["aria-pressed"]).props.children, "보컬(여)");
+  assert.deepEqual(f.operations, []);
+  f.logoutButton().props.onClick();
+  f.render();
+  f.leaveDialog().props.onConfirm();
+  f.render();
+  assert.equal(f.logout.calls, 1);
+  assert.deepEqual(f.operations, [["logout"]]);
+  assert.equal(f.logoutButton().props.disabled, true);
+  pending.resolve();
+  await f.settle();
+  assert.deepEqual(f.operations, [["logout"], ["navigate", "/auth/login"], ["refresh"]]);
+});
+
+test("failed profile logout preserves edits and restores the unsaved-changes guard before retry", async () => {
+  const f = fixture("기타", { logout: async () => { throw new Error("offline"); } });
+  f.click("보컬(남)");
+  f.logoutButton().props.onClick();
+  f.render();
+  f.leaveDialog().props.onConfirm();
+  assert.equal(f.guard.isSubmittingRef.current, true);
+  await f.settle();
+  assert.equal(f.guard.isSubmittingRef.current, false);
+  assert.equal(f.guard.dirty, true);
+  assert.equal(f.logoutButton().props.disabled, false);
+  assert.deepEqual(f.operations, [["logout"]]);
+  assert.deepEqual(f.errors, ["로그아웃에 실패했습니다. 다시 시도해 주세요."]);
+  f.logout.run = async () => {};
+  f.logoutButton().props.onClick();
+  f.render();
+  assert.equal(f.leaveDialog().props.isOpen, true);
+  assert.equal(f.logout.calls, 1);
+  f.leaveDialog().props.onConfirm();
+  await f.settle();
+  assert.equal(f.logout.calls, 2);
+  assert.deepEqual(f.operations.at(-2), ["navigate", "/auth/login"]);
+});
+
+test("pending profile logout blocks duplicate logout, saving, withdrawal and device changes", async () => {
+  const pending = deferredLogout();
+  const f = fixture("기타", { logout: () => pending.promise });
+  f.logoutButton().props.onClick();
+  f.render();
+  assert.equal(f.logoutButton().props.disabled, true);
+  assert.equal(f.find((element) => element.type === "button" && element.props.type === "submit")[0].props.disabled, true);
+  assert.equal(f.deletion().props.disabled, true);
+  const deviceToggle = f.find((element) => element.props?.role === "switch")[0];
+  assert.equal(deviceToggle.props.disabled, true);
+  f.logoutButton().props.onClick();
+  deviceToggle.props.onClick();
+  await f.save();
+  assert.equal(f.logout.calls, 1);
+  assert.equal(f.saves.length, 0);
+  assert.deepEqual(f.operations, [["logout"]]);
+  pending.resolve();
+  await f.settle();
+});
+
+test("profile logout is unavailable during saving, withdrawal or push configuration", () => {
+  for (const operation of ["saving", "withdrawal", "push"]) {
+    const f = fixture("기타");
+    if (operation === "withdrawal") f.deletion().props.onPendingChange(true);
+    else f.busy[operation] = true;
+    f.render();
+    assert.equal(f.logoutButton().props.disabled, true, operation);
+    f.logoutButton().props.onClick();
+    assert.equal(f.logout.calls, 0, operation);
+    assert.equal(f.guard.open, false, operation);
+  }
 });

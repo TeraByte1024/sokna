@@ -92,6 +92,7 @@ function fixture(rows, { isAdmin = true, userId = "admin", queryError = null, sa
       processPendingPushNotifications: async (options) => pushBatches.push(options),
     },
     "./user-profile-menu": { UserProfileMenu: () => null },
+    "./logout-button": { LogoutButton: () => React.createElement("button", null, "로그아웃") },
     "./notification-menu": { NotificationMenu: () => null },
     "@/lib/notifications": { getUnreadNotificationCount: async () => 0 },
     "@/components/site-layout": { SiteLayout: fragment },

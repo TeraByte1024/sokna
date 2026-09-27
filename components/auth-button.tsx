@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getIsAdmin } from "@/lib/auth-admin";
 import { getPendingMemberApplications, hasCompletedMemberProfile } from "@/lib/member-application";
 import { UserProfileMenu } from "./user-profile-menu";
+import { LogoutButton } from "./logout-button";
 import { NotificationMenu } from "./notification-menu";
 import { getUnreadNotificationCount } from "@/lib/notifications";
 import { ShieldAlert, ShieldCheck, Clock } from "lucide-react";
@@ -89,13 +90,20 @@ export async function AuthButton() {
         </Badge>
       )}
 
-      {/* 프로필 아이콘 클릭 시 float 메뉴 (내 정보 | 로그아웃) */}
       <NotificationMenu key={user.sub} userId={user.sub} initialUnreadCount={unreadNotificationCount} />
-      <UserProfileMenu
-        userName={userName}
-        userEmail={user.email}
-        marketingOptIn={marketingOptIn}
-      />
+      <div className="hidden md:block">
+        <UserProfileMenu
+          userName={userName}
+          userEmail={user.email}
+          marketingOptIn={marketingOptIn}
+        />
+      </div>
+      {/* 가입 정보 미완성 계정은 프로필 대신 가입 폼으로 이동하므로 로그아웃 경로를 유지합니다. */}
+      {!isAdmin && (!userStatus || userStatus === "pending") && !hasCompletedProfile && (
+        <div className="md:hidden">
+          <LogoutButton />
+        </div>
+      )}
     </div>
   );
 }

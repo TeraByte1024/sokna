@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { signOutWithPushSession } from "@/lib/supabase/logout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -32,6 +33,7 @@ import {
   Crown,
   Clock,
   Loader2,
+  LogOut,
   CheckCircle2,
   AlertCircle,
   Bell,
@@ -83,6 +85,7 @@ export function ProfileForm({ user, isAdmin }: ProfileFormProps) {
 
   const [isPending, startTransition] = useTransition();
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [message, setMessage] = useState<{
     type: "success" | "error";
     text: string;
@@ -101,7 +104,27 @@ export function ProfileForm({ user, isAdmin }: ProfileFormProps) {
     cancelLeave,
     confirmLeave,
     markSubmitting,
+    triggerConfirm,
+    isSubmittingRef,
   } = useUnsavedChangesWarning({ isDirty });
+
+  const handleLogout = () => {
+    if (isPending || push.isPending || isDeleting || isLoggingOut || pushConsentDialogOpen) return;
+    triggerConfirm(async () => {
+      setIsLoggingOut(true);
+      try {
+        await signOutWithPushSession();
+        markSubmitting();
+        router.push("/auth/login");
+        router.refresh();
+      } catch {
+        isSubmittingRef.current = false;
+        toast.error("로그아웃에 실패했습니다. 다시 시도해 주세요.");
+      } finally {
+        setIsLoggingOut(false);
+      }
+    });
+  };
 
   const handlePresetSelect = (preset: string) => {
     if (selectedPreset === preset) {
@@ -122,7 +145,7 @@ export function ProfileForm({ user, isAdmin }: ProfileFormProps) {
   };
 
   const handleDevicePushToggle = () => {
-    if (isDeleting) return;
+    if (isPending || push.isPending || isDeleting || isLoggingOut) return;
     if (push.enabled) {
       void push.disablePush();
     } else if (!push.hasMarketingConsent) {
@@ -134,7 +157,7 @@ export function ProfileForm({ user, isAdmin }: ProfileFormProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (isPending || push.isPending || isDeleting) return;
+    if (isPending || push.isPending || isDeleting || isLoggingOut) return;
     setMessage(null);
 
     const trimmedName = name.trim();
@@ -283,6 +306,19 @@ export function ProfileForm({ user, isAdmin }: ProfileFormProps) {
               </div>
             )}
           </div>
+          <div className="mt-4 flex justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={isPending || push.isPending || isDeleting || isLoggingOut || pushConsentDialogOpen}
+              onClick={handleLogout}
+              className="h-9 gap-2"
+            >
+              {isLoggingOut ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <LogOut className="size-4" aria-hidden="true" />}
+              {isLoggingOut ? "로그아웃 중..." : "로그아웃"}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -296,7 +332,7 @@ export function ProfileForm({ user, isAdmin }: ProfileFormProps) {
         </CardHeader>
 
         <CardContent>
-          <fieldset disabled={isDeleting} className="min-w-0">
+          <fieldset disabled={isDeleting || isLoggingOut} className="min-w-0">
           <form
             id="profile-update-form"
             onSubmit={handleSubmit}
@@ -398,7 +434,7 @@ export function ProfileForm({ user, isAdmin }: ProfileFormProps) {
               onCustomPartChange={setCustomPart}
               onClear={handleClearSession}
               required={false}
-              disabled={isDeleting}
+              disabled={isDeleting || isLoggingOut}
             />
 
             {/* 앱 푸시 알림 수신 동의 */}
@@ -430,7 +466,7 @@ export function ProfileForm({ user, isAdmin }: ProfileFormProps) {
                         : "미동의"}
                   </p>
                   <FieldDescription id="marketingPushDescription">
-                    소크나 공연, 행사, 가입 승인 및 선곡회의 소식을 앱 푸시로 받아봅니다. 아래 토글이나 헤더 프로필 메뉴에서 이 기기의 알림을 관리할 수 있습니다.
+                    소크나 공연, 행사, 가입 승인 및 선곡회의 소식을 앱 푸시로 받아봅니다. 아래 토글에서 이 기기의 알림을 관리할 수 있습니다.
                   </FieldDescription>
                 </div>
               </div>
@@ -446,7 +482,7 @@ export function ProfileForm({ user, isAdmin }: ProfileFormProps) {
                   aria-labelledby="devicePushLabel"
                   aria-describedby={push.permission === "unsupported" || push.permission === "denied" ? "devicePushDescription" : undefined}
                   title={push.enabled ? "이 기기 알림 끄기" : "이 기기 알림 켜기"}
-                  disabled={isPending || push.isPending || isDeleting || push.permission === "unsupported" || push.permission === "denied"}
+                  disabled={isPending || push.isPending || isDeleting || isLoggingOut || push.permission === "unsupported" || push.permission === "denied"}
                   onClick={handleDevicePushToggle}
                   className="inline-flex h-11 w-14 shrink-0 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                 >
@@ -479,14 +515,14 @@ export function ProfileForm({ user, isAdmin }: ProfileFormProps) {
 
           <div className="flex flex-wrap items-center justify-between gap-x-8 gap-y-6 pt-6">
             <DeleteAccountSection
-              disabled={isPending || push.isPending || pushConsentDialogOpen}
+              disabled={isPending || push.isPending || isLoggingOut || pushConsentDialogOpen}
               onPendingChange={setIsDeleting}
               onDeleted={markSubmitting}
             />
             <Button
               type="submit"
               form="profile-update-form"
-              disabled={isPending || push.isPending || isDeleting}
+              disabled={isPending || push.isPending || isDeleting || isLoggingOut}
               className="ml-auto h-10 w-auto min-w-32 bg-primary text-primary-foreground font-semibold shadow-sm"
             >
               {isPending ? (
