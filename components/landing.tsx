@@ -23,12 +23,12 @@ const STATUS_ITEMS = [
   {
     icon: Music2,
     title: "선곡 회의",
-    description: "참여 중인 공연의 후보곡과 세션을 조율해요.",
+    description: "참여 중인 공연에 올릴 곡을 추천하고 세션을 조율할 수 있어요.",
   },
   {
     icon: Bell,
     title: "중요 알림",
-    description: "기기 알림을 활성화하고 새 후보곡이 올라오면 알림으로 확인해요.",
+    description: "기기 알림을 활성화하고 새 후보곡이 올라오면 알림으로 확인할 수 있어요.",
   },
   {
     icon: Sparkles,
@@ -130,24 +130,22 @@ export function Landing({ isLoggedIn }: { isLoggedIn: boolean }) {
                 </div>
               </div>
 
-              <div className="grid gap-2.5">
+              <ul className="divide-y divide-border/70 border-t border-border/70">
                 {STATUS_ITEMS.map(({ icon: Icon, title, description }) => (
-                  <div
+                  <li
                     key={title}
-                    className="flex items-start gap-3 rounded-xl border border-border/60 bg-background/70 p-3 text-left sm:items-center sm:rounded-2xl sm:p-3.5"
+                    className="flex items-start gap-3 py-3.5 text-left sm:gap-4 sm:py-4"
                   >
-                    <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/5 text-primary">
-                      <Icon className="size-4" />
-                    </div>
+                    <Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                     <div className="min-w-0">
                       <p className="text-xs font-bold text-foreground">{title}</p>
                       <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
                         {description}
                       </p>
                     </div>
-                  </div>
+                  </li>
                 ))}
-              </div>
+              </ul>
             </div>
           </div>
         </motion.div>
