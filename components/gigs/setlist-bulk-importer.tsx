@@ -50,9 +50,9 @@ function isValidPerformerName(name: string): boolean {
 
 function normalizePartName(rawHeader: string): string {
   const clean = rawHeader.trim();
-  // 뒷자리 숫자 제거 (예: 기타1 -> 기타, 키보드2 -> 키보드)
+  // 뒷자리 숫자 제거 (예: 기타1 -> 기타, 건반2 -> 건반)
   const withoutNum = clean.replace(/\s*\d+$/, "").trim();
-  if (/^건반|키보드|피아노|신디/i.test(withoutNum)) return "키보드";
+  if (/^(?:건반|키보드|피아노|신디)/i.test(withoutNum)) return "건반";
   if (/^일렉기타|어쿠스틱기타|기타/i.test(withoutNum)) return "기타";
   if (/^베이스/i.test(withoutNum)) return "베이스";
   if (/^드럼/i.test(withoutNum)) return "드럼";
@@ -125,8 +125,8 @@ export function parseSetlistTableText(
     headers = firstRow;
     dataRows = rows.slice(1);
   } else {
-    // 헤더가 없는 경우 기본 순서 (곡, 아티스트, 보컬, 기타1, 기타2, 베이스, 키보드1, 키보드2, 드럼)
-    headers = ["곡", "아티스트", "보컬", "기타1", "기타2", "베이스", "키보드1", "키보드2", "드럼"];
+    // 헤더가 없는 경우 기본 순서 (곡, 아티스트, 보컬, 기타1, 기타2, 베이스, 건반1, 건반2, 드럼)
+    headers = ["곡", "아티스트", "보컬", "기타1", "기타2", "베이스", "건반1", "건반2", "드럼"];
     dataRows = rows;
   }
 
@@ -331,8 +331,8 @@ export function SetlistBulkImporter({
             표 헤더(열 이름)를 포함하여 복사하면 자동으로 열을 매핑합니다.
           </p>
           <p className="text-[11px] text-muted-foreground">
-            예시 1: <code className="text-primary font-mono font-medium">곡 | 아티스트 | 보컬 | 기타1 | 기타2 | 베이스 | 키보드 | 드럼</code><br />
-            예시 2: <code className="text-primary font-mono font-medium">곡 | 보컬 | 기타1 | 기타2 | 베이스 | 키보드1 | 키보드2 | 드럼</code> (아티스트 생략 가능)
+            예시 1: <code className="text-primary font-mono font-medium">곡 | 아티스트 | 보컬 | 기타1 | 기타2 | 베이스 | 건반 | 드럼</code><br />
+            예시 2: <code className="text-primary font-mono font-medium">곡 | 보컬 | 기타1 | 기타2 | 베이스 | 건반1 | 건반2 | 드럼</code> (아티스트 생략 가능)
           </p>
         </div>
       </div>
@@ -356,7 +356,7 @@ export function SetlistBulkImporter({
         <Textarea
           id="setlist-paste-textarea"
           rows={5}
-          placeholder={`곡\t보컬\t기타1\t기타2\t베이스\t키보드1\t키보드2\t드럼\n축배\t윤소영\t남채현\t김서율\t임준\t강윤아\t\t김서연\nemotions\t이윤아\t허원\t남채현\t박예찬\t황두현\t임준\t이건영`}
+          placeholder={`곡\t보컬\t기타1\t기타2\t베이스\t건반1\t건반2\t드럼\n축배\t윤소영\t남채현\t김서율\t임준\t강윤아\t\t김서연\nemotions\t이윤아\t허원\t남채현\t박예찬\t황두현\t임준\t이건영`}
           value={pasteText}
           onChange={(e) => setPasteText(e.target.value)}
           className="text-xs font-mono bg-background border-border placeholder:text-muted-foreground/50 resize-y"

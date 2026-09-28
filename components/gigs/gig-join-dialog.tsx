@@ -43,7 +43,7 @@ const GLOBAL_SESSIONS = [
   "보컬(여)",
   "기타",
   "베이스",
-  "키보드",
+  "건반",
   "드럼",
 ];
 
@@ -137,7 +137,7 @@ export function GigJoinDialog({
   };
 
   const finishCustomSession = () => {
-    const session = customSession.trim();
+    const session = customSession.trim().replaceAll("키보드", "건반");
     setIsCustomInputOpen(false);
     setCustomSession("");
     if (!session || pending) return;

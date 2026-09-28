@@ -2,7 +2,7 @@
 export function parseGigRsvpSessions(value: string | readonly string[] | null | undefined): string[] {
   const values = typeof value === "string" ? [value] : value ?? [];
   const parts = values.flatMap((entry) =>
-    entry.split(",").map((part) => part.trim()).filter(Boolean)
+    entry.split(",").map((part) => part.trim().replaceAll("키보드", "건반")).filter(Boolean)
   );
   return Array.from(new Set(parts));
 }

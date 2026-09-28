@@ -22,6 +22,41 @@ type PerformerValues = {
   photo_url: string | null;
 };
 
+function normalizePerformerParts(value: string | null | undefined): string {
+  return [...new Set((value || "세션")
+    .split(",")
+    .map((part) => part.trim().replaceAll("키보드", "건반"))
+    .filter(Boolean))].join(", ") || "세션";
+}
+
+export function mergeLinkedGigPerformers<T extends IncomingGigPerformer>(performers: T[]): T[] {
+  const merged: T[] = [];
+  const linkedIndices = new Map<string, number>();
+  for (const performer of performers) {
+    const normalized = {
+      ...performer,
+      part: normalizePerformerParts(performer.part),
+    } as T;
+    const userId = performer.id && !performer.email?.startsWith("temp-")
+      ? performer.id
+      : null;
+    const existingIndex = userId ? linkedIndices.get(userId) : undefined;
+    if (existingIndex === undefined) {
+      if (userId) linkedIndices.set(userId, merged.length);
+      merged.push(normalized);
+      continue;
+    }
+    const existing = merged[existingIndex];
+    merged[existingIndex] = {
+      ...existing,
+      performerId: existing.performerId ?? normalized.performerId,
+      part: normalizePerformerParts([existing.part, normalized.part].join(", ")),
+      photo_url: existing.photo_url || normalized.photo_url,
+    };
+  }
+  return merged;
+}
+
 export type GigPerformerPlan =
   | { ok: false; error: string }
   | {
@@ -57,7 +92,7 @@ export function planGigPerformerChanges(
     const values: PerformerValues = {
       user_id: linked ? p.id! : null,
       name: p.name.trim(),
-      part: p.part?.trim() || "세션",
+      part: normalizePerformerParts(p.part),
       photo_url: p.photo_url || null,
     };
     let matchedIdx = -1;

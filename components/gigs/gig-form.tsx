@@ -6,6 +6,7 @@ import Link from "next/link";
 import { createGig, updateGig } from "@/app/gigs/actions";
 import { createClient } from "@/lib/supabase/client";
 import { getGigVisibility, type GigVisibility } from "@/lib/gig-visibility";
+import { mergeLinkedGigPerformers } from "@/lib/gig-performer-reconcile";
 import {
   PerformerSelector,
   type Performer,
@@ -133,7 +134,7 @@ const DEFAULT_SESSION_SLOTS: SessionSlot[] = [
   { sessionName: "보컬", members: [] },
   { sessionName: "기타", members: [] },
   { sessionName: "베이스", members: [] },
-  { sessionName: "키보드", members: [] },
+  { sessionName: "건반", members: [] },
   { sessionName: "드럼", members: [] },
 ];
 
@@ -401,7 +402,7 @@ function AddSessionDropdown({
   }, [isExpanded]);
 
   const handleSubmit = () => {
-    const trimmed = sessionName.trim();
+    const trimmed = sessionName.trim().replaceAll("키보드", "건반");
     if (!trimmed) return;
     if (existingSessionNames.includes(trimmed)) {
       toast.info(`'${trimmed}' 세션이 이미 존재합니다.`);
@@ -996,10 +997,10 @@ export function GigForm({
         email: `temp-${Math.random().toString(36).substring(2, 9)}`,
         part: "세션",
       }));
-      setPerformers((prev) => [...prev, ...newPerformers]);
+      setPerformers((prev) => mergeLinkedGigPerformers([...prev, ...newPerformers]));
       toast.success(`${newPerformers.length}명의 공연자가 명단에 추가되었습니다.`);
     } else {
-      setPerformers((prev) => [...prev, ...(namesOrPerformers as Performer[])]);
+      setPerformers((prev) => mergeLinkedGigPerformers([...prev, ...(namesOrPerformers as Performer[])]));
     }
   };
 
@@ -1036,7 +1037,7 @@ export function GigForm({
       const parts = [target.part, duplicate?.part]
         .filter(Boolean)
         .flatMap((value) => value!.split(","))
-        .map((part) => part.trim())
+        .map((part) => part.trim().replaceAll("키보드", "건반"))
         .filter(Boolean);
       const merged: Performer = {
         ...mappedUser,
@@ -1089,7 +1090,7 @@ export function GigForm({
 
   // 셋리스트 특정 곡 세션 관리 핸들러
   const handleAddSessionToSong = (songIdx: number, sessionName: string) => {
-    const trimmed = sessionName.trim();
+    const trimmed = sessionName.trim().replaceAll("키보드", "건반");
     if (!trimmed) return;
     setSetlists((prev) => {
       const next = [...prev];
@@ -1186,7 +1187,7 @@ export function GigForm({
 
   // 새 곡 추가 폼 전용 세션 관리 핸들러
   const handleAddNewSessionToNewSong = (sessionName: string) => {
-    const trimmed = sessionName.trim();
+    const trimmed = sessionName.trim().replaceAll("키보드", "건반");
     if (!trimmed) return;
     if (newSongSlots.some((s) => s.sessionName === trimmed)) {
       toast.info(`'${trimmed}' 세션이 이미 존재합니다.`);

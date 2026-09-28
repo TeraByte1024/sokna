@@ -72,7 +72,6 @@ const COMMON_PARTS = [
   "베이스",
   "드럼",
   "건반",
-  "키보드",
   "신디사이저",
   "코러스",
   "브라스",
@@ -133,7 +132,7 @@ function PerformerPartDropdown({
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
-                const trimmed = customPart.trim();
+                const trimmed = customPart.trim().replaceAll("키보드", "건반");
                 if (trimmed && !currentParts.includes(trimmed)) {
                   onAddPart(trimmed);
                   setCustomPart("");
@@ -145,9 +144,9 @@ function PerformerPartDropdown({
           <Button
             type="button"
             size="sm"
-            disabled={!customPart.trim() || currentParts.includes(customPart.trim())}
+            disabled={!customPart.trim() || currentParts.includes(customPart.trim().replaceAll("키보드", "건반"))}
             onClick={() => {
-              const trimmed = customPart.trim();
+              const trimmed = customPart.trim().replaceAll("키보드", "건반");
               if (trimmed && !currentParts.includes(trimmed)) {
                 onAddPart(trimmed);
                 setCustomPart("");
@@ -275,7 +274,7 @@ export function PerformerSelector({
 
   // 일괄 세션 할당 핸들러
   const handleConfirmAssignSession = (sessionName: string, targetIndices: number[]) => {
-    const trimmed = sessionName.trim();
+    const trimmed = sessionName.trim().replaceAll("키보드", "건반");
     if (!trimmed || targetIndices.length === 0) return;
 
     targetIndices.forEach((idx) => {
@@ -403,7 +402,7 @@ export function PerformerSelector({
       toast.info(`'${name}' 공연자가 이미 명단에 있습니다.`);
       return;
     }
-    onAddDummy(name, dummyPart.trim() || "세션");
+    onAddDummy(name, dummyPart.trim().replaceAll("키보드", "건반") || "세션");
     setDummyName("");
     setDummyPart("");
   };

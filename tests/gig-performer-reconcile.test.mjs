@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { planGigPerformerChanges } from "../lib/gig-performer-reconcile.ts";
+import { mergeLinkedGigPerformers, planGigPerformerChanges } from "../lib/gig-performer-reconcile.ts";
+import { parseGigRsvpSessions } from "../lib/gig-rsvp-sessions.ts";
 
 const stored = (id, userId, name, part = "기타") => ({
   id,
@@ -76,4 +77,26 @@ test("stale row IDs and duplicate member links are rejected", () => {
     [stored(7, null, "임시 이름"), stored(8, "member-1", "회원 이름")]
   );
   assert.equal(duplicate.ok, false);
+});
+
+
+test("legacy keyboard and 건반 parts collapse to one linked performer", () => {
+  const performers = mergeLinkedGigPerformers([
+    { id: "member-1", name: "연주자", part: "키보드" },
+    { id: "member-1", name: "연주자", part: "건반, 베이스" },
+  ]);
+  assert.equal(performers.length, 1);
+  assert.equal(performers[0].part, "건반, 베이스");
+
+  const plan = planGigPerformerChanges(
+    12,
+    [{ performerId: 7, id: "member-1", name: "연주자", part: "키보드, 건반" }],
+    [stored(7, "member-1", "연주자", "키보드")]
+  );
+  assert.equal(plan.ok, true);
+  assert.equal(plan.toUpdate[0].part, "건반");
+});
+
+test("RSVP sessions normalize old keyboard labels before deduplication", () => {
+  assert.deepEqual(parseGigRsvpSessions("키보드, 건반, 드럼"), ["건반", "드럼"]);
 });

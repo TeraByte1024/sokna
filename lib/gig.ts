@@ -23,6 +23,21 @@ export interface SessionSlot {
   members: string[];
 }
 
+export function normalizeSessionSlots(slots: SessionSlot[]): SessionSlot[] {
+  const merged = new Map<string, string[]>();
+  for (const slot of slots) {
+    const sessionName = slot.sessionName.trim().replaceAll("키보드", "건반");
+    if (!sessionName) continue;
+    const members = merged.get(sessionName) ?? [];
+    for (const member of slot.members) {
+      const name = member.trim();
+      if (name && !members.includes(name)) members.push(name);
+    }
+    merged.set(sessionName, members);
+  }
+  return Array.from(merged, ([sessionName, members]) => ({ sessionName, members }));
+}
+
 export type GigPerformer = {
   id: number;
   part: string;
@@ -49,14 +64,14 @@ export function parseSessionSlots(raw: string | null | undefined): SessionSlot[]
     try {
       const parsed = JSON.parse(trimmed);
       if (Array.isArray(parsed)) {
-        return parsed
+        return normalizeSessionSlots(parsed
           .filter((item) => item && typeof item === "object" && typeof item.sessionName === "string")
           .map((item) => ({
             sessionName: String(item.sessionName).trim(),
             members: Array.isArray(item.members)
               ? item.members.map((m: unknown) => String(m).trim()).filter(Boolean)
               : [],
-          }));
+          })));
       }
     } catch {
       // JSON 파싱 실패 시 레거시 문자열 파싱으로 폴백
@@ -88,22 +103,19 @@ export function parseSessionSlots(raw: string | null | undefined): SessionSlot[]
     }
   }
 
-  return Array.from(slotsMap.entries()).map(([sessionName, members]) => ({
+  return normalizeSessionSlots(Array.from(slotsMap.entries()).map(([sessionName, members]) => ({
     sessionName,
     members,
-  }));
+  })));
 }
 
 /**
  * SessionSlot 배열을 DB 저장을 위한 JSON 문자열로 직렬화
  */
 export function serializeSessionSlots(slots: SessionSlot[]): string {
-  const validSlots = slots
-    .filter((s) => s && s.sessionName && s.sessionName.trim().length > 0)
-    .map((s) => ({
-      sessionName: s.sessionName.trim(),
-      members: s.members.map((m) => m.trim()).filter(Boolean),
-    }));
+  const validSlots = normalizeSessionSlots(slots.filter(
+    (s) => s && s.sessionName && s.sessionName.trim().length > 0
+  ));
 
   return JSON.stringify(validSlots);
 }

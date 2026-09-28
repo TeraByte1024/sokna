@@ -225,6 +225,9 @@ erDiagram
 | `name` | `text` | YES | null | 공연자 이름 (미연동 더미 공연자 저장 및 표기용) |
 | `part` | `text` | NO | `'세션'` | 해당 공연에서의 배정 파트(다중 파트는 콤마 구분) |
 | `photo_url` | `text` | YES | null | 공연별 세션 프로필 사진 URL (Supabase Storage: gigs/performers) |
+
+> **중복 방지**: `performers_gig_user_unique` 부분 고유 인덱스로 `user_id IS NOT NULL`인 행은 공연별 회원당 한 행만 허용합니다. 기존 중복 행은 파트·이름·사진 및 등록자 참조를 합쳐 정리합니다. 더미 공연자(`user_id = null`)는 동명이인을 허용합니다. 공연 세션의 표준 건반 명칭은 `건반`입니다.
+> 2026-09-28 운영 DB에서 표준 건반 명칭으로 19개 저장 값을 정리하고, 동일 공연·회원 중복 2쌍을 병합했습니다. `nominations.created_by`와 `setlists.created_by`는 유지되는 행으로 이전했습니다.
 | `created_at` | `timestamptz` | NO | `now()` | 생성 일시 |
 
 ### 2.6 `nominations` (선곡회의 후보곡 및 추천곡)

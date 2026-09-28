@@ -56,9 +56,9 @@ export function isLikelyNonMemberText(text: string): boolean {
 
 export function normalizePartName(rawHeader: string): string {
   const clean = rawHeader.trim();
-  // 뒷자리 숫자 및 공백/특수문자 제거 (예: 기타1 -> 기타, 키보드2 -> 키보드, 건반 1 -> 건반)
+  // 뒷자리 숫자 및 공백/특수문자 제거 (예: 기타1 -> 기타, 건반2 -> 건반, 건반 1 -> 건반)
   const withoutNum = clean.replace(/[\s_\-]*\d+$/, "").trim();
-  if (/건반|키보드|피아노|신디|keyboard|piano|synth/i.test(withoutNum)) return "키보드";
+  if (/건반|키보드|피아노|신디|keyboard|piano|synth/i.test(withoutNum)) return "건반";
   if (/일렉기타|어쿠스틱기타|일렉|어쿠스틱|통기타|기타|guitar/i.test(withoutNum)) return "기타";
   if (/베이스|bass/i.test(withoutNum)) return "베이스";
   if (/드럼|drum/i.test(withoutNum)) return "드럼";
@@ -179,7 +179,7 @@ export function parseSpreadsheetText(rawText: string): ParsedSpreadsheetResult {
     dataRows = rows.slice(1);
   } else {
     // 헤더가 없는 경우: 기본 세션 분배표 순서
-    headers = ["곡", "보컬", "기타1", "기타2", "베이스", "키보드1", "키보드2", "드럼"];
+    headers = ["곡", "보컬", "기타1", "기타2", "베이스", "건반1", "건반2", "드럼"];
     dataRows = rows;
   }
 
@@ -274,7 +274,7 @@ export function parseSpreadsheetText(rawText: string): ParsedSpreadsheetResult {
           .filter(Boolean);
 
         if (memberNames.length > 0) {
-          // global 세션명으로 통일 (기타1/기타2 -> 기타, 키보드/건반 -> 키보드)
+          // global 세션명으로 통일 (기타1/기타2 -> 기타, 기존 건반 계열 -> 건반)
           const slotSessionName = colMeta.partName;
           const existingSlot = slots.find((s) => s.sessionName === slotSessionName);
           if (existingSlot) {
@@ -298,8 +298,8 @@ export function parseSpreadsheetText(rawText: string): ParsedSpreadsheetResult {
         }
       });
 
-      // 표준 세션 순서 정렬 (보컬 -> 기타 -> 베이스 -> 키보드 -> 드럼)
-      const SESSION_ORDER = ["보컬", "기타", "베이스", "키보드", "드럼"];
+      // 표준 세션 순서 정렬 (보컬 -> 기타 -> 베이스 -> 건반 -> 드럼)
+      const SESSION_ORDER = ["보컬", "기타", "베이스", "건반", "드럼"];
       slots.sort((a, b) => {
         const idxA = SESSION_ORDER.indexOf(a.sessionName);
         const idxB = SESSION_ORDER.indexOf(b.sessionName);
@@ -569,9 +569,9 @@ export function GigSpreadsheetImporterDialog({
           const excelNorms = excelSessions.map((s) => normalizePartName(s));
           const excelPartStr = excelSessions.join(", ");
 
-          // 세션 일치 여부 확인 (보컬, 키보드, 기타 계열 변형 고려)
+          // 세션 일치 여부 확인 (보컬, 건반, 기타 계열 변형 고려)
           const isVocalVariant = userNorm === "보컬" && excelNorms.length === 1 && excelNorms[0] === "보컬";
-          const isKeyboardVariant = userNorm === "키보드" && excelNorms.length === 1 && excelNorms[0] === "키보드";
+          const isKeyboardVariant = userNorm === "건반" && excelNorms.length === 1 && excelNorms[0] === "건반";
           const isGuitarVariant = userNorm === "기타" && excelNorms.length === 1 && excelNorms[0] === "기타";
 
           const isSameInstrument =
@@ -976,7 +976,7 @@ export function GigSpreadsheetImporterDialog({
                 <Textarea
                   value={pasteText}
                   onChange={(e) => setPasteText(e.target.value)}
-                  placeholder="엑셀에서 표 영역을 선택한 후 복사(Ctrl+C)하여 여기에 붙여넣기(Ctrl+V)하세요.&#10;&#10;[지원 형식 1] 참여자 명단표: 기수 | 이름 | 세션&#10;[지원 형식 2] 세션 분배 결과표: 곡 | (아티스트) | 보컬 | 기타1 | 기타2 | 베이스 | 키보드1 | 키보드2 | 드럼"
+                  placeholder="엑셀에서 표 영역을 선택한 후 복사(Ctrl+C)하여 여기에 붙여넣기(Ctrl+V)하세요.&#10;&#10;[지원 형식 1] 참여자 명단표: 기수 | 이름 | 세션&#10;[지원 형식 2] 세션 분배 결과표: 곡 | (아티스트) | 보컬 | 기타1 | 기타2 | 베이스 | 건반1 | 건반2 | 드럼"
                   rows={8}
                   className="font-mono text-xs leading-relaxed resize-y bg-background border-border"
                   autoFocus

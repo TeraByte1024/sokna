@@ -6,7 +6,7 @@ import { getIsAdmin } from "@/lib/auth-admin";
 import { getGigViewer } from "@/lib/gig-viewer";
 import { SUPABASE_GIGS_TABLE } from "@/lib/supabase/gigs";
 import { getGigVisibility, isGigVisibility } from "@/lib/gig-visibility";
-import { planGigPerformerChanges, type IncomingGigPerformer } from "@/lib/gig-performer-reconcile";
+import { mergeLinkedGigPerformers, planGigPerformerChanges, type IncomingGigPerformer } from "@/lib/gig-performer-reconcile";
 
 export type GigActionResult = { ok: true; gigId?: number } | { ok: false; error: string };
 
@@ -87,7 +87,7 @@ export async function createGig(formData: FormData): Promise<GigActionResult> {
 
   // 2. 참여자 매핑 데이터 준비 (N:M 관계, 미연동 더미 공연자도 지원)
   if (performersList.length > 0) {
-    const mappingData = performersList
+    const mappingData = mergeLinkedGigPerformers(performersList)
       .filter((p) => Boolean(p.name && p.name.trim()))
       .map((p) => {
         const linked = Boolean(p.id && !p.email?.startsWith("temp-"));
@@ -128,7 +128,7 @@ export async function createGig(formData: FormData): Promise<GigActionResult> {
           gig_id: newGig.id,
           title: item.title.trim(),
           artist: item.artist?.trim() || null,
-          session_members: item.session_members?.trim() || null,
+          session_members: item.session_members?.trim().replaceAll("키보드", "건반") || null,
           order_num: idx + 1,
         }));
 
@@ -316,7 +316,7 @@ export async function updateGig(formData: FormData): Promise<GigActionResult> {
         if (!title) continue;
 
         const artist = item.artist?.trim() || null;
-        const session_members = item.session_members?.trim() || null;
+        const session_members = item.session_members?.trim().replaceAll("키보드", "건반") || null;
         const order_num = idx + 1;
         const parsedItemId = item.id ? Number(item.id) : null;
 
@@ -408,7 +408,7 @@ export async function submitGigRsvp(formData: FormData): Promise<{ ok: true } | 
     return { ok: false, error: "올바른 참여 상태를 선택해 주세요." };
   }
 
-  const submittedParts = formData.getAll("part").map((value) => String(value).trim()).filter(Boolean);
+  const submittedParts = formData.getAll("part").map((value) => String(value).trim().replaceAll("키보드", "건반")).filter(Boolean);
   if (status === "going" && submittedParts.some((part) => part.includes(","))) {
     return { ok: false, error: "세션은 한 번에 하나씩 입력해 주세요." };
   }

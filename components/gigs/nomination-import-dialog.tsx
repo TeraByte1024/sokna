@@ -62,7 +62,7 @@ const DEFAULT_BASE_SLOTS: SessionSlot[] = [
   { sessionName: "보컬", members: [] },
   { sessionName: "기타", members: [] },
   { sessionName: "베이스", members: [] },
-  { sessionName: "키보드", members: [] },
+  { sessionName: "건반", members: [] },
   { sessionName: "드럼", members: [] },
 ];
 
