@@ -75,6 +75,7 @@ export async function GigEditInner({ gigId }: GigEditInnerProps) {
     const isLinked = Boolean(row.user_id && rawUser);
 
     return {
+      performerId: row.id,
       id: row.user_id ?? undefined,
       name: isLinked ? rawUser!.name : (row.name || "미연동 공연자"),
       email: isLinked ? (rawUser?.email ?? undefined) : `temp-${row.id}`,

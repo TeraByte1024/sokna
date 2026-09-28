@@ -810,6 +810,7 @@ export function GigForm({
         const init = initialPerformers[i];
         if (!init) return true;
         return (
+          p.performerId !== init.performerId ||
           p.id !== init.id ||
           p.name !== init.name ||
           p.part !== init.part ||
@@ -950,21 +951,40 @@ export function GigForm({
 
   // 명단 관리 핸들러
   const addPerformer = (p: Performer) => {
-    if (!performers.find((item) => (item.id && item.id === p.id) || (item.email && item.email === p.email))) {
-      setPerformers([
-        ...performers,
-        {
+    setPerformers((prev) => {
+      if (prev.some((item) => p.id && item.id === p.id)) return prev;
+      const dummyIndex = prev.findIndex(
+        (item) => !isPerformerLinked(item) && item.name === p.name
+      );
+      if (dummyIndex >= 0) {
+        const next = [...prev];
+        next[dummyIndex] = {
           ...p,
-          part: p.part || "세션",
-        },
-      ]);
-    }
+          performerId: next[dummyIndex].performerId,
+          part: next[dummyIndex].part || p.part || "세션",
+          photo_url: next[dummyIndex].photo_url || p.photo_url,
+        };
+        return next;
+      }
+      return [...prev, { ...p, part: p.part || "세션" }];
+    });
     setSearch("");
     setSearchResults([]);
   };
 
-  const removePerformer = (email: string) => {
-    setPerformers(performers.filter((p) => p.email !== email));
+  const addDummyPerformer = (name: string, part: string) => {
+    setPerformers((prev) => [
+      ...prev,
+      {
+        name,
+        email: `temp-${crypto.randomUUID()}`,
+        part,
+      },
+    ]);
+  };
+
+  const removePerformer = (index: number) => {
+    setPerformers((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleBulkAdd = (namesOrPerformers: string[] | Performer[]) => {
@@ -1006,11 +1026,38 @@ export function GigForm({
   // 수동 매핑 핸들러 (연동 완료 및 셋리스트 내 이름 동기화)
   const handleMapPerformer = (index: number, mappedUser: Performer, oldName: string) => {
     setPerformers((prev) => {
-      const next = [...prev];
-      if (next[index]) {
-        next[index] = mappedUser;
+      const target = prev[index];
+      if (!target) return prev;
+
+      const duplicateIndex = prev.findIndex(
+        (item, i) => i !== index && item.id === mappedUser.id
+      );
+      const duplicate = duplicateIndex >= 0 ? prev[duplicateIndex] : null;
+      const parts = [target.part, duplicate?.part]
+        .filter(Boolean)
+        .flatMap((value) => value!.split(","))
+        .map((part) => part.trim())
+        .filter(Boolean);
+      const merged: Performer = {
+        ...mappedUser,
+        performerId: target.performerId,
+        part: [...new Set(parts)].join(", ") || "세션",
+        photo_url: target.photo_url || duplicate?.photo_url || null,
+      };
+
+      if (!duplicate) {
+        return prev.map((item, i) => i === index ? merged : item);
       }
-      return next;
+      if (!target.performerId && duplicate.performerId) {
+        return prev
+          .map((item, i) => i === duplicateIndex
+            ? { ...merged, performerId: duplicate.performerId }
+            : item)
+          .filter((_, i) => i !== index);
+      }
+      return prev
+        .map((item, i) => i === index ? merged : item)
+        .filter((_, i) => i !== duplicateIndex);
     });
 
     // 셋리스트에 포함된 기존 이름을 새 이름으로 일괄 치환 (JSON 세션 슬롯 구조 지원)
@@ -1021,13 +1068,13 @@ export function GigForm({
           const slots = parseSessionSlots(song.session_members);
           let changed = false;
           slots.forEach((s) => {
-            s.members = s.members.map((m) => {
+            s.members = [...new Set(s.members.map((m) => {
               if (m === oldName) {
                 changed = true;
                 return mappedUser.name;
               }
               return m;
-            });
+            }))];
           });
           if (changed) {
             return { ...song, session_members: serializeSessionSlots(slots) };
@@ -2093,6 +2140,7 @@ export function GigForm({
               selected={performers}
               onAdd={addPerformer}
               onRemove={removePerformer}
+              onAddDummy={addDummyPerformer}
               onBulkAdd={handleBulkAdd}
               onMapPerformer={handleMapPerformer}
               onUpdatePart={handleUpdatePart}

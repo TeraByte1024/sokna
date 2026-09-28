@@ -36,6 +36,7 @@ import { PerformerMappingDialog } from "@/components/gigs/performer-mapping-dial
 import { SessionAssignmentDialog } from "@/components/gigs/session-assignment-dialog";
 
 export interface Performer {
+  performerId?: number;
   id?: string;
   name: string;
   email?: string;
@@ -54,7 +55,8 @@ interface Props {
   results: Performer[];
   selected: Performer[];
   onAdd: (p: Performer) => void;
-  onRemove: (email: string) => void;
+  onRemove: (index: number) => void;
+  onAddDummy: (name: string, part: string) => void;
   onBulkAdd: ((names: string[]) => void) | ((performers: Performer[]) => void);
   onBulkAddPerformers?: (performers: Performer[]) => void;
   onMapPerformer?: (index: number, mappedUser: Performer, oldName: string) => void;
@@ -171,6 +173,7 @@ export function PerformerSelector({
   selected,
   onAdd,
   onRemove,
+  onAddDummy,
   onBulkAdd,
   onBulkAddPerformers,
   onMapPerformer,
@@ -179,6 +182,8 @@ export function PerformerSelector({
   const supabase = createClient();
   const [showPasteBox, setShowPasteBox] = useState(false);
   const [pasteText, setPasteText] = useState("");
+  const [dummyName, setDummyName] = useState("");
+  const [dummyPart, setDummyPart] = useState("");
   const [isApplyingBulk, setIsApplyingBulk] = useState(false);
 
   // 정렬 상태: 기본값은 "이름순 (이름 > 기수)"
@@ -391,6 +396,25 @@ export function PerformerSelector({
     }
   };
 
+  const handleAddDummy = () => {
+    const name = dummyName.trim();
+    if (!name) return;
+    if (selected.some((p) => !isPerformerLinked(p) && p.name === name)) {
+      toast.info(`'${name}' 공연자가 이미 명단에 있습니다.`);
+      return;
+    }
+    onAddDummy(name, dummyPart.trim() || "세션");
+    setDummyName("");
+    setDummyPart("");
+  };
+
+  const handleDummyKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      handleAddDummy();
+    }
+  };
+
   const handleOpenMapping = (performer: Performer, index: number) => {
     setMappingTarget({ performer, index });
   };
@@ -487,6 +511,30 @@ export function PerformerSelector({
             ))}
           </ul>
         )}
+      </div>
+
+      {/* Add an unlinked performer directly. */}
+      <div className="flex flex-col sm:flex-row gap-2">
+        <Input
+          aria-label="더미 공연자 이름"
+          placeholder="미연동 공연자 이름"
+          value={dummyName}
+          onChange={(event) => setDummyName(event.target.value)}
+          onKeyDown={handleDummyKeyDown}
+          className="sm:flex-1 text-sm"
+        />
+        <Input
+          aria-label="더미 공연자 세션"
+          placeholder="세션 (기본: 세션)"
+          value={dummyPart}
+          onChange={(event) => setDummyPart(event.target.value)}
+          onKeyDown={handleDummyKeyDown}
+          className="sm:w-48 text-sm"
+        />
+        <Button type="button" variant="outline" disabled={!dummyName.trim()} onClick={handleAddDummy} className="gap-1.5">
+          <Plus className="size-4" />
+          미연동 공연자 추가
+        </Button>
       </div>
 
       {/* 2. 엑셀 명단 일괄 붙여넣기 토글 영역 */}
@@ -764,7 +812,7 @@ export function PerformerSelector({
 
                       return (
                         <tr
-                          key={p.email || p.id || `${p.name}-${idx}`}
+                          key={p.performerId ?? p.email ?? p.id ?? `${p.name}-${idx}`}
                           className={`transition-colors ${
                             linked ? "hover:bg-muted/20" : "bg-amber-500/5 hover:bg-amber-500/10"
                           }`}
@@ -858,7 +906,7 @@ export function PerformerSelector({
                               type="button"
                               variant="ghost"
                               size="icon"
-                              onClick={() => onRemove(p.email || p.name)}
+                              onClick={() => onRemove(idx)}
                               className="size-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors rounded-lg"
                               aria-label={`${p.name} 삭제`}
                             >

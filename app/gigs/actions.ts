@@ -6,6 +6,7 @@ import { getIsAdmin } from "@/lib/auth-admin";
 import { getGigViewer } from "@/lib/gig-viewer";
 import { SUPABASE_GIGS_TABLE } from "@/lib/supabase/gigs";
 import { getGigVisibility, isGigVisibility } from "@/lib/gig-visibility";
+import { planGigPerformerChanges, type IncomingGigPerformer } from "@/lib/gig-performer-reconcile";
 
 export type GigActionResult = { ok: true; gigId?: number } | { ok: false; error: string };
 
@@ -177,17 +178,35 @@ export async function updateGig(formData: FormData): Promise<GigActionResult> {
 
   // 프론트엔드에서 전달된 참여자 JSON 파싱
   const rawPerformers = formData.get("performers") as string;
-  let performersList: { id?: string; name: string; email?: string; part?: string; photo_url?: string }[] = [];
+  let performersList: IncomingGigPerformer[] = [];
 
   try {
     performersList = rawPerformers ? JSON.parse(rawPerformers) : [];
   } catch (e) {
     console.error("참여자 데이터 파싱 실패:", e);
+    return { ok: false, error: "공연자 데이터를 읽을 수 없습니다." };
+  }
+
+  if (!Array.isArray(performersList) || performersList.some((p) => !p || typeof p.name !== "string")) {
+    return { ok: false, error: "공연자 데이터 형식이 올바르지 않습니다." };
   }
 
   const supabase = await createClient();
 
-  // 1. 공연(Gig) 기본 정보 업데이트
+  // 공연자 행 ID를 우선 사용해 기존 행을 갱신한다.
+  const { data: existingPerformers, error: fetchPerfError } = await supabase
+    .from("performers")
+    .select("id, user_id, name, part, photo_url")
+    .eq("gig_id", gigId);
+
+  if (fetchPerfError || !existingPerformers) {
+    return { ok: false, error: `공연자 조회 실패: ${fetchPerfError?.message ?? "알 수 없는 오류"}` };
+  }
+
+  const plan = planGigPerformerChanges(gigId, performersList, existingPerformers);
+  if (!plan.ok) return { ok: false, error: plan.error };
+
+  // 공연 기본 정보는 공연자 계획 검증 후 갱신한다.
   const { error: gigError } = await supabase
     .from(SUPABASE_GIGS_TABLE)
     .update({
@@ -209,99 +228,55 @@ export async function updateGig(formData: FormData): Promise<GigActionResult> {
 
   if (gigError) return { ok: false, error: gigError.message };
 
-  // 2. 참여자(Performers) 지능형 동기화 (Diff/Upsert, 미연동 더미 지원)
-  const { data: existingPerformers, error: fetchPerfError } = await supabase
-    .from("performers")
-    .select("id, user_id, name, part, photo_url")
-    .eq("gig_id", gigId);
 
-  if (!fetchPerfError && existingPerformers) {
-    const validIncomingPerformers = performersList.filter(
-      (p) => Boolean(p.name && p.name.trim())
-    );
-
-    const remainingExisting = [...existingPerformers];
-    const toUpdate: { id: number; user_id: string | null; name: string; part: string; photo_url: string | null }[] = [];
-    const toInsert: { gig_id: number; user_id: string | null; name: string; part: string; photo_url: string | null }[] = [];
-
-    for (const p of validIncomingPerformers) {
-      const linked = Boolean(p.id && !p.email?.startsWith("temp-"));
-      const pName = p.name.trim();
-      const pUserId = linked ? p.id! : null;
-      const pPart = p.part || "세션";
-      const pPhoto = p.photo_url || null;
-
-      let matchedIdx = -1;
-
-      if (linked) {
-        // A-1. 연동된 경우: user_id가 일치하는 기존 레코드 우선 매칭
-        matchedIdx = remainingExisting.findIndex((ep) => ep.user_id === pUserId);
-        // A-2. 없으면 이름이 같고 user_id가 null이었던 더미 레코드 매칭 (더미 -> 연동으로 변경된 경우)
-        if (matchedIdx === -1) {
-          matchedIdx = remainingExisting.findIndex((ep) => ep.user_id === null && ep.name === pName);
-        }
-      } else {
-        // B. 미연동(더미)인 경우: user_id가 null이고 이름이 일치하는 레코드 매칭
-        matchedIdx = remainingExisting.findIndex((ep) => ep.user_id === null && ep.name === pName);
-      }
-
-      if (matchedIdx !== -1) {
-        const matched = remainingExisting[matchedIdx];
-        remainingExisting.splice(matchedIdx, 1);
-
-        if (
-          matched.user_id !== pUserId ||
-          matched.name !== pName ||
-          matched.part !== pPart ||
-          matched.photo_url !== pPhoto
-        ) {
-          toUpdate.push({
-            id: matched.id,
-            user_id: pUserId,
-            name: pName,
-            part: pPart,
-            photo_url: pPhoto,
-          });
-        }
-      } else {
-        toInsert.push({
-          gig_id: gigId,
-          user_id: pUserId,
-          name: pName,
-          part: pPart,
-          photo_url: pPhoto,
-        });
-      }
+  // 같은 회원으로 합쳐진 행의 선곡 기록은 살아남는 행으로 이전한다.
+  for (const ep of plan.toDelete) {
+    const { error: nominationError } = await supabase
+      .from("nominations")
+      .update({ created_by: ep.replacementId })
+      .eq("created_by", ep.id);
+    if (nominationError) {
+      return { ok: false, error: `공연자 선곡 기록 이전 실패: ${nominationError.message}` };
     }
 
-    // A. 기존 레코드 업데이트
-    for (const item of toUpdate) {
-      await supabase
-        .from("performers")
-        .update({
-          user_id: item.user_id,
-          name: item.name,
-          part: item.part,
-          photo_url: item.photo_url,
-        })
-        .eq("id", item.id);
+    const { error: setlistAuthorError } = await supabase
+      .from("setlists")
+      .update({ created_by: ep.replacementId })
+      .eq("created_by", ep.id);
+    if (setlistAuthorError) {
+      return { ok: false, error: `공연자 셋리스트 기록 이전 실패: ${setlistAuthorError.message}` };
     }
 
-    // B. 신규 레코드 삽입
-    if (toInsert.length > 0) {
-      const { error: insertError } = await supabase.from("performers").insert(toInsert);
-      if (insertError) console.error("신규 참여자 저장 실패:", insertError);
+    const { error: delError } = await supabase
+      .from("performers")
+      .delete()
+      .eq("id", ep.id)
+      .eq("gig_id", gigId);
+    if (delError) {
+      return { ok: false, error: `공연자 삭제 실패: ${delError.message}` };
     }
+  }
 
-    // C. 제외된 참여자 안전 삭제
-    for (const ep of remainingExisting) {
-      await supabase
-        .from("nominations")
-        .update({ created_by: null })
-        .eq("created_by", ep.id);
+  for (const item of plan.toUpdate) {
+    const { error: updateError } = await supabase
+      .from("performers")
+      .update({
+        user_id: item.user_id,
+        name: item.name,
+        part: item.part,
+        photo_url: item.photo_url,
+      })
+      .eq("id", item.id)
+      .eq("gig_id", gigId);
+    if (updateError) {
+      return { ok: false, error: `공연자 수정 실패: ${updateError.message}` };
+    }
+  }
 
-      const { error: delError } = await supabase.from("performers").delete().eq("id", ep.id);
-      if (delError) console.error("참여자 삭제 실패:", delError);
+  if (plan.toInsert.length > 0) {
+    const { error: insertError } = await supabase.from("performers").insert(plan.toInsert);
+    if (insertError) {
+      return { ok: false, error: `공연자 추가 실패: ${insertError.message}` };
     }
   }
 

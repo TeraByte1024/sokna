@@ -262,6 +262,7 @@ erDiagram
 | `title` | `text` | YES | null | 곡 제목 |
 | `artist` | `text` | YES | null | 원곡 아티스트 |
 | `order_num` | `int4` | NO | `0` | 셋리스트 연주 순서 (1, 2, 3...) |
+| `created_by` | `int8` | YES | null | FK → `performers(id)` (등록 공연자, 행 병합 시 이전) |
 | `session_members` | `text` | YES | null | 가변 세션 슬롯 JSON 문자열 |
 | `created_at` | `timestamptz` | NO | `now()` | 등록 일시 |
 | `updated_at` | `timestamptz` | NO | `now()` | 수정 일시 |
