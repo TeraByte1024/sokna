@@ -433,7 +433,11 @@ export async function submitGigRsvp(formData: FormData): Promise<{ ok: true } | 
     return { ok: false, error: "올바른 참여 상태를 선택해 주세요." };
   }
 
-  const part = emptyToNull(formData.get("part"));
+  const submittedParts = formData.getAll("part").map((value) => String(value).trim()).filter(Boolean);
+  if (status === "going" && submittedParts.some((part) => part.includes(","))) {
+    return { ok: false, error: "세션은 한 번에 하나씩 입력해 주세요." };
+  }
+  const part = Array.from(new Set(submittedParts)).join(", ") || null;
   const note = emptyToNull(formData.get("note"));
 
   if (status === "going" && !part) {

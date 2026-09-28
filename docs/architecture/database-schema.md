@@ -198,7 +198,7 @@ erDiagram
 | `gig_id` | `int8` | NO | - | FK → `gigs(id)` (ON DELETE CASCADE) |
 | `user_id` | `uuid` | NO | - | FK → `users(id)` (ON DELETE CASCADE) |
 | `status` | `text` | NO | - | 참여 상태 (`'going'`, `'not_going'`, `'undecided'`) |
-| `part` | `text` | YES | null | 참여 시 희망 세션 파트 (예: 보컬, 베이스 등) |
+| `part` | `text` | YES | null | 참여 시 희망 세션 파트. 여러 세션은 쉼표와 공백으로 구분 (예: `기타, 드럼`) |
 | `note` | `text` | YES | null | 전달 사항 및 특이사항 메모 |
 | `created_at` | `timestamptz` | NO | `now()` | 등록 일시 |
 | `updated_at` | `timestamptz` | NO | `now()` | 수정 일시 |
@@ -207,7 +207,7 @@ erDiagram
 
 > **참여 승인 처리** (`20260926000000_review_gig_rsvps.sql`):
 > - `going`은 참여 신청이며, 승인 여부는 같은 `(gig_id, user_id)`의 `performers` 존재로 판단합니다. 승인된 RSVP는 보존하고 관리자 대기 목록에서는 제외합니다.
-> - `review_gig_rsvp(p_gig_id bigint, p_rsvp_id bigint, p_updated_at timestamptz, p_decision text)`는 `approve` 시 신청 세션 그대로 공연자를 INSERT, `ignore` 시 RSVP를 DELETE합니다. 무시는 재신청 가능한 미선택 상태로 돌아갑니다.
+> - `review_gig_rsvp(p_gig_id bigint, p_rsvp_id bigint, p_updated_at timestamptz, p_decision text)`는 `approve` 시 쉼표로 구분된 신청 세션 전체를 공연자 `part`에 그대로 INSERT, `ignore` 시 RSVP를 DELETE합니다. 무시는 재신청 가능한 미선택 상태로 돌아갑니다.
 > - `SECURITY DEFINER`, 빈 `search_path`, 명시적 스키마 참조 및 `auth.uid()`/`is_admin()` 권한 검사. PUBLIC 실행 권한을 회수하고, `20260926001000_restrict_gig_rsvp_rpc.sql`로 Supabase 기본 권한에 포함될 수 있는 `anon`의 직접 실행 권한도 회수합니다. 사용자 역할 중 authenticated만 실행 가능하며 관리자 여부는 함수 내부에서 다시 검사합니다.
 > - `FOR UPDATE`로 신청을 잠그고 `updated_at`을 비교합니다. 이미 공연자이거나 신청이 없거나 변경되었거나 `going`이 아니면 `false`를 반환하며 데이터를 변경하지 않습니다. 세션이 없는 신청은 승인할 수 없습니다.
 > - RSVP SELECT RLS는 본인 또는 `public.is_admin()`으로 관리자 전체 조회를 허용합니다. 다른 회원은 타인의 신청/비고를 읽을 수 없습니다.

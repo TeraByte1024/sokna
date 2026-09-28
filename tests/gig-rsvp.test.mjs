@@ -134,6 +134,22 @@ test("custom session is preserved and submission does not create a performer", a
   assert.ok(fixture.invalidations.includes("/admin/members"));
 });
 
+test("multiple RSVP sessions are trimmed, deduplicated, and stored for approval", async () => {
+  const fixture = actionsFixture();
+  const data = form("going", "  기타  ");
+  data.append("part", "드럼");
+  data.append("part", "드럼");
+  data.append("part", "베이스");
+  assert.deepEqual(await fixture.actions.submitGigRsvp(data), { ok: true });
+  assert.equal(fixture.writes[0].payload.part, "기타, 드럼, 베이스");
+
+  for (const invalidPart of ["   ", "기타, 드럼"]) {
+    const invalid = actionsFixture();
+    assert.equal((await invalid.actions.submitGigRsvp(form("going", invalidPart))).ok, false);
+    assert.equal(invalid.writes.length, 0);
+  }
+});
+
 test("not-going and undecided responses clear the session", async () => {
   for (const status of ["not_going", "undecided"]) {
     const fixture = actionsFixture();
@@ -211,14 +227,120 @@ test("new or ignored RSVP opens with no choice and saving disabled", () => {
   const html = renderToStaticMarkup(React.createElement(GigJoinDialog, { gig, isOpen: true, onClose() {}, existingRsvp: null }));
   assert.equal((html.match(/aria-pressed="false"/g) || []).length, 3);
   assert.match(html, /type="submit"[^>]*disabled=""/);
+  assert.doesNotMatch(html, /관리자 승인 후 공연 참여자로 등록됩니다/);
 });
 
 test("saved custom session is selected verbatim and direct-add control is available", () => {
   const { GigJoinDialog } = loadSource("components/gigs/gig-join-dialog.tsx", uiMocks);
   const html = renderToStaticMarkup(React.createElement(GigJoinDialog, { gig, isOpen: true, onClose() {}, existingRsvp: rsvp }));
   assert.match(html, /aria-pressed="true"[^>]*>어쿠스틱 기타<\/button>/);
-  assert.match(html, /직접 추가할 세션/);
+  assert.match(html, /aria-label="세션 직접 입력"/);
+  assert.match(html, /border-dashed/);
+  assert.doesNotMatch(html, /aria-label="직접 추가할 세션"/);
   assert.match(html, /승인 대기 중/);
+  assert.match(html, /관리자 승인 후 공연 참여자로 등록됩니다/);
+
+  const notGoing = renderToStaticMarkup(React.createElement(GigJoinDialog, {
+    gig, isOpen: true, onClose() {}, existingRsvp: { ...rsvp, status: "not_going", part: null },
+  }));
+  assert.doesNotMatch(notGoing, /관리자 승인 후 공연 참여자로 등록됩니다/);
+});
+
+test("saved sessions can be toggled independently and submitted together", async () => {
+  const state = [];
+  const submissions = [];
+  let stateIndex = 0;
+  let tree;
+  const noop = () => {};
+  const mocks = {
+    ...uiMocks,
+    react: {
+      useEffect: noop,
+      useState(initial) {
+        const index = stateIndex++;
+        if (!(index in state)) state[index] = typeof initial === "function" ? initial() : initial;
+        return [state[index], (next) => { state[index] = typeof next === "function" ? next(state[index]) : next; }];
+      },
+    },
+    "@/app/gigs/actions": { submitGigRsvp: async (data) => { submissions.push(data); return { ok: true }; } },
+    "@/components/ui/button": { Button: "button" },
+    "@/components/ui/badge": { Badge: "span" },
+    "@/components/ui/label": { Label: "label" },
+    "@/components/ui/input": { Input: "input" },
+    "@/components/ui/textarea": { Textarea: "textarea" },
+    "@/lib/utils": { formatKoreanDateTime: () => "" },
+  };
+  const { GigJoinDialog } = loadSource("components/gigs/gig-join-dialog.tsx", mocks);
+  const find = (node, predicate) => {
+    if (Array.isArray(node)) return node.flatMap((child) => find(child, predicate));
+    if (!node || typeof node !== "object") return [];
+    return [...(predicate(node) ? [node] : []), ...find(node.props?.children, predicate)];
+  };
+  const render = () => {
+    stateIndex = 0;
+    tree = GigJoinDialog({ gig, isOpen: true, onClose: noop, existingRsvp: { ...rsvp, part: "기타, 드럼" } });
+  };
+  const chips = () => find(tree, (node) => node.type === "button" && "aria-pressed" in node.props);
+  const chip = (name) => chips().find((node) => node.props.children === name);
+  render();
+  assert.equal(chip("기타").props["aria-pressed"], true);
+  assert.equal(chip("드럼").props["aria-pressed"], true);
+  chip("드럼").props.onClick();
+  render();
+  assert.equal(chip("드럼").props["aria-pressed"], false);
+  chip("기타").props.onClick();
+  render();
+  assert.equal(find(tree, (node) => node.props?.type === "submit")[0].props.disabled, true);
+  chip("기타").props.onClick();
+  render();
+  chip("베이스").props.onClick();
+  render();
+  assert.equal(chip("기타").props["aria-pressed"], true);
+  assert.equal(chip("베이스").props["aria-pressed"], true);
+  const input = () => find(tree, (node) => node.type === "input"
+    && node.props["aria-label"] === "직접 추가할 세션")[0];
+  const openInput = () => {
+    find(tree, (node) => node.type === "button"
+      && node.props["aria-label"] === "세션 직접 입력")[0].props.onClick();
+    render();
+    assert.ok(input());
+    assert.equal(input().props.autoFocus, true);
+  };
+  const typeSession = (value) => {
+    input().props.onChange({ target: { value } });
+    render();
+  };
+  openInput();
+  input().props.onBlur();
+  render();
+  assert.equal(input(), undefined);
+  openInput();
+  typeSession("바이올린, 비올라");
+  input().props.onBlur();
+  render();
+  assert.equal(chip("바이올린"), undefined);
+  openInput();
+  typeSession("바이올린");
+  const enterInput = input();
+  enterInput.props.onKeyDown({
+    key: "Enter", nativeEvent: { isComposing: false }, preventDefault: noop,
+    currentTarget: { blur: () => enterInput.props.onBlur() },
+  });
+  render();
+  assert.equal(input(), undefined);
+  assert.equal(submissions.length, 0);
+  openInput();
+  typeSession("비올라");
+  input().props.onBlur();
+  render();
+  openInput();
+  typeSession("기타");
+  input().props.onBlur();
+  render();
+  assert.equal(chip("바이올린").props["aria-pressed"], true);
+  assert.equal(chip("비올라").props["aria-pressed"], true);
+  await find(tree, (node) => node.type === "form")[0].props.onSubmit({ preventDefault: noop });
+  assert.deepEqual(submissions[0].getAll("part"), ["기타", "베이스", "바이올린", "비올라"]);
 });
 
 test("admin table shows gig details on one row, omits undecided responses and pending chips", () => {

@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type Gig, type GigRsvp, type GigRsvpStatus } from "@/lib/gig";
+import { parseGigRsvpSessions } from "@/lib/gig-rsvp-sessions";
 import { submitGigRsvp } from "@/app/gigs/actions";
 import { formatKoreanDateTime } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -46,10 +47,6 @@ const GLOBAL_SESSIONS = [
   "드럼",
 ];
 
-function resolveInitialPart(partVal?: string | null): string {
-  return partVal?.trim() || GLOBAL_SESSIONS[0];
-}
-
 export function GigJoinDialog({
   isOpen,
   onClose,
@@ -63,16 +60,18 @@ export function GigJoinDialog({
   const [status, setStatus] = useState<GigRsvpStatus | null>(
     existingRsvp?.status ?? null
   );
-  const [part, setPart] = useState<string>(
-    resolveInitialPart(existingRsvp?.part || defaultPart)
+  const [parts, setParts] = useState<string[]>(
+    parseGigRsvpSessions(existingRsvp?.part || defaultPart)
   );
   const [note, setNote] = useState<string>(existingRsvp?.note || "");
   const [pending, setPending] = useState(false);
   const [customSessions, setCustomSessions] = useState<string[]>([]);
   const [customSession, setCustomSession] = useState("");
+  const [isCustomInputOpen, setIsCustomInputOpen] = useState(false);
   const sessions = Array.from(new Set([
     ...GLOBAL_SESSIONS,
-    resolveInitialPart(existingRsvp?.part || defaultPart),
+    ...parseGigRsvpSessions(existingRsvp?.part || defaultPart),
+    ...parts,
     ...customSessions,
   ]));
 
@@ -80,10 +79,11 @@ export function GigJoinDialog({
   useEffect(() => {
     if (isOpen) {
       setStatus(existingRsvp?.status ?? null);
-      setPart(resolveInitialPart(existingRsvp?.part || defaultPart));
+      setParts(parseGigRsvpSessions(existingRsvp?.part || defaultPart));
       setNote(existingRsvp?.note || "");
       setCustomSessions([]);
       setCustomSession("");
+      setIsCustomInputOpen(false);
     }
   }, [isOpen, existingRsvp, defaultPart]);
 
@@ -101,14 +101,14 @@ export function GigJoinDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (pending || !status) return;
+    if (pending || !status || (status === "going" && parts.length === 0)) return;
     setPending(true);
 
     const formData = new FormData();
     formData.set("gig_id", String(gig.id));
     formData.set("status", status);
     if (status === "going") {
-      formData.set("part", part.trim());
+      parts.forEach((part) => formData.append("part", part));
     }
     if (note.trim()) {
       formData.set("note", note.trim());
@@ -136,12 +136,17 @@ export function GigJoinDialog({
     }
   };
 
-  const addCustomSession = () => {
+  const finishCustomSession = () => {
     const session = customSession.trim();
-    if (!session || pending) return;
-    setCustomSessions((previous) => Array.from(new Set([...previous, session])));
-    setPart(session);
+    setIsCustomInputOpen(false);
     setCustomSession("");
+    if (!session || pending) return;
+    if (session.includes(",")) {
+      toast.error("세션은 한 번에 하나씩 입력해 주세요.");
+      return;
+    }
+    setCustomSessions((previous) => Array.from(new Set([...previous, session])));
+    setParts((previous) => Array.from(new Set([...previous, session])));
   };
 
   return (
@@ -313,23 +318,25 @@ export function GigJoinDialog({
               </div>
             </div>
 
-            {/* 참여 시 기본 세션 및 직접 추가한 세션 선택 */}
+            {/* 참여 시 기본 세션 및 직접 추가한 세션 다중 선택 */}
             {status === "going" && (
               <div className="space-y-2 animate-in fade-in-50 duration-150">
                 <Label className="text-xs font-bold text-foreground">
-                  세션 <span className="text-destructive">*</span>
+                  세션 (여러 개 선택 가능) <span className="text-destructive">*</span>
                 </Label>
-                <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 sm:gap-2">
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                   {sessions.map((p) => {
-                    const isSelected = part === p;
+                    const isSelected = parts.includes(p);
                     return (
                       <button
                         key={p}
                         type="button"
-                        onClick={() => setPart(p)}
+                        onClick={() => setParts((previous) => previous.includes(p)
+                          ? previous.filter((part) => part !== p)
+                          : [...previous, p])}
                         aria-pressed={isSelected}
                         disabled={pending}
-                        className={`min-w-0 break-words text-xs py-2 px-1 rounded-xl border font-bold text-center transition-all ${
+                        className={`max-w-full min-w-0 break-words text-xs py-2 px-3 rounded-xl border font-bold text-center transition-all ${
                           isSelected
                             ? "bg-primary text-primary-foreground border-primary shadow-xs ring-1 ring-primary/30 scale-[1.02]"
                             : "bg-background border-border/70 text-foreground/80 hover:bg-muted hover:text-foreground"
@@ -339,28 +346,40 @@ export function GigJoinDialog({
                       </button>
                     );
                   })}
+                  {isCustomInputOpen ? (
+                    <Input
+                      type="text"
+                      aria-label="직접 추가할 세션"
+                      placeholder="세션명"
+                      value={customSession}
+                      onChange={(e) => setCustomSession(e.target.value)}
+                      onBlur={finishCustomSession}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+                          e.preventDefault();
+                          e.currentTarget.blur();
+                        }
+                      }}
+                      disabled={pending}
+                      autoFocus
+                      className="h-[34px] w-36 max-w-full min-w-0 rounded-xl border-primary/50 px-2 text-xs"
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      aria-label="세션 직접 입력"
+                      onClick={() => setIsCustomInputOpen(true)}
+                      disabled={pending}
+                      className="inline-flex max-w-full items-center justify-center gap-1 rounded-xl border border-dashed border-border/70 bg-muted/20 px-3 py-2 text-xs font-bold text-muted-foreground transition-all hover:border-primary/50 hover:bg-primary/5 hover:text-primary"
+                    >
+                      <Plus className="size-3.5" />
+                      <span>직접 입력</span>
+                    </button>
+                  )}
                 </div>
-                <div className="flex gap-2">
-                  <Input
-                    aria-label="직접 추가할 세션"
-                    placeholder="세션 직접 입력 (예: 바이올린)"
-                    value={customSession}
-                    onChange={(e) => setCustomSession(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.nativeEvent.isComposing) {
-                        e.preventDefault();
-                        addCustomSession();
-                      }
-                    }}
-                    disabled={pending}
-                    className="min-w-0 text-xs"
-                  />
-                  <Button type="button" variant="outline" onClick={addCustomSession} disabled={pending || !customSession.trim()} className="shrink-0 gap-1 text-xs">
-                    <Plus className="size-3.5" />
-                    추가
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground">참여 신청 후 관리자가 승인하면 공연 참여자로 등록됩니다.</p>
+                <p className="text-xs text-muted-foreground">
+                  관리자 승인 후 공연 참여자로 등록됩니다.
+                </p>
               </div>
             )}
 
@@ -395,7 +414,7 @@ export function GigJoinDialog({
               <Button
                 type="submit"
                 size="sm"
-                disabled={pending || !status || (status === "going" && !part.trim())}
+                disabled={pending || !status || (status === "going" && parts.length === 0)}
                 className="text-xs font-bold gap-1.5"
               >
                 {pending ? (
