@@ -941,7 +941,7 @@ export function NominationDrawer({
 												</span>
 												<span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-muted text-muted-foreground border border-border">
 													<HelpCircle className="size-3" />
-													미선택 {selectedPartStats.undecided}명
+													미응답 {selectedPartStats.undecided}명
 												</span>
 											</div>
 										</div>
@@ -982,7 +982,7 @@ export function NominationDrawer({
 																		<HelpCircle className="size-3" />
 																	)}
 																	<span>
-																		{isAvail ? "가능" : isUnavail ? "불가능" : "미선택"}
+																		{isAvail ? "가능" : isUnavail ? "불가능" : "미응답"}
 																	</span>
 																</Badge>
 

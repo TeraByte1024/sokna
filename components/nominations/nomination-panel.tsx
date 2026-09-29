@@ -258,7 +258,7 @@ export function NominationPanel({
 					}
 				}
 
-				// 4. 내 응답 필터 (가능 / 불가능 / 미선택)
+				// 4. 내 응답 필터 (가능 / 불가능 / 미응답)
 				if (responseFilter !== "all" && currentUser) {
 					const myResp = song.responses?.find((r) => r.userId === currentUser.id);
 					const myStatus = myResp?.status || "undecided";
@@ -498,45 +498,55 @@ export function NominationPanel({
 
 				{/* 필터 확장 패널 (세션, 응답, 악보 3가지 필터) */}
 				{isFilterOpen && (
-					<div className="flex flex-col gap-3.5 pt-1 animate-in fade-in-50 duration-150">
+					<div className="flex flex-col gap-3.5 rounded-2xl border border-border/70 bg-muted/30 p-3 shadow-xs animate-in fade-in-50 duration-150 sm:p-4">
 						{/* 1. 세션 파트 필터 */}
-						<div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-							<span className="text-[11px] font-bold text-muted-foreground shrink-0 w-12">
+						<div className="flex min-w-0 items-center gap-2">
+							<span className="w-8 shrink-0 text-[11px] font-bold text-muted-foreground">
 								세션:
 							</span>
-							<div className="flex flex-wrap items-center gap-1.5">
-								<Badge
-									variant={partFilter === "all" ? "default" : "outline"}
+							<div className="flex min-w-0 w-fit max-w-full items-center overflow-x-auto whitespace-nowrap rounded-lg border border-border/80 bg-muted p-0.5 text-xs">
+								<button
+									type="button"
 									onClick={() => setPartFilter("all")}
-									className="cursor-pointer font-semibold text-xs py-1 px-2.5 transition-colors"
+									className={cn(
+										"shrink-0 rounded-md px-2.5 py-1 font-medium transition-all",
+										partFilter === "all"
+											? "bg-background text-foreground shadow-2xs font-bold"
+											: "text-muted-foreground hover:text-foreground",
+									)}
 								>
 									전체
-								</Badge>
+								</button>
 								{SESSION_FILTER_PARTS.map((part) => (
-									<Badge
-										key={part}
-										variant={partFilter === part ? "default" : "outline"}
-										onClick={() => setPartFilter(part)}
-										className="cursor-pointer font-semibold text-xs py-1 px-2.5 transition-colors"
-									>
-										{part}
-									</Badge>
-								))}
+								<button
+									type="button"
+									key={part}
+									onClick={() => setPartFilter(part)}
+									className={cn(
+										"shrink-0 rounded-md px-2.5 py-1 font-medium transition-all",
+										partFilter === part
+											? "bg-background text-foreground shadow-2xs font-bold"
+											: "text-muted-foreground hover:text-foreground",
+									)}
+								>
+									{part}
+								</button>
+							))}
 							</div>
 						</div>
 
 						{/* 2. 내 응답 필터 */}
 						{currentUser && (
-							<div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-								<span className="text-[11px] font-bold text-muted-foreground shrink-0 w-12">
+							<div className="flex min-w-0 items-center gap-2">
+								<span className="w-8 shrink-0 text-[11px] font-bold text-muted-foreground">
 									응답:
 								</span>
-								<div className="flex items-center p-0.5 bg-muted rounded-lg border border-border/80 text-xs w-fit">
+								<div className="flex min-w-0 w-fit max-w-full items-center overflow-x-auto whitespace-nowrap rounded-lg border border-border/80 bg-muted p-0.5 text-xs">
 									<button
 										type="button"
 										onClick={() => setResponseFilter("all")}
 										className={cn(
-											"px-2.5 py-1 rounded-md font-medium transition-all",
+											"shrink-0 rounded-md px-2.5 py-1 font-medium transition-all",
 											responseFilter === "all"
 												? "bg-background text-foreground shadow-2xs font-bold"
 												: "text-muted-foreground hover:text-foreground",
@@ -548,7 +558,7 @@ export function NominationPanel({
 										type="button"
 										onClick={() => setResponseFilter("available")}
 										className={cn(
-											"px-2.5 py-1 rounded-md font-medium transition-all flex items-center gap-1",
+											"shrink-0 rounded-md px-2.5 py-1 font-medium transition-all flex items-center gap-1",
 											responseFilter === "available"
 												? "bg-background text-emerald-600 dark:text-emerald-400 shadow-2xs font-bold"
 												: "text-muted-foreground hover:text-foreground",
@@ -561,7 +571,7 @@ export function NominationPanel({
 										type="button"
 										onClick={() => setResponseFilter("unavailable")}
 										className={cn(
-											"px-2.5 py-1 rounded-md font-medium transition-all flex items-center gap-1",
+											"shrink-0 rounded-md px-2.5 py-1 font-medium transition-all flex items-center gap-1",
 											responseFilter === "unavailable"
 												? "bg-background text-rose-600 dark:text-rose-400 shadow-2xs font-bold"
 												: "text-muted-foreground hover:text-foreground",
@@ -574,29 +584,29 @@ export function NominationPanel({
 										type="button"
 										onClick={() => setResponseFilter("undecided")}
 										className={cn(
-											"px-2.5 py-1 rounded-md font-medium transition-all",
+											"shrink-0 rounded-md px-2.5 py-1 font-medium transition-all",
 											responseFilter === "undecided"
 												? "bg-background text-foreground shadow-2xs font-bold"
 												: "text-muted-foreground hover:text-foreground",
 										)}
 									>
-										미선택
+										미응답
 									</button>
 								</div>
 							</div>
 						)}
 
 						{/* 3. 악보 필터 */}
-						<div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-							<span className="text-[11px] font-bold text-muted-foreground shrink-0 w-12">
+						<div className="flex min-w-0 items-center gap-2">
+							<span className="w-8 shrink-0 text-[11px] font-bold text-muted-foreground">
 								악보:
 							</span>
-							<div className="flex items-center p-0.5 bg-muted rounded-lg border border-border/80 text-xs w-fit">
+							<div className="flex min-w-0 w-fit max-w-full items-center overflow-x-auto whitespace-nowrap rounded-lg border border-border/80 bg-muted p-0.5 text-xs">
 								<button
 									type="button"
 									onClick={() => setSheetFilter("all")}
 									className={cn(
-										"px-2.5 py-1 rounded-md font-medium transition-all",
+										"shrink-0 rounded-md px-2.5 py-1 font-medium transition-all",
 										sheetFilter === "all"
 											? "bg-background text-foreground shadow-2xs font-bold"
 											: "text-muted-foreground hover:text-foreground",
@@ -608,7 +618,7 @@ export function NominationPanel({
 									type="button"
 									onClick={() => setSheetFilter("has_sheet")}
 									className={cn(
-										"px-2.5 py-1 rounded-md font-medium transition-all",
+										"shrink-0 rounded-md px-2.5 py-1 font-medium transition-all",
 										sheetFilter === "has_sheet"
 											? "bg-background text-emerald-600 dark:text-emerald-400 shadow-2xs font-bold"
 											: "text-muted-foreground hover:text-foreground",
@@ -620,7 +630,7 @@ export function NominationPanel({
 									type="button"
 									onClick={() => setSheetFilter("no_sheet")}
 									className={cn(
-										"px-2.5 py-1 rounded-md font-medium transition-all",
+										"shrink-0 rounded-md px-2.5 py-1 font-medium transition-all",
 										sheetFilter === "no_sheet"
 											? "bg-background text-foreground shadow-2xs font-bold"
 											: "text-muted-foreground hover:text-foreground",
@@ -629,23 +639,23 @@ export function NominationPanel({
 									악보 없음
 								</button>
 							</div>
-
-							{activeFilterCount > 0 && (
-								<Button
-									variant="ghost"
-									size="sm"
-									onClick={() => {
-										setPartFilter("all");
-										setResponseFilter("all");
-										setSheetFilter("all");
-									}}
-									className="h-7 text-[11px] text-muted-foreground hover:text-foreground px-2 sm:ml-auto w-fit gap-1"
-								>
-									<RotateCcw className="size-3" />
-									필터 초기화
-								</Button>
-							)}
 						</div>
+
+						{activeFilterCount > 0 && (
+							<Button
+								variant="ghost"
+								size="sm"
+								onClick={() => {
+									setPartFilter("all");
+									setResponseFilter("all");
+									setSheetFilter("all");
+								}}
+								className="h-7 w-fit self-end gap-1 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+							>
+								<RotateCcw className="size-3" />
+								필터 초기화
+							</Button>
+						)}
 					</div>
 				)}
 
