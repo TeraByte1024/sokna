@@ -12,6 +12,7 @@ import { useParams, useRouter } from "next/navigation";
 import {
 	Plus,
 	AlarmClock,
+	Calendar,
 	ArrowLeft,
 	Music2,
 	Disc3,
@@ -19,10 +20,8 @@ import {
 	X,
 	ChevronRight,
 	Sparkles,
-	Calendar,
 	MapPin,
 	Filter,
-	Lock,
 	CheckCheck,
 	ChevronDown,
 	RotateCcw,
@@ -46,7 +45,7 @@ import {
 	updateNominationViewAction,
 } from "@/app/gigs/[id]/nominations/actions";
 import { toast } from "sonner";
-import { cn, getDDay } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { getNominationDeadline } from "@/lib/nomination-deadline";
 
 const NominationDrawer = dynamic(
@@ -92,7 +91,7 @@ function formatDateKorean(dateStr?: string | null) {
 			year: "numeric",
 			month: "long",
 			day: "numeric",
-			weekday: "short",
+			weekday: "long",
 		});
 	} catch {
 		return dateStr;
@@ -108,8 +107,7 @@ interface NominationPanelProps {
 	initialGigInfo: {
 		title: string;
 		meetingDate: string;
-		performDate?: string;
-		location?: string;
+		meetingLocation?: string;
 	};
 	initialLastViewedTimestamp: string | null;
 }
@@ -134,6 +132,10 @@ export function NominationPanel({
 	const performers = initialPerformers;
 	const isAdmin = initialIsAdmin;
 	const gigInfo = initialGigInfo;
+	const meetingDateLabel = gigInfo.meetingDate?.trim()
+		? formatDateKorean(gigInfo.meetingDate)
+		: "날짜 미정";
+	const meetingLocationLabel = gigInfo.meetingLocation?.trim() || "장소 미정";
 	const [timeLeft, setTimeLeft] = useState(() => getRemainingTime(initialGigInfo.meetingDate));
 
 	// 마지막 조회 시점(하이라이트 기준) 및 확인된 곡 목록
@@ -278,13 +280,17 @@ export function NominationPanel({
 		(responseFilter !== "all" ? 1 : 0) +
 		(sheetFilter !== "all" ? 1 : 0);
 
-	const dDay = gigInfo?.performDate ? getDDay(gigInfo.performDate) : "";
+	const remainingTimeLabel = timeLeft.dd > 0
+		? `${timeLeft.dd}일`
+		: timeLeft.hh > 0
+			? `${timeLeft.hh}시간`
+			: `${Math.max(timeLeft.mm, 1)}분`;
 	const canRecommend = isAdmin || (!timeLeft.isOver && Boolean(currentPerformer));
 	const recommendationTitle =
 		isAdmin && timeLeft.isOver
 			? "선곡회의가 마감되었으나 관리자 권한으로 후보곡을 추천할 수 있습니다."
 			: !isAdmin && timeLeft.isOver
-				? "선곡회의 접수가 마감되었습니다."
+				? "추천곡 접수가 마감되었습니다"
 				: !isAdmin && !currentPerformer
 					? "공연 참여자만 후보곡을 추천할 수 있습니다."
 					: "후보곡 추천하기";
@@ -295,96 +301,84 @@ export function NominationPanel({
 			<div className="flex items-center justify-between gap-4">
 				<Link
 					href={`/gigs/${gigId}`}
-					className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors group"
+					className="group inline-flex shrink-0 items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
 				>
 					<ArrowLeft className="size-4 group-hover:-translate-x-1 transition-transform" />
 					<span>공연 상세 정보로 돌아가기</span>
 				</Link>
 
-				<div className="text-xs text-muted-foreground font-medium hidden sm:block">
-					공연 &gt; {gigInfo?.title} &gt; 선곡회의
+				<div className="hidden min-w-0 max-w-[50%] items-center gap-1 text-xs font-medium text-muted-foreground sm:flex">
+					<span className="shrink-0">공연 &gt;</span>
+					<span className="min-w-0 truncate" title={gigInfo.title}>{gigInfo.title}</span>
+					<span className="shrink-0">&gt; 선곡회의</span>
 				</div>
 			</div>
 
-			{/* 2. 메인 히어로 배너 섹션 */}
-			<div className="relative overflow-hidden rounded-3xl border border-border/80 bg-gradient-to-br from-card via-card/95 to-primary/5 p-6 sm:p-8 shadow-sm">
-				<div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-					<div className="space-y-3 max-w-2xl">
-						<div className="flex flex-wrap items-center gap-2">
-							{timeLeft.isOver && (
-								<Badge
-									variant="secondary"
-									className="text-xs font-bold gap-1 px-2.5 py-0.5"
-								>
-									<Lock className="size-3" /> 추천 마감
-								</Badge>
-							)}
-
-							{currentPerformer && (
-								<Badge
-									variant="outline"
-									className="text-xs font-bold px-2.5 py-0.5 bg-primary/5 border-primary/20 text-primary flex items-center gap-1"
-								>
-									<Sparkles className="size-3 text-primary" />
-									내 참여 세션: {currentPerformer.part}
-								</Badge>
-							)}
-						</div>
-
-						<h1 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground flex items-center gap-2.5">
-							{dDay && (
-								<Badge className="bg-primary text-primary-foreground text-xs font-black tracking-wider px-2.5 py-0.5">
-									{dDay}
-								</Badge>
-							)}
-							<span>{gigInfo?.title} 선곡회의</span>
+			{/* 2. 상단 선곡회의 정보 */}
+			<div className="w-full rounded-3xl border border-primary/20 bg-gradient-to-br from-card via-card to-primary/5 p-6 shadow-md shadow-primary/5 sm:p-8">
+				<div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
+					<div className="w-full min-w-0 max-w-2xl space-y-4">
+						<h1 className="flex w-full min-w-0 items-baseline gap-2 text-2xl font-black tracking-tight text-foreground sm:text-3xl">
+							<span className="min-w-0 truncate" title={gigInfo.title}>{gigInfo.title}</span>
+							<span className="shrink-0 whitespace-nowrap">선곡회의</span>
 						</h1>
-
-						<div className="flex flex-wrap items-center gap-y-1.5 gap-x-4 text-xs sm:text-sm text-muted-foreground">
-							{gigInfo?.performDate && (
-								<span className="flex items-center gap-1">
-									<Calendar className="size-3.5 text-primary" />
-									공연일: {formatDateKorean(gigInfo.performDate)}
-								</span>
-							)}
-							{gigInfo?.meetingDate && (
-								<span className="flex items-center gap-1">
-									<AlarmClock className="size-3.5 text-primary" />
-									선곡회의: {formatDateKorean(gigInfo.meetingDate)}
-								</span>
-							)}
-							{gigInfo?.location && (
-								<span className="flex items-center gap-1">
-									<MapPin className="size-3.5 text-primary" />
-									{gigInfo.location}
-								</span>
-							)}
-						</div>
-					</div>
-
-					{/* 마감 카운트다운 및 곡 추천 액션 박스 */}
-					<div className="flex flex-col sm:flex-row lg:flex-col items-stretch sm:items-center lg:items-end gap-3 shrink-0">
-						<div className="p-3.5 px-4 rounded-2xl bg-muted/40 border border-border/80 flex items-center justify-between sm:justify-start gap-3 text-xs">
-							<div className="size-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
-								<AlarmClock className="size-4" />
+						<div className="flex flex-col gap-2 sm:hidden">
+							<div className="flex items-center gap-2">
+								<Calendar className="size-4 shrink-0 text-primary" />
+								<span className="text-xs font-semibold text-foreground">{meetingDateLabel}</span>
 							</div>
-							<div className="text-left">
-								<div className="text-[11px] text-muted-foreground font-medium">
-									{timeLeft.isOver ? "추천 마감 완료" : "후보곡 추천 마감까지"}
-								</div>
-								<div className="font-extrabold text-foreground text-sm">
+							<div className="flex items-start gap-2">
+								<MapPin className="size-4 shrink-0 text-primary" />
+								<span className="min-w-0 break-words text-xs leading-4 text-foreground">{meetingLocationLabel}</span>
+							</div>
+							<div className="flex items-center gap-2">
+								<AlarmClock className="size-4 shrink-0 text-primary" />
+								<div className="flex min-w-0 items-baseline gap-1 whitespace-nowrap">
 									{timeLeft.isOver ? (
-										<span className="text-muted-foreground">접수가 마감되었습니다</span>
+										<span className="text-xs text-muted-foreground">추천곡 접수가 마감되었습니다</span>
 									) : (
-										<span>
-											{timeLeft.dd > 0 ? `${timeLeft.dd}일 ` : ""}
-											{timeLeft.hh}시간 {timeLeft.mm}분 남음
-										</span>
+											<>
+											<span className="text-xs text-muted-foreground">추천 마감까지</span>
+											<span className="text-xs text-foreground">
+												<span className="font-bold">{remainingTimeLabel}</span>{" "}
+												<span className="font-normal">남았어요</span>
+											</span>
+										</>
 									)}
 								</div>
 							</div>
 						</div>
+						<div className="hidden grid-cols-[minmax(0,1fr)_auto] items-center gap-x-6 sm:grid">
+							<div className="flex min-w-0 items-center gap-3">
+								<span className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap text-sm font-semibold text-foreground">
+									<Calendar className="size-4 shrink-0 text-primary" />
+									{meetingDateLabel}
+								</span>
+								<span aria-hidden="true" className="h-4 w-px shrink-0 bg-border" />
+								<span className="inline-flex min-w-0 items-center gap-1.5 text-xs text-foreground">
+									<MapPin className="size-4 shrink-0 text-primary" />
+									<span className="truncate" title={meetingLocationLabel}>{meetingLocationLabel}</span>
+								</span>
+							</div>
+							<div className="flex min-w-0 items-center justify-self-end gap-2 whitespace-nowrap">
+								<AlarmClock className="size-4 shrink-0 text-primary" />
+								{timeLeft.isOver ? (
+									<span className="text-xs text-muted-foreground">추천곡 접수가 마감되었습니다</span>
+								) : (
+									<div className="flex items-baseline gap-1.5">
+										<span className="text-xs text-muted-foreground">추천 마감까지</span>
+										<span className="text-xs text-foreground">
+											<span className="font-bold">{remainingTimeLabel}</span>{" "}
+											<span className="font-normal">남았어요</span>
+										</span>
+									</div>
+								)}
+							</div>
+						</div>
+					</div>
 
+					{/* 곡 추천 액션 */}
+					<div className="hidden shrink-0 flex-col items-stretch gap-3 sm:flex sm:flex-row sm:items-center lg:flex-col lg:items-end">
 						{canRecommend ? (
 							<Button
 								asChild
@@ -414,7 +408,7 @@ export function NominationPanel({
 			</div>
 
 			{/* 3. 검색, 변경 사항 알림 및 필터 툴바 */}
-			<div className="flex flex-col gap-3 p-4 rounded-2xl bg-card border border-border/80 shadow-2xs">
+			<div className="flex flex-col gap-3">
 				{/* 마지막 조회 이후 변경 사항 안내 배너 (있는 경우) */}
 				{changedCount > 0 && (
 					<div className="flex flex-wrap items-center justify-between gap-2 p-2.5 px-3.5 rounded-xl bg-amber-500/10 dark:bg-amber-500/15 border border-amber-500/25 text-xs text-amber-800 dark:text-amber-300">
@@ -504,7 +498,7 @@ export function NominationPanel({
 
 				{/* 필터 확장 패널 (세션, 응답, 악보 3가지 필터) */}
 				{isFilterOpen && (
-					<div className="pt-3 border-t border-border/70 flex flex-col gap-3.5 animate-in fade-in-50 duration-150">
+					<div className="flex flex-col gap-3.5 pt-1 animate-in fade-in-50 duration-150">
 						{/* 1. 세션 파트 필터 */}
 						<div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
 							<span className="text-[11px] font-bold text-muted-foreground shrink-0 w-12">

@@ -96,7 +96,7 @@ async function NominationsContent({ params }: PageProps) {
 			.maybeSingle(),
 		supabase
 			.from(SUPABASE_GIGS_TABLE)
-			.select("title, meeting_date, perform_date, location")
+			.select("title, meeting_date, meeting_location")
 			.eq("id", numericId)
 			.maybeSingle(),
 	]);
@@ -202,8 +202,7 @@ async function NominationsContent({ params }: PageProps) {
 		initialGigInfo={{
 			title: gig.title || "무제",
 			meetingDate: gig.meeting_date || "",
-			performDate: gig.perform_date || "",
-			location: gig.location || "",
+			meetingLocation: gig.meeting_location || "",
 		}}
 		initialLastViewedTimestamp={viewRes.data?.last_viewed_at ?? null}
 	/>;
