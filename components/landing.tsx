@@ -37,7 +37,13 @@ const STATUS_ITEMS = [
   },
 ];
 
-export function Landing({ isLoggedIn }: { isLoggedIn: boolean }) {
+export function Landing({
+  isLoggedIn,
+  activeNominationGig,
+}: {
+  isLoggedIn: boolean;
+  activeNominationGig: { id: number; title: string | null } | null;
+}) {
   return (
     <div className="relative isolate w-full overflow-hidden border-b border-border/60 bg-background">
       <div
@@ -78,7 +84,7 @@ export function Landing({ isLoggedIn }: { isLoggedIn: boolean }) {
           <div
             className={cn(
               "gap-2.5 sm:flex sm:justify-center sm:gap-3 lg:justify-start",
-              isLoggedIn ? "flex" : "grid grid-cols-2",
+              isLoggedIn && !activeNominationGig ? "flex" : "grid grid-cols-2",
             )}
           >
             <Button asChild size="lg" className="h-12 rounded-xl px-2 text-sm font-bold sm:h-11 sm:px-6">
@@ -87,6 +93,21 @@ export function Landing({ isLoggedIn }: { isLoggedIn: boolean }) {
                 <ArrowRight className="size-4" />
               </Link>
             </Button>
+            {activeNominationGig && (
+              <Button
+                asChild
+                size="lg"
+                variant="outline"
+                className="h-12 rounded-xl px-2 text-sm font-bold sm:h-11 sm:px-6"
+              >
+                <Link
+                  href={`/gigs/${activeNominationGig.id}/nominations`}
+                  aria-label={`${activeNominationGig.title || "공연"} 선곡회의 바로가기`}
+                >
+                  선곡회의 바로가기
+                </Link>
+              </Button>
+            )}
             {!isLoggedIn && (
               <Button
                 asChild
