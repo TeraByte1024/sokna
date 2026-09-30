@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useMemo, useState, useRef, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { createGig, updateGig } from "@/app/gigs/actions";
 import { createClient } from "@/lib/supabase/client";
 import { getGigVisibility, type GigVisibility } from "@/lib/gig-visibility";
@@ -18,7 +18,6 @@ import { LeaveConfirmDialog, useUnsavedChangesWarning } from "@/components/ui/le
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -53,14 +52,13 @@ import {
   SlidersHorizontal,
   FileSpreadsheet,
   ListPlus,
-  AlertTriangle,
   Clock,
   Users,
   X,
 } from "lucide-react";
 import { SessionOrderDialog } from "./session-order-dialog";
 import { toast } from "sonner";
-import { cn, parseDateTime, combineDateTime } from "@/lib/utils";
+import { cn, parseDateTime } from "@/lib/utils";
 
 export interface GigFormData {
   id?: number;
@@ -101,17 +99,6 @@ function formatDeadlineInput(value?: string | null): string {
   if (Number.isNaN(date.getTime())) return "";
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
   return local.toISOString().slice(0, 16);
-}
-
-function formatDateForInput(dateString: string | null | undefined): string {
-  if (!dateString) return "";
-  const d = new Date(dateString);
-  if (isNaN(d.getTime())) return "";
-  return d.toISOString().split("T")[0];
-}
-
-function escapeRegExp(string: string) {
-  return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 export function isPerformerInSessionFamily(p: Performer, sessionName: string): boolean {
@@ -345,7 +332,7 @@ function AddMemberDropdown({
             <div className="p-3 text-center text-xs text-muted-foreground space-y-1">
               {query.trim() ? (
                 <>
-                  <p className="font-medium text-foreground">'{query.trim()}' 일치 부원 없음</p>
+                  <p className="font-medium text-foreground">&apos;{query.trim()}&apos; 일치 부원 없음</p>
                   <p className="text-[10px] text-primary font-semibold">
                     Enter를 누르면 이름 그대로 직접 추가됩니다
                   </p>
@@ -366,7 +353,7 @@ function AddMemberDropdown({
                   onClick={() => handleSelect(query.trim())}
                   className="w-full text-left px-2 py-1.5 rounded-md bg-primary/10 hover:bg-primary/20 text-primary text-[11px] font-semibold flex items-center justify-between transition-colors"
                 >
-                  <span>'{query.trim()}' 직접 추가</span>
+                  <span>&apos;{query.trim()}&apos; 직접 추가</span>
                   <span className="text-[10px] font-normal text-muted-foreground font-mono">Enter ↵</span>
                 </button>
               </div>
@@ -662,12 +649,12 @@ function SongSessionManager({
               </div>
               <div className="space-y-1 flex-1 min-w-0">
                 <h4 className="text-sm font-bold text-foreground">
-                  '{sessionToDelete.sessionName}' 세션 삭제
+                  &apos;{sessionToDelete.sessionName}&apos; 세션 삭제
                 </h4>
                 <p className="text-xs text-muted-foreground leading-relaxed">
                   {sessionToDelete.members.length > 0 ? (
                     <>
-                      {songTitle?.trim() ? `'${songTitle.trim()}'` : "해당 곡"}에서 '{sessionToDelete.sessionName}' 세션을 삭제하시겠습니까?<br />
+                      {songTitle?.trim() ? `'${songTitle.trim()}'` : "해당 곡"}에서 &apos;{sessionToDelete.sessionName}&apos; 세션을 삭제하시겠습니까?<br />
                       <span className="text-destructive font-medium">
                         배정된 인원({sessionToDelete.members.join(", ")})도 함께 제거됩니다.
                       </span>
@@ -715,7 +702,6 @@ export function GigForm({
   initialPerformers = [],
   initialSetlists = [],
 }: GigFormProps) {
-  const router = useRouter();
   const supabase = createClient();
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -854,10 +840,13 @@ export function GigForm({
     title,
     subtitle,
     performDate,
+    performTime,
     meetingDate,
+    meetingTime,
     deadlineDate,
     deadlineTime,
     location,
+    meetingLocation,
     posterUrl,
     visibility,
     performers,
@@ -1118,7 +1107,7 @@ export function GigForm({
         toast.info(`'${trimmed}' 세션이 이미 존재합니다.`);
         return prev;
       }
-      let nextSlots = [...slots, { sessionName: trimmed, members: [] }];
+      const nextSlots = [...slots, { sessionName: trimmed, members: [] }];
       if (globalSessionOrder && globalSessionOrder.length > 0) {
         const orderMap = new Map(globalSessionOrder.map((name, i) => [name, i]));
         nextSlots.sort((a, b) => {
@@ -1211,7 +1200,7 @@ export function GigForm({
       return;
     }
     setNewSongSlots((prev) => {
-      let nextSlots = [...prev, { sessionName: trimmed, members: [] }];
+      const nextSlots = [...prev, { sessionName: trimmed, members: [] }];
       if (globalSessionOrder && globalSessionOrder.length > 0) {
         const orderMap = new Map(globalSessionOrder.map((name, i) => [name, i]));
         nextSlots.sort((a, b) => {
@@ -1559,10 +1548,13 @@ export function GigForm({
                 {posterUrl ? (
                   <div className="space-y-2">
                     <div className="relative w-full aspect-[1/1.414] rounded-xl overflow-hidden border border-border/80 shadow-xs bg-muted group">
-                      <img
+                      <Image
                         src={posterUrl}
                         alt="포스터 미리보기"
-                        className="w-full h-full object-cover"
+                        fill
+                        sizes="(max-width: 767px) 240px, 208px"
+                        unoptimized
+                        className="object-cover"
                       />
                       {isUploadingPoster && (
                         <div className="absolute inset-0 bg-background/60 backdrop-blur-xs flex items-center justify-center">
@@ -1744,8 +1736,8 @@ export function GigForm({
                     공연 일시 <span className="text-destructive">*</span>
                   </span>
                 </Label>
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="col-span-2">
+                <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(8rem,9rem)] gap-2 max-[389px]:grid-cols-1 sm:grid-cols-3">
+                  <div className="min-w-0 sm:col-span-2">
                     <Input
                       id="perform_date"
                       name="perform_date"
@@ -1753,10 +1745,10 @@ export function GigForm({
                       required
                       value={performDate}
                       onChange={(e) => setPerformDate(e.target.value)}
-                      className="bg-background border-border text-foreground text-sm font-medium"
+                      className="min-w-0 bg-background border-border text-foreground text-sm font-medium"
                     />
                   </div>
-                  <div className="col-span-1">
+                  <div className="min-w-0 sm:col-span-1">
                     <Input
                       id="perform_time"
                       name="perform_time"
@@ -1764,7 +1756,7 @@ export function GigForm({
                       value={performTime}
                       onChange={(e) => setPerformTime(e.target.value)}
                       placeholder="18:00"
-                      className="bg-background border-border text-foreground text-sm"
+                      className="min-w-0 bg-background border-border text-foreground text-sm"
                     />
                   </div>
                 </div>
@@ -1778,18 +1770,18 @@ export function GigForm({
                     선곡회의 일시
                   </span>
                 </Label>
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="col-span-2">
+                <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(8rem,9rem)] gap-2 max-[389px]:grid-cols-1 sm:grid-cols-3">
+                  <div className="min-w-0 sm:col-span-2">
                     <Input
                       id="meeting_date"
                       name="meeting_date"
                       type="date"
                       value={meetingDate}
                       onChange={(e) => setMeetingDate(e.target.value)}
-                      className="bg-background border-border text-foreground text-sm"
+                      className="min-w-0 bg-background border-border text-foreground text-sm"
                     />
                   </div>
-                  <div className="col-span-1">
+                  <div className="min-w-0 sm:col-span-1">
                     <Input
                       id="meeting_time"
                       name="meeting_time"
@@ -1797,7 +1789,7 @@ export function GigForm({
                       value={meetingTime}
                       onChange={(e) => setMeetingTime(e.target.value)}
                       placeholder="19:00"
-                      className="bg-background border-border text-foreground text-sm"
+                      className="min-w-0 bg-background border-border text-foreground text-sm"
                     />
                   </div>
                 </div>
@@ -1811,8 +1803,8 @@ export function GigForm({
                     <Clock className="size-3.5 text-indigo-500" />
                     추천곡 접수 마감 기한
                   </Label>
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="col-span-2">
+                  <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(8rem,9rem)] gap-2 max-[389px]:grid-cols-1 sm:grid-cols-3">
+                    <div className="min-w-0 sm:col-span-2">
                       <Input
                         id="nomination_deadline_date"
                         name="nomination_deadline_date"
@@ -1820,10 +1812,10 @@ export function GigForm({
                         required={Boolean(deadlineTime)}
                         value={deadlineDate}
                         onChange={(e) => setDeadlineDate(e.target.value)}
-                        className="bg-background border-border text-foreground text-sm"
+                        className="min-w-0 bg-background border-border text-foreground text-sm"
                       />
                     </div>
-                    <div className="col-span-1">
+                    <div className="min-w-0 sm:col-span-1">
                       <Input
                         id="nomination_deadline_time"
                         name="nomination_deadline_time"
@@ -1832,7 +1824,7 @@ export function GigForm({
                         aria-label="추천곡 접수 마감 시간"
                         value={deadlineTime}
                         onChange={(e) => setDeadlineTime(e.target.value)}
-                        className="bg-background border-border text-foreground text-sm"
+                        className="min-w-0 bg-background border-border text-foreground text-sm"
                       />
                     </div>
                   </div>

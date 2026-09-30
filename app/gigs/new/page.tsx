@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 export default function GigNewPage() {
   return (
     <SiteLayout>
-      <PageContainer>
+      <PageContainer className="p-4 sm:p-10">
         <Suspense fallback={<GigFormSkeleton label="공연 추가 화면을 불러오는 중…" />}>
           <GigNewInner />
         </Suspense>
