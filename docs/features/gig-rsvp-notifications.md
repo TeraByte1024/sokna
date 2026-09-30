@@ -1,7 +1,7 @@
 # 공연 참여 신청 관리자 알림 명세서
 
 > 작성일자: 2026-09-30  
-> 상태: 구현 완료, DB 마이그레이션 적용 대기
+> 상태: 2026-09-30 운영 DB 마이그레이션 적용 완료, 서버 배포 대기
 
 ## 1. 배경 및 목적
 
@@ -28,7 +28,7 @@
 
 - `notifications.event_type` 체크 제약에 `gig_rsvp_requested`를 추가한다.
 - `notify_gig_rsvp_requested()` 트리거 함수를 추가한다. 테이블 컬럼과 RLS는 변경하지 않는다.
-- 마이그레이션: `supabase/migrations/20260930010000_notify_gig_rsvp_requested.sql`. 기존 RSVP를 소급 발송하지 않는다.
+- 마이그레이션: `supabase/migrations/20260930010000_notify_gig_rsvp_requested.sql`. 2026-09-30 운영 DB 적용 및 원격 이력 확인 완료. 기존 RSVP를 소급 발송하지 않는다. 실제 알림 발송 테스트는 수행하지 않았다.
 
 ## 4. API / Server Action 명세
 

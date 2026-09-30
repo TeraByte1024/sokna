@@ -209,7 +209,7 @@ erDiagram
 
 > **Unique 제약조건**: `UNIQUE(gig_id, user_id)` (공연별 회원당 1개의 RSVP 레코드 유지)
 
-> **참여 신청 알림** (`20260930010000_notify_gig_rsvp_requested.sql`): INSERT에서 `status = going`이거나 UPDATE로 불참·미정에서 `going`으로 전환될 때만 AFTER 트리거가 관리자별 `notifications`를 같은 트랜잭션에 생성합니다. 세션·메모만 재저장해도 중복 생성하지 않습니다. 이벤트 키는 RSVP ID와 해당 전환의 `updated_at` UTC 밀리초 시각을 결합하며, 재신청 시 새 전환을 구분합니다. 푸시 미동의 관리자도 인앱 알림은 받습니다.
+> **참여 신청 알림** (`20260930010000_notify_gig_rsvp_requested.sql`, 2026-09-30 운영 DB 적용 완료): INSERT에서 `status = going`이거나 UPDATE로 불참·미정에서 `going`으로 전환될 때만 AFTER 트리거가 관리자별 `notifications`를 같은 트랜잭션에 생성합니다. 세션·메모만 재저장해도 중복 생성하지 않습니다. 이벤트 키는 RSVP ID와 해당 전환의 `updated_at` UTC 밀리초 시각을 결합하며, 재신청 시 새 전환을 구분합니다. 푸시 미동의 관리자도 인앱 알림은 받습니다.
 
 > **참여 승인 처리** (`20260926000000_review_gig_rsvps.sql`):
 > - `going`은 참여 신청이며, 승인 여부는 같은 `(gig_id, user_id)`의 `performers` 존재로 판단합니다. 승인된 RSVP는 보존하고 관리자 대기 목록에서는 제외합니다.
