@@ -51,7 +51,7 @@ export function MemberProfileFields({
         </div>
         <div className="min-w-0 space-y-1.5">
           <Label htmlFor={`${id}-generation`} className="flex items-center gap-1 text-xs font-semibold">
-            동아리 기수 <span className="text-destructive">*</span>
+            기수 <span className="text-destructive">*</span>
           </Label>
           <div className="flex items-center gap-2">
             <Input

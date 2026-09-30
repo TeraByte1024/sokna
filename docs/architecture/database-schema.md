@@ -119,7 +119,7 @@ erDiagram
 | :--- | :--- | :--- | :--- | :--- |
 | `id` | `uuid` | NO | - | 회원 고유 ID (Supabase auth.users.id 매핑) |
 | `name` | `text` | NO | - | 회원 이름 (실명) |
-| `generation` | `int4` | YES | null | 동아리 기수 (예: 39) |
+| `generation` | `int4` | YES | null | 기수 (예: 39) |
 | `part` | `text` | YES | null | 주 활동 파트 (보컬, 기타, 베이스, 드럼, 건반, 창작 등) |
 | `email` | `text` | YES | null | 회원 이메일 주소 |
 | `status` | `text` | NO | `'pending'` | 회원 승인 상태 (`'pending'`, `'approved'`, `'rejected'`) |
