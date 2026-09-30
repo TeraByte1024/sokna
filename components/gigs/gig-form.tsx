@@ -72,6 +72,7 @@ export interface GigFormData {
   perform_time?: string | null;
   meeting_date: string | null;
   meeting_time?: string | null;
+  nomination_deadline?: string | null;
   location: string | null;
   meeting_location?: string | null;
   poster_url: string | null;
@@ -92,6 +93,14 @@ interface GigFormProps {
   gig?: GigFormData;
   initialPerformers?: Performer[];
   initialSetlists?: SetlistItem[];
+}
+
+function formatDeadlineInput(value?: string | null): string {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
 }
 
 function formatDateForInput(dateString: string | null | undefined): string {
@@ -727,6 +736,9 @@ export function GigForm({
   const initialMeeting = parseDateTime(gig?.meeting_date);
   const [meetingDate, setMeetingDate] = useState(initialMeeting.date || gig?.meeting_date || "");
   const [meetingTime, setMeetingTime] = useState(gig?.meeting_time ?? initialMeeting.time);
+  const initialDeadline = formatDeadlineInput(gig?.nomination_deadline);
+  const [deadlineDate, setDeadlineDate] = useState(initialDeadline.slice(0, 10));
+  const [deadlineTime, setDeadlineTime] = useState(initialDeadline.slice(11, 16));
 
   const [location, setLocation] = useState(gig?.location ?? "");
   const [meetingLocation, setMeetingLocation] = useState(gig?.meeting_location ?? "");
@@ -786,6 +798,7 @@ export function GigForm({
       const initMeeting = parseDateTime(gig?.meeting_date);
       const initMeetingDate = initMeeting.date || gig?.meeting_date || "";
       const initMeetingTime = gig?.meeting_time ?? initMeeting.time;
+      const initNominationDeadline = formatDeadlineInput(gig?.nomination_deadline);
       const initLocation = gig?.location ?? "";
       const initMeetingLocation = gig?.meeting_location ?? "";
       const initPosterUrl = gig?.poster_url ?? "";
@@ -798,6 +811,8 @@ export function GigForm({
         performTime !== initPerformTime ||
         meetingDate !== initMeetingDate ||
         meetingTime !== initMeetingTime ||
+        deadlineDate !== initNominationDeadline.slice(0, 10) ||
+        deadlineTime !== initNominationDeadline.slice(11, 16) ||
         location !== initLocation ||
         meetingLocation !== initMeetingLocation ||
         posterUrl !== initPosterUrl ||
@@ -840,6 +855,8 @@ export function GigForm({
     subtitle,
     performDate,
     meetingDate,
+    deadlineDate,
+    deadlineTime,
     location,
     posterUrl,
     visibility,
@@ -1384,6 +1401,12 @@ export function GigForm({
     e.preventDefault();
     if (pending) return;
 
+    const deadlineTimestamp = deadlineDate && deadlineTime ? Date.parse(`${deadlineDate}T${deadlineTime}`) : null;
+    if (mode === "edit" && (Boolean(deadlineDate) !== Boolean(deadlineTime) || (deadlineTimestamp !== null && !Number.isFinite(deadlineTimestamp)))) {
+      setMessage("추천곡 접수 마감 날짜와 시간을 모두 입력해 주세요.");
+      return;
+    }
+
     setMessage(null);
     setPending(true);
 
@@ -1405,6 +1428,9 @@ export function GigForm({
     formData.set("perform_time", performTime || "");
     formData.set("meeting_date", meetingDate || "");
     formData.set("meeting_time", meetingTime || "");
+    if (mode === "edit") {
+      formData.set("nomination_deadline", deadlineTimestamp === null ? "" : new Date(deadlineTimestamp).toISOString());
+    }
     formData.set("location", location);
     formData.set("meeting_location", meetingLocation);
     formData.set("poster_url", posterUrl);
@@ -1777,6 +1803,42 @@ export function GigForm({
                 </div>
               </div>
             </div>
+
+            {mode === "edit" && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="nomination_deadline_date" className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                    <Clock className="size-3.5 text-indigo-500" />
+                    추천곡 접수 마감 기한
+                  </Label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="col-span-2">
+                      <Input
+                        id="nomination_deadline_date"
+                        name="nomination_deadline_date"
+                        type="date"
+                        required={Boolean(deadlineTime)}
+                        value={deadlineDate}
+                        onChange={(e) => setDeadlineDate(e.target.value)}
+                        className="bg-background border-border text-foreground text-sm"
+                      />
+                    </div>
+                    <div className="col-span-1">
+                      <Input
+                        id="nomination_deadline_time"
+                        name="nomination_deadline_time"
+                        type="time"
+                        required={Boolean(deadlineDate)}
+                        aria-label="추천곡 접수 마감 시간"
+                        value={deadlineTime}
+                        onChange={(e) => setDeadlineTime(e.target.value)}
+                        className="bg-background border-border text-foreground text-sm"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* 장소 (공연 장소 & 선곡회의 장소) */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -167,6 +167,12 @@ export async function updateGig(formData: FormData): Promise<GigActionResult> {
   const perform_time = emptyToNull(formData.get("perform_time"));
   const meeting_date = emptyToNull(formData.get("meeting_date"));
   const meeting_time = emptyToNull(formData.get("meeting_time"));
+  const deadlineInput = emptyToNull(formData.get("nomination_deadline"));
+  const deadlineTimestamp = deadlineInput ? Date.parse(deadlineInput) : null;
+  if (deadlineInput && !Number.isFinite(deadlineTimestamp)) {
+    return { ok: false, error: "추천곡 접수 마감 기한을 확인해 주세요." };
+  }
+  const nomination_deadline = deadlineTimestamp === null ? null : new Date(deadlineTimestamp).toISOString();
   const location = emptyToNull(formData.get("location"));
   const meeting_location = emptyToNull(formData.get("meeting_location"));
   const poster_url = emptyToNull(formData.get("poster_url"));
@@ -218,6 +224,7 @@ export async function updateGig(formData: FormData): Promise<GigActionResult> {
       perform_time,
       meeting_date,
       meeting_time,
+      nomination_deadline,
       location,
       meeting_location,
       poster_url,

@@ -66,11 +66,11 @@ const SESSION_FILTER_PARTS = [
 ];
 
 /**
- * 마감 기한까지 남은 시간을 계산 (회의 1일 전 마감)
+ * 공연에 설정된 마감 기한까지 남은 시간을 계산한다.
  */
-const getRemainingTime = (targetDate: string) => {
-	const deadline = getNominationDeadline(targetDate);
-	if (deadline === null) return { dd: 0, hh: 0, mm: 0, isOver: true };
+const getRemainingTime = (nominationDeadline?: string | null) => {
+	const deadline = getNominationDeadline(nominationDeadline);
+	if (deadline === null) return { dd: 0, hh: 0, mm: 0, isOver: Boolean(nominationDeadline) };
 	const diff = deadline - Date.now();
 
 	if (diff <= 0) return { dd: 0, hh: 0, mm: 0, isOver: true };
@@ -107,6 +107,7 @@ interface NominationPanelProps {
 	initialGigInfo: {
 		title: string;
 		meetingDate: string;
+		nominationDeadline?: string | null;
 		meetingLocation?: string;
 	};
 	initialLastViewedTimestamp: string | null;
@@ -136,7 +137,8 @@ export function NominationPanel({
 		? formatDateKorean(gigInfo.meetingDate)
 		: "날짜 미정";
 	const meetingLocationLabel = gigInfo.meetingLocation?.trim() || "장소 미정";
-	const [timeLeft, setTimeLeft] = useState(() => getRemainingTime(initialGigInfo.meetingDate));
+	const showDeadline = Boolean(gigInfo.nominationDeadline?.trim());
+	const [timeLeft, setTimeLeft] = useState(() => getRemainingTime(initialGigInfo.nominationDeadline));
 
 	// 마지막 조회 시점(하이라이트 기준) 및 확인된 곡 목록
 	const [lastViewedTimestamp, setLastViewedTimestamp] = useState<string | null>(initialLastViewedTimestamp);
@@ -217,13 +219,13 @@ export function NominationPanel({
 	};
 
 	useEffect(() => {
-		setTimeLeft(getRemainingTime(gigInfo.meetingDate));
+		setTimeLeft(getRemainingTime(gigInfo.nominationDeadline));
 		const timer = setInterval(
-			() => setTimeLeft(getRemainingTime(gigInfo.meetingDate)),
+			() => setTimeLeft(getRemainingTime(gigInfo.nominationDeadline)),
 			60000,
 		);
 		return () => clearInterval(timer);
-	}, [gigInfo?.meetingDate]);
+	}, [gigInfo?.nominationDeadline]);
 
 	// 필터링 및 정렬된 곡 목록 (항상 등록순 - 처음 등록한 것이 위로 오도록 정렬)
 	const filteredSongs = useMemo(() => {
@@ -331,7 +333,7 @@ export function NominationPanel({
 								<MapPin className="size-4 shrink-0 text-primary" />
 								<span className="min-w-0 break-words text-xs leading-4 text-foreground">{meetingLocationLabel}</span>
 							</div>
-							<div className="flex items-center gap-2">
+							{showDeadline && <div className="flex items-center gap-2">
 								<AlarmClock className="size-4 shrink-0 text-primary" />
 								<div className="flex min-w-0 items-baseline gap-1 whitespace-nowrap">
 									{timeLeft.isOver ? (
@@ -346,9 +348,9 @@ export function NominationPanel({
 										</>
 									)}
 								</div>
-							</div>
+							</div>}
 						</div>
-						<div className="hidden grid-cols-[minmax(0,1fr)_auto] items-center gap-x-6 sm:grid">
+						<div className={showDeadline ? "hidden grid-cols-[minmax(0,1fr)_auto] items-center gap-x-6 sm:grid" : "hidden items-center sm:grid"}>
 							<div className="flex min-w-0 items-center gap-3">
 								<span className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap text-sm font-semibold text-foreground">
 									<Calendar className="size-4 shrink-0 text-primary" />
@@ -360,7 +362,7 @@ export function NominationPanel({
 									<span className="truncate" title={meetingLocationLabel}>{meetingLocationLabel}</span>
 								</span>
 							</div>
-							<div className="flex min-w-0 items-center justify-self-end gap-2 whitespace-nowrap">
+							{showDeadline && <div className="flex min-w-0 items-center justify-self-end gap-2 whitespace-nowrap">
 								<AlarmClock className="size-4 shrink-0 text-primary" />
 								{timeLeft.isOver ? (
 									<span className="text-xs text-muted-foreground">추천곡 접수가 마감되었습니다</span>
@@ -373,7 +375,7 @@ export function NominationPanel({
 										</span>
 									</div>
 								)}
-							</div>
+							</div>}
 						</div>
 					</div>
 

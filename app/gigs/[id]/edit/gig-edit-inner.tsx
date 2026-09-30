@@ -105,6 +105,7 @@ export async function GigEditInner({ gigId }: GigEditInnerProps) {
         perform_time: gigRow.perform_time,
         meeting_date: gigRow.meeting_date,
         meeting_time: gigRow.meeting_time,
+        nomination_deadline: gigRow.nomination_deadline,
         location: gigRow.location,
         meeting_location: gigRow.meeting_location,
         poster_url: gigRow.poster_url,

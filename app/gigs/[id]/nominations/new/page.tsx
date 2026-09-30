@@ -75,7 +75,7 @@ export default async function NewNominationPage({ params }: PageProps) {
 
 	const { data: gig } = await supabase
 		.from(SUPABASE_GIGS_TABLE)
-		.select("id, title, perform_date, meeting_date")
+		.select("id, title, perform_date, meeting_date, nomination_deadline")
 		.eq("id", numericId)
 		.maybeSingle();
 
@@ -122,7 +122,7 @@ export default async function NewNominationPage({ params }: PageProps) {
 	}
 
 	// 마감 후에는 직접 URL로 접근해도 등록 폼을 제공하지 않음.
-	if (!isAdmin && isNominationClosed(gig.meeting_date)) {
+	if (!isAdmin && isNominationClosed(gig.nomination_deadline)) {
 		redirect(`/gigs/${numericId}/nominations`);
 	}
 

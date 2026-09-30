@@ -88,6 +88,7 @@ docs/
 | **Feature** | [kakao-login.md](./features/kakao-login.md) | 카카오 로그인·가입, 계정 연결/해제 및 앱 설정 |
 | **Feature** | [account-withdrawal.md](./features/account-withdrawal.md) | 프로필 회원 탈퇴, 계정·개인 데이터 삭제, 공유 공연 기록 보존 |
 | **Feature** | [gigs.md](./features/gigs.md) | 공연 생성, 목록/상세 조회, 참여 세션(Performer) 매핑 |
+| **Feature** | [nomination-deadline.md](./features/nomination-deadline.md) | 공연별 추천곡 접수 마감 기한 입력 및 적용 |
 | **Feature** | [gig-visibility.md](./features/gig-visibility.md) | 비공개·회원 공개·전체 공개 권한 및 기존 공연 전환 |
 | **Feature** | [landing-active-nomination.md](./features/landing-active-nomination.md) | 랜딩에서 진행 중인 선곡회의 바로가기 노출 및 권한 규칙 |
 | **Feature** | [setlists.md](./features/setlists.md) | 곡 등록/삭제, 필수 파트 선택, 악보 유무, 참고 링크 관리 |

@@ -119,6 +119,7 @@ export type Database = {
           meeting_date: string | null
           meeting_location: string | null
           meeting_time: string | null
+          nomination_deadline: string | null
           perform_date: string
           perform_time: string | null
           poster_url: string | null
@@ -136,6 +137,7 @@ export type Database = {
           meeting_date?: string | null
           meeting_location?: string | null
           meeting_time?: string | null
+          nomination_deadline?: string | null
           perform_date: string
           perform_time?: string | null
           poster_url?: string | null
@@ -153,6 +155,7 @@ export type Database = {
           meeting_date?: string | null
           meeting_location?: string | null
           meeting_time?: string | null
+          nomination_deadline?: string | null
           perform_date?: string
           perform_time?: string | null
           poster_url?: string | null

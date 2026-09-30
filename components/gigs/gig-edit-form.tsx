@@ -18,6 +18,7 @@ interface GigEditFormProps {
     perform_time?: string | null;
     meeting_date: string | null;
     meeting_time?: string | null;
+    nomination_deadline?: string | null;
     location: string | null;
     meeting_location?: string | null;
     poster_url: string | null;
@@ -46,6 +47,7 @@ export function GigEditForm({
         perform_time: gig.perform_time,
         meeting_date: gig.meeting_date,
         meeting_time: gig.meeting_time,
+        nomination_deadline: gig.nomination_deadline,
         location: gig.location,
         meeting_location: gig.meeting_location,
         poster_url: gig.poster_url,

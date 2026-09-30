@@ -123,3 +123,22 @@ for (const [actionName, operation] of [["createGig", "insert"], ["updateGig", "u
     }
   });
 }
+
+test("updateGig stores or clears the optional nomination deadline", async () => {
+  for (const [input, expected] of [
+    ["2026-10-14T10:00:00.000Z", "2026-10-14T10:00:00.000Z"],
+    ["", null],
+  ]) {
+    const fixture = actionsFixture();
+    const form = gigForm("members");
+    form.set("nomination_deadline", input);
+    assert.equal((await fixture.actions.updateGig(form)).ok, true);
+    assert.equal(fixture.writes[0].payload.nomination_deadline, expected);
+  }
+
+  const fixture = actionsFixture();
+  const form = gigForm("members");
+  form.set("nomination_deadline", "invalid");
+  assert.equal((await fixture.actions.updateGig(form)).ok, false);
+  assert.deepEqual(fixture.writes, []);
+});

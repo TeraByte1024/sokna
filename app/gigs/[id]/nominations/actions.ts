@@ -67,13 +67,13 @@ export async function addNomination(gigId: string, payload: NominationFormValues
 	// 3. 제출 시점의 마감을 검사하여 미리 열어 둔 폼에서도 등록을 차단.
 	const { data: gig, error: gigError } = await supabase
 		.from(SUPABASE_GIGS_TABLE)
-		.select("meeting_date")
+		.select("nomination_deadline")
 		.eq("id", numericGigId)
 		.maybeSingle();
 	if (gigError || !gig) {
 		throw new Error("공연 정보를 확인할 수 없습니다.");
 	}
-	if (!isAdmin && isNominationClosed(gig.meeting_date)) {
+	if (!isAdmin && isNominationClosed(gig.nomination_deadline)) {
 		throw new Error("선곡회의 접수가 마감되었습니다.");
 	}
 

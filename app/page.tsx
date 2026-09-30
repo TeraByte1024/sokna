@@ -16,9 +16,9 @@ async function getActiveNominationGig(viewer: GigViewer) {
   const [gigsResult, performersResult] = await Promise.all([
     supabase
       .from("gigs")
-      .select("id, title, meeting_date, visibility, is_public")
-      .gt("meeting_date", today)
-      .order("meeting_date", { ascending: true })
+      .select("id, title, meeting_date, nomination_deadline, visibility, is_public")
+      .or(`meeting_date.gt.${today},nomination_deadline.gt.${new Date(now).toISOString()}`)
+      .order("meeting_date", { ascending: true, nullsFirst: false })
       .order("id", { ascending: true }),
     viewer.isAdmin
       ? Promise.resolve(null)
@@ -34,7 +34,7 @@ async function getActiveNominationGig(viewer: GigViewer) {
   return (
     gigsResult.data?.find(
       (gig) =>
-        !isNominationClosed(gig.meeting_date, now) &&
+        !isNominationClosed(gig.nomination_deadline, now) &&
         canViewGig(getGigVisibility(gig), viewer) &&
         (viewer.isAdmin || performerGigIds.has(gig.id)),
     ) ?? null

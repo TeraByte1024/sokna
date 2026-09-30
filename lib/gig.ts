@@ -10,6 +10,7 @@ export type Gig = {
   perform_time?: string | null;
   meeting_date: string | null;
   meeting_time?: string | null;
+  nomination_deadline?: string | null;
   location: string | null;
   meeting_location?: string | null;
   poster_url: string | null;
@@ -188,6 +189,10 @@ export function mapGigRow(row: Record<string, unknown>): Gig {
       row.meeting_time == null || row.meeting_time === ""
         ? null
         : String(row.meeting_time),
+    nomination_deadline:
+      row.nomination_deadline == null || row.nomination_deadline === ""
+        ? null
+        : String(row.nomination_deadline),
     location:
       row.location == null || row.location === ""
         ? null

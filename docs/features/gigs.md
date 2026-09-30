@@ -83,6 +83,7 @@
   - 공연 일시 및 시각 (`perform_date`, 24hh:mm, 필수)
   - 공연 장소 (`location`, 선택)
   - 선곡 회의 일시 및 시각 (`meeting_date`, 24hh:mm, 선택)
+  - 추천곡 접수 마감 기한 (`nomination_deadline`, 날짜·시각, 선택, 수정 화면 전용)
   - 선곡 회의 장소 (`meeting_location`, 선택)
   - 공개 범위 (`visibility`: 비공개 / 회원 공개 / 전체 공개)
   - 참여 공연자 명단 (`performers`):
@@ -91,7 +92,7 @@
     - 공연별 세션 프로필 사진 업로드 및 수정
 - **처리 절차 (`updateGig` Server Action)**:
   1. `getIsAdmin()` 검증.
-  2. `gigs` 테이블의 기본 정보(`title`, `subtitle`, `advance_ticket_price`, `door_ticket_price`, `perform_date`, `meeting_date`, `location`, `meeting_location`, `poster_url`, `visibility`) update. 호환용 `is_public`은 전체 공개 여부로 동기화.
+  2. `gigs` 테이블의 기본 정보(`title`, `subtitle`, `advance_ticket_price`, `door_ticket_price`, `perform_date`, `meeting_date`, `nomination_deadline`, `location`, `meeting_location`, `poster_url`, `visibility`) update. 호환용 `is_public`은 전체 공개 여부로 동기화.
   3. 참여자(Performers) 지능형 동기화 (Diff/Upsert):
      - 기존 `performers` 목록과 새 목록 비교.
      - 유지되는 참여자는 파트/프로필 사진 변경사항만 update하여 고유 `performers.id` 보존 (`setlists.created_by` FK 무결성 유지).

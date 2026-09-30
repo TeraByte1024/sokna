@@ -36,23 +36,25 @@ function loadSource(relativePath, mocks = {}, cache = new Map()) {
   return loadedModule.exports;
 }
 
-test("nomination deadline is exactly 24 hours before the meeting and includes the boundary", () => {
+test("configured deadline includes its exact closing boundary", () => {
   const { getNominationDeadline, isNominationClosed } = loadSource("lib/nomination-deadline.ts");
-  const meeting = "2026-10-20T12:30:00+09:00";
-  const deadline = Date.parse("2026-10-19T12:30:00+09:00");
-  assert.equal(getNominationDeadline(meeting), deadline);
-  assert.equal(getNominationDeadline("2026-10-20"), Date.parse("2026-10-19T00:00:00Z"));
-  assert.equal(isNominationClosed(meeting, deadline - 1), false);
-  assert.equal(isNominationClosed(meeting, deadline), true);
-  assert.equal(isNominationClosed(meeting, deadline + 1), true);
+  const configured = "2026-10-19T12:30:00+09:00";
+  const deadline = Date.parse(configured);
+  assert.equal(getNominationDeadline(configured), deadline);
+  assert.equal(isNominationClosed(configured, deadline - 1), false);
+  assert.equal(isNominationClosed(configured, deadline), true);
+  assert.equal(isNominationClosed(configured, deadline + 1), true);
 });
 
-test("missing and invalid meeting dates do not allow nominations", () => {
+test("no configured deadline keeps nominations open regardless of meeting date", () => {
   const { getNominationDeadline, isNominationClosed } = loadSource("lib/nomination-deadline.ts");
-  for (const meeting of [undefined, null, "", "invalid-date"]) {
-    assert.equal(getNominationDeadline(meeting), null);
-    assert.equal(isNominationClosed(meeting), true);
+  for (const value of [undefined, null, ""]) {
+    assert.equal(getNominationDeadline(value), null);
+    assert.equal(isNominationClosed(value), false);
   }
+  assert.equal(isNominationClosed(null, Date.parse(closedMeeting)), false);
+  assert.equal(getNominationDeadline("invalid"), null);
+  assert.equal(isNominationClosed("invalid"), true);
 });
 
 const linkMock = { __esModule: true, default: ({ children, ...props }) => React.createElement("a", props, children) };
@@ -64,7 +66,7 @@ const uiMocks = {
   sonner: { toast: { success() {}, error() {} } },
 };
 
-function renderPanel({ admin = false, meeting = closedMeeting } = {}) {
+function renderPanel({ admin = false, meeting = closedMeeting, deadline = null } = {}) {
   const { NominationPanel } = loadSource("components/nominations/nomination-panel.tsx", uiMocks);
   return renderToStaticMarkup(React.createElement(NominationPanel, {
     initialIsAdmin: admin,
@@ -72,14 +74,28 @@ function renderPanel({ admin = false, meeting = closedMeeting } = {}) {
     initialUserId: "member-id",
     initialPerformer: { id: 3, part: "기타" },
     initialPerformers: [],
-    initialGigInfo: { title: "테스트 공연", meetingDate: meeting },
+    initialGigInfo: { title: "테스트 공연", meetingDate: meeting, nominationDeadline: deadline },
     initialLastViewedTimestamp: null,
   }));
 }
 
+test("deadline details appear only when an explicit deadline is set", () => {
+  for (const meeting of [openMeeting, closedMeeting]) {
+    assert.doesNotMatch(renderPanel({ meeting }), /lucide-alarm-clock/);
+  }
+  for (const deadline of [openMeeting, closedMeeting]) {
+    const html = renderPanel({ meeting: openMeeting, deadline });
+    assert.equal((html.match(/lucide-alarm-clock/g) || []).length, 2);
+  }
+});
+
 test("closed nominations expose disabled desktop, empty-state and mobile buttons without a navigable link", () => {
-  for (const meeting of [closedMeeting, "", "invalid-date"]) {
-    const html = renderPanel({ meeting });
+  for (const options of [
+    { meeting: closedMeeting, deadline: closedMeeting },
+    { meeting: openMeeting, deadline: closedMeeting },
+    { meeting: openMeeting, deadline: "invalid" },
+  ]) {
+    const html = renderPanel(options);
     assert.doesNotMatch(html, /href="\/gigs\/1\/nominations\/new"/);
     const disabledButtons = [...html.matchAll(/<button\b(?=[^>]*\bdisabled="")[^>]*>(.*?)<\/button>/g)];
     assert.equal(disabledButtons.length, 3);
@@ -90,7 +106,7 @@ test("closed nominations expose disabled desktop, empty-state and mobile buttons
 });
 
 test("members before the deadline and administrators after it retain all nomination links", () => {
-  for (const options of [{ meeting: openMeeting }, { admin: true }]) {
+  for (const options of [{ meeting: closedMeeting }, { meeting: null }, { meeting: closedMeeting, deadline: openMeeting }, { admin: true, deadline: closedMeeting }]) {
     const html = renderPanel(options);
     assert.equal((html.match(/href="\/gigs\/1\/nominations\/new"/g) || []).length, 3);
     assert.doesNotMatch(html, /<a\b[^>]*>\s*<button\b/);
@@ -105,6 +121,7 @@ function nominationFixture(options = {}) {
     id: 1,
     title: "테스트 공연",
     meeting_date: Object.hasOwn(options, "meeting") ? options.meeting : closedMeeting,
+    nomination_deadline: options.deadline ?? null,
   };
   const performer = options.nonPerformer ? null : { id: 3, part: "기타", name: "참여자" };
   const client = {
@@ -141,15 +158,19 @@ function nominationFixture(options = {}) {
 const payload = { title: "후보곡", artist: "아티스트", requiredParts: ["기타"], sheetExists: false, description: "", links: [], recommendedVocals: [] };
 
 test("direct create-page access redirects ordinary members after closing", async () => {
-  for (const meeting of [closedMeeting, null, "invalid-date"]) {
-    const fixture = nominationFixture({ meeting });
+  for (const options of [
+    { meeting: closedMeeting, deadline: closedMeeting },
+    { meeting: openMeeting, deadline: closedMeeting },
+    { meeting: openMeeting, deadline: "invalid" },
+  ]) {
+    const fixture = nominationFixture(options);
     const { default: NewNominationPage } = loadSource("app/gigs/[id]/nominations/new/page.tsx", fixture.mocks);
     await assert.rejects(NewNominationPage({ params: Promise.resolve({ id: "1" }) }), /^Error: REDIRECT:\/gigs\/1\/nominations$/);
   }
 });
 
 test("create page allows members before closing and administrators after closing", async () => {
-  for (const options of [{ meeting: openMeeting }, { admin: true, nonPerformer: true }]) {
+  for (const options of [{ meeting: closedMeeting }, { meeting: null }, { meeting: closedMeeting, deadline: openMeeting }, { admin: true, nonPerformer: true, deadline: closedMeeting }]) {
     const fixture = nominationFixture(options);
     const { default: NewNominationPage } = loadSource("app/gigs/[id]/nominations/new/page.tsx", fixture.mocks);
     const html = renderToStaticMarkup(await NewNominationPage({ params: Promise.resolve({ id: "1" }) }));
@@ -158,8 +179,12 @@ test("create page allows members before closing and administrators after closing
 });
 
 test("server actions reject late submissions and the legacy alias without writes or notifications", async () => {
-  for (const meeting of [closedMeeting, null, "invalid-date"]) {
-    const fixture = nominationFixture({ meeting });
+  for (const options of [
+    { meeting: closedMeeting, deadline: closedMeeting },
+    { meeting: openMeeting, deadline: closedMeeting },
+    { meeting: openMeeting, deadline: "invalid" },
+  ]) {
+    const fixture = nominationFixture(options);
     const actions = loadSource("app/gigs/[id]/nominations/actions.ts", fixture.mocks);
     for (const action of [actions.addNomination, actions.addSetlist]) {
       await assert.rejects(action("1", payload), /마감/);
@@ -171,7 +196,7 @@ test("server actions reject late submissions and the legacy alias without writes
 });
 
 test("server action allows members before closing and administrators after closing", async () => {
-  for (const options of [{ meeting: openMeeting }, { admin: true, nonPerformer: true }]) {
+  for (const options of [{ meeting: closedMeeting }, { meeting: null }, { meeting: closedMeeting, deadline: openMeeting }, { admin: true, nonPerformer: true, deadline: closedMeeting }]) {
     const fixture = nominationFixture(options);
     const { addNomination } = loadSource("app/gigs/[id]/nominations/actions.ts", fixture.mocks);
     await addNomination("1", payload);

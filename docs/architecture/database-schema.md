@@ -39,6 +39,7 @@ erDiagram
         string perform_time
         date meeting_date
         string meeting_time
+        timestamp nomination_deadline
         timestamp created_at
     }
     performers ||--o{ nominations : "후보곡 추천(created_by)"
@@ -176,12 +177,15 @@ erDiagram
 | `perform_time` | `text` | YES | null | 공연 시작 시각 (24시간제 HH:mm, 예: 19:00) |
 | `meeting_date` | `date` | YES | null | 곡 선정 및 준비 총회(선곡회의) 일자 (YYYY-MM-DD) |
 | `meeting_time` | `text` | YES | null | 선곡회의 시작 시각 (24시간제 HH:mm, 예: 14:00) |
+| `nomination_deadline` | `timestamptz` | YES | null | 추천곡 접수 마감 시각. null이면 마감 기한 없음 |
 | `location` | `text` | YES | null | 공연 장소 (예: 한양대학교 학생회관 콘서트홀) |
 | `meeting_location` | `text` | YES | null | 선곡회의 장소 (예: 동아리방, 학생회관 301호 등) |
 | `poster_url` | `text` | YES | null | 공연 공식 포스터 이미지 공개 URL (Supabase Storage: gigs/posters) |
 | `visibility` | `text` | NO | `'members'` | 공개 범위: `private`(관리자만), `members`(승인 완료 회원), `public`(모든 방문자), CHECK 제약 적용 |
 | `is_public` | `bool` | NO | `false` | 호환용 전체 공개 여부. 트리거가 `visibility = 'public'`과 동기화 |
 | `created_at` | `timestamptz` | NO | `now()` | 생성 일시 |
+
+> `20260930000000_add_nomination_deadline_to_gigs.sql`은 2026-09-30 연결된 DB에 적용했습니다. 원격 마이그레이션 이력과 `npm run types` 재생성 결과에서 `gigs.nomination_deadline`(`timestamptz`, nullable)을 확인했습니다. 기존 공연의 값은 null이며 접수 마감이 없습니다.
 
 > `20260926083828_add_gig_visibility_levels.sql`은 기존 `is_public=false`를 `members`, `true`를 `public`으로 전환합니다. `gigs` SELECT에는 공개 범위별 허용형·제한형 RLS를 적용하고, 관리자 관리 정책을 제공합니다. 공연자·확정 셋리스트·후보곡·응답의 SELECT에는 상위 공연 조회 권한을 추가로 검사합니다. 세부 규칙과 적용 순서는 [공연 공개 범위 명세](../features/gig-visibility.md)를 참고하십시오.
 
