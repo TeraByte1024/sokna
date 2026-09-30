@@ -443,7 +443,7 @@ test("displayed notification preserves its content and click destination", async
   await f.push(payload);
   assert.equal(f.shown[0].title, payload.notification.title);
   assert.equal(f.shown[0].options.body, payload.notification.body);
-  assert.equal(f.shown[0].options.icon, "/logo_edited.png");
+  assert.equal(f.shown[0].options.icon, "/logos/logo_app_icon.png");
   assert.equal(f.shown[0].options.tag, "sokna-notification-101");
   assert.equal(f.shown[0].options.renotify, false);
   await f.click(f.shown[0].options.data);
@@ -477,7 +477,7 @@ test("empty notification payload uses readable content and the app icon", async 
   assert.equal(f.shown.length, 1);
   assert.equal(f.shown[0].title, "소크나 알림");
   assert.equal(f.shown[0].options.body, "새로운 알림이 도착했습니다.");
-  assert.equal(f.shown[0].options.icon, "/logo_edited.png");
+  assert.equal(f.shown[0].options.icon, "/logos/logo_app_icon.png");
 });
 
 test("older payloads retain notification, data, or message tags", async () => {

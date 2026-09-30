@@ -107,7 +107,7 @@ function safeNotificationUrl(value) {
 }
 async function showDelayedNotice(tag) {
   await self.registration.showNotification("소크나 알림 확인 지연", {
-    body: "앱의 알림 목록에서도 확인할 수 있습니다.", icon: "/logo_edited.png",
+    body: "앱의 알림 목록에서도 확인할 수 있습니다.", icon: "/logos/logo_app_icon.png",
     tag, renotify: false, silent: true, data: { pushRecovery: true, url: self.location.origin + "/" },
   }).catch(() => {});
 }
@@ -118,7 +118,7 @@ async function displayMessage({ recipient, id, expiresAt, title, body, url, tag 
   if (!existing.some(item => item.data?.recipientUserId === recipient && !item.data?.pushRecovery)) {
     try {
       await self.registration.showNotification(title || "소크나 알림", {
-        body: body || "새로운 알림이 도착했습니다.", icon: "/logo_edited.png", tag, renotify: false,
+        body: body || "새로운 알림이 도착했습니다.", icon: "/logos/logo_app_icon.png", tag, renotify: false,
         data: { url: safeNotificationUrl(url), recipientUserId: recipient, notificationId: id },
       });
     } catch { return false; }

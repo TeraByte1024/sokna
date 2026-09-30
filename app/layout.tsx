@@ -15,14 +15,14 @@ export const metadata: Metadata = {
     default: "소리로 크는 나무",
     template: "%s | 소리로 크는 나무",
   },
-  description: "동아리 소개와 선곡회의 안내",
+  description: "한양대 X 한양여대 연합 밴드동아리",
   appleWebApp: {
     capable: true,
     title: "소크나",
     statusBarStyle: "default",
   },
   icons: {
-    apple: "/logo_edited.png",
+    apple: "/logos/logo_app_icon.png",
   },
 };
 

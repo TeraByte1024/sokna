@@ -1,10 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { CalendarDays, House, UserRound } from "lucide-react";
-import { CLUB_NAME_KOREAN } from "@/lib/club";
+import { SoknaLogo } from "@/components/sokna-logo";
 import { cn } from "@/lib/utils";
 
 const mobileLinks = [
@@ -28,14 +27,7 @@ export function SiteHeaderClient({ authButton, leading }: SiteHeaderClientProps)
           <div className="flex min-w-0 items-center gap-3 font-semibold sm:gap-5">
             {leading}
             <Link href="/" className="flex shrink-0 items-center transition-opacity hover:opacity-90">
-              <Image
-                src="/logo.svg"
-                alt={CLUB_NAME_KOREAN}
-                width={160}
-                height={40}
-                className="h-4 w-auto object-contain invert"
-                priority
-              />
+              <SoknaLogo />
             </Link>
 
             <nav className="hidden items-center md:flex" aria-label="주요 메뉴">

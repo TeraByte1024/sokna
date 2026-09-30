@@ -1,6 +1,6 @@
 import Link from "next/link";
-import Image from "next/image";
 import { ThemeSwitcher } from "@/components/theme-switcher";
+import { SoknaLogo } from "@/components/sokna-logo";
 import { SiInstagram, SiYoutube } from '@icons-pack/react-simple-icons';
 
 export function SiteFooter() {
@@ -14,19 +14,11 @@ export function SiteFooter() {
 							href="/"
 							className="flex items-center gap-2 opacity-80 hover:opacity-100 transition-opacity"
 						>
-							{/* 로고가 하얀색이라면 다크모드에서 invert 처리 등을 고려할 수 있습니다. 
-                  기존 헤더 로직처럼 'dark:invert-0 invert' 클래스를 활용해 보세요. */}
-							<Image
-								src="/logo.svg"
-								alt="SOKNA Logo"
-								width={120}
-								height={30}
-								className="h-6 w-auto dark:invert-0 invert"
-							/>
+							<SoknaLogo className="h-6" />
 						</Link>
 						<div className="text-center md:text-left">
 							<p className="text-xs text-muted-foreground leading-relaxed">
-								한양대학교 중앙 밴드 동아리 소리로 크는 나무
+								한양대 X 한양여대 연합 밴드 동아리 소리로 크는 나무
 							</p>
 							<p className="text-[10px] text-muted-foreground/60 mt-1 uppercase tracking-wider">
 								© 2026 SOKNA. All rights reserved.

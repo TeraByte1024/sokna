@@ -137,7 +137,7 @@ export async function sendPushToUsers(
 					webpush: {
 						fcmOptions: { link: absoluteLink },
 						headers: { TTL: String(Math.max(0, Math.floor((expiresAt - Date.now()) / 1000))) },
-						notification: { icon: "/logo_edited.png", tag, renotify: false },
+						notification: { icon: "/logos/logo_app_icon.png", tag, renotify: false },
 					},
 				});
 				chunk.forEach((profile, index) => {

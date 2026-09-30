@@ -75,7 +75,7 @@ c:\dev\sokna\
 - **Server Components & Server Actions**: 서버 사이드에서는 `lib/supabase/server.ts`의 `createClient()`를 호출해 쿠키 저장소를 참조하는 안전한 클라이언트를 생성합니다.
 - **관리자 권한 인가 (`lib/auth-admin.ts`)**: `getIsAdmin()`을 통해 현재 인증된 유저의 이메일이 `admins` 테이블에 존재하는지 확인합니다. React `cache`를 적용하여 단일 HTTP 요청 주기 내에서 중복 DB 쿼리를 방지합니다.
 - **공연 조회 (`lib/gig-server-data.ts`)**: 공연 상세·수정 페이지의 메타데이터와 본문에서 동일 공연 기본 정보 조회를 요청 단위로 재사용합니다. 비공개 공연의 접근 판정은 각 페이지에서 계속 수행합니다.
-- **이미지 (`components/ui/responsive-image.tsx`)**: 프로젝트의 Supabase 공개 Storage URL은 Next 이미지 최적화를 사용합니다. 외부 URL은 직접 표시하며, 목록 첫 이미지 우선 로드와 나머지 이미지 지연 로드를 구분합니다.
+- **이미지 (`components/ui/responsive-image.tsx`)**: 프로젝트의 Supabase 공개 Storage URL은 Next 이미지 최적화를 사용합니다. 외부 URL은 직접 표시하며, 공연 이미지는 지연 로드합니다. 사이트 로고는 `public/logos`에 밝은 테마·어두운 테마 SVG와 앱/알림용 PNG를 보관합니다.
 
 ### 4.2 데이터 변경 및 캐싱 전략 (Mutations & Caching)
 - 데이터 변경은 Next.js **Server Actions**(`app/gigs/actions.ts`, `app/gigs/[id]/nominations/actions.ts`)를 통해 수행됩니다.
