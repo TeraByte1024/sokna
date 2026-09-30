@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Pencil } from "lucide-react";
 import { AdminPageHeading } from "@/components/admin/admin-page-heading";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/server";
 
@@ -50,7 +52,10 @@ export default async function AdminGigDetailPage({ params }: Props) {
         </>}
       />
       {(gigResult.error || performersResult.error || rsvpsResult.error) && <p role="alert" className="rounded-xl border border-destructive/30 p-4 text-sm text-destructive">일부 공연 정보를 불러오지 못했습니다. 새로고침해 주세요.</p>}
-      {pending > 0 && <Link href="/admin/approvals" className="inline-flex rounded-lg border border-primary/30 px-3 py-2 text-sm font-medium hover:bg-muted">대기 신청 처리하기 →</Link>}
+      <div className="flex flex-wrap gap-2">
+        {gig && <Button asChild><Link href={`/gigs/${gigId}/edit`}><Pencil className="size-4" />공연 정보 수정</Link></Button>}
+        {pending > 0 && <Button asChild variant="outline"><Link href="/admin/approvals">대기 신청 처리하기 →</Link></Button>}
+      </div>
 
       <Card className="overflow-hidden border-border/70 shadow-sm">
         <CardHeader className="border-b border-border/60 bg-muted/20"><CardTitle className="text-lg">확정 참여자</CardTitle></CardHeader>
