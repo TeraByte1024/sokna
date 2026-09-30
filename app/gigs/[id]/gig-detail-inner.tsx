@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import {
   ArrowLeft,
   Calendar,
@@ -49,8 +50,8 @@ export async function GigDetailInner({ gigId }: GigDetailInnerProps) {
     );
   }
 
-  const supabase = await createClient();
-  const [viewer, { data: gigRow, error: gigError }] = await Promise.all([
+  const [supabase, viewer, { data: gigRow, error: gigError }] = await Promise.all([
+    createClient(),
     getGigViewer(),
     getGigRow(numericId),
   ]);
@@ -100,50 +101,6 @@ export async function GigDetailInner({ gigId }: GigDetailInnerProps) {
     );
   }
 
-  let isCurrentUserPerformer = false;
-
-  // 1-1. 승인 회원 또는 관리자의 본인 프로필 및 공연 참가 신청 내역 조회
-  let userRsvp: GigRsvp | null = null;
-  let userProfile: { name: string | null; part: string | null } | null = null;
-  if (user && canParticipate) {
-    const [{ data: rsvpRow }, { data: profileRow }, { data: performerRow }] = await Promise.all([
-      supabase
-        .from("gig_rsvps")
-        .select("*")
-        .eq("gig_id", numericId)
-        .eq("user_id", user.id)
-        .maybeSingle(),
-      supabase
-        .from("users")
-        .select("name, part")
-        .eq("id", user.id)
-        .maybeSingle(),
-      supabase
-        .from("performers")
-        .select("id")
-        .eq("gig_id", numericId)
-        .eq("user_id", user.id)
-        .limit(1)
-        .maybeSingle(),
-    ]);
-
-    if (rsvpRow) {
-      userRsvp = {
-        id: rsvpRow.id,
-        gig_id: rsvpRow.gig_id,
-        user_id: rsvpRow.user_id,
-        status: rsvpRow.status as "going" | "not_going" | "undecided",
-        review_status: rsvpRow.review_status as "pending" | "approved" | "rejected",
-        part: rsvpRow.part,
-        note: rsvpRow.note,
-        created_at: rsvpRow.created_at,
-        updated_at: rsvpRow.updated_at,
-      };
-    }
-    userProfile = profileRow;
-    isCurrentUserPerformer = Boolean(performerRow);
-  }
-
   // 3. 참여 공연자 (Performers) 조회 (미연동 더미 포함)
   const performerQuery = supabase
     .from("performers")
@@ -168,36 +125,191 @@ export async function GigDetailInner({ gigId }: GigDetailInnerProps) {
     .order("order_num", { ascending: true })
     .order("created_at", { ascending: true });
 
-  const [{ data: performerRows }, { data: setlistRows }] = await Promise.all([
-    performerQuery,
-    setlistQuery,
-  ]);
+  // 독립적인 목록 조회를 참가 상태 조회와 동시에 시작합니다.
+  const performerRowsPromise = Promise.resolve(performerQuery);
+  const setlistRowsPromise = Promise.resolve(setlistQuery);
 
-  const performers: GigPerformer[] = (performerRows ?? []).map((row) => {
-    const rawUser = row.users as { name: string; generation: number | null } | null;
-    return {
-      id: row.id,
-      part: row.part,
-      user_id: row.user_id,
-      name: row.name,
-      photo_url: row.photo_url,
-      user: rawUser
-        ? {
-          name: rawUser.name,
-          generation: rawUser.generation,
-        }
-        : null,
-    };
-  });
+  const participantPromise = user && canParticipate ? Promise.all([
+    supabase
+      .from("gig_rsvps")
+      .select("*")
+      .eq("gig_id", numericId)
+      .eq("user_id", user.id)
+      .maybeSingle(),
+    supabase
+      .from("users")
+      .select("name, part")
+      .eq("id", user.id)
+      .maybeSingle(),
+    supabase
+      .from("performers")
+      .select("id")
+      .eq("gig_id", numericId)
+      .eq("user_id", user.id)
+      .limit(1)
+      .maybeSingle(),
+  ]) : null;
 
-  // 셋리스트 (Setlists)는 참여자와 함께 조회합니다.
-  const setlists: DetailSetlistItem[] = (setlistRows ?? []).map((s) => ({
-    id: s.id,
-    title: s.title,
-    artist: s.artist,
-    session_members: s.session_members,
-    order_num: s.order_num,
-  }));
+  async function ParticipationActions() {
+    if (!participantPromise || !user) return null;
+    let isCurrentUserPerformer = false;
+    let userRsvp: GigRsvp | null = null;
+    let userProfile: { name: string | null; part: string | null } | null = null;
+    const [{ data: rsvpRow }, { data: profileRow }, { data: performerRow }] = await participantPromise;
+    if (rsvpRow) {
+      userRsvp = {
+        id: rsvpRow.id,
+        gig_id: rsvpRow.gig_id,
+        user_id: rsvpRow.user_id,
+        status: rsvpRow.status as "going" | "not_going" | "undecided",
+        review_status: rsvpRow.review_status as "pending" | "approved" | "rejected",
+        part: rsvpRow.part,
+        note: rsvpRow.note,
+        created_at: rsvpRow.created_at,
+        updated_at: rsvpRow.updated_at,
+      };
+    }
+    userProfile = profileRow;
+    isCurrentUserPerformer = Boolean(performerRow);
+    return (
+      <GigDetailActions
+        gig={gig}
+        existingRsvp={userRsvp}
+        isCurrentUserPerformer={isCurrentUserPerformer}
+        defaultPart={userProfile?.part ?? ""}
+        userName={userProfile?.name ?? user.email ?? "부원"}
+        isLoggedIn
+      />
+    );
+  }
+
+  async function SetlistSection() {
+    const { data: setlistRows } = await setlistRowsPromise;
+    const setlists: DetailSetlistItem[] = (setlistRows ?? []).map((s) => ({
+      id: s.id,
+      title: s.title,
+      artist: s.artist,
+      session_members: s.session_members,
+      order_num: s.order_num,
+    }));
+    return (
+      <Card className="border-border/60 shadow-sm overflow-hidden">
+        <CardHeader className="border-b bg-muted/20 pb-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Music2 className="size-5 text-primary" />
+              <CardTitle className="text-lg font-bold tracking-tight">SETLIST</CardTitle>
+            </div>
+            <Badge variant="secondary" className="text-xs font-semibold">
+              총 {setlists.length}곡
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="p-6">
+          {setlists.length === 0 ? (
+            <div className="text-center py-12 space-y-3">
+              <p className="text-sm text-muted-foreground">
+                아직 등록된 셋리스트가 없습니다.
+              </p>
+              {isAdmin && (
+                <Button asChild variant="outline" size="sm">
+                  <Link href={`/gigs/${numericId}/edit`}>
+                    <Pencil className="size-3.5 mr-1.5" />
+                    셋리스트 등록하기
+                  </Link>
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div className="divide-y divide-border/50">
+              {setlists.map((song, idx) => (
+                <div
+                  key={song.id}
+                  className="py-4 first:pt-0 last:pb-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3 group hover:bg-muted/10 px-3 rounded-xl transition-colors"
+                >
+                  <div className="flex items-start gap-3.5 min-w-0">
+                    <span className="text-xs font-mono font-bold text-muted-foreground shrink-0 mt-1">
+                      #{idx + 1}
+                    </span>
+                    <div className="space-y-1 min-w-0">
+                      <div className="flex items-baseline gap-2 flex-wrap">
+                        <h4 className="text-base font-bold text-foreground">
+                          {song.title || "제목 없음"}
+                        </h4>
+                        {song.artist && (
+                          <span className="text-xs font-medium text-muted-foreground">
+                            — {song.artist}
+                          </span>
+                        )}
+                      </div>
+                      {/* 해당 곡 연주자 명단 (가변 세션 JSON 지원) */}
+                      {song.session_members && (() => {
+                        const slots = parseSessionSlots(song.session_members).filter(
+                          (slot) => slot.members.length > 0
+                        );
+                        if (slots.length === 0) return null;
+                        return (
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground pt-1 flex-wrap">
+                            {slots.map((slot) => (
+                              <span
+                                key={slot.sessionName}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-muted/60 text-[11px] font-medium text-foreground/85 border border-border/50"
+                              >
+                                <span className="text-primary font-semibold">{slot.sessionName}</span>
+                                <span>{slot.members.join(" ")}</span>
+                              </span>
+                            ))}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  async function LineupSection() {
+    const { data: performerRows } = await performerRowsPromise;
+    const performers: GigPerformer[] = (performerRows ?? []).map((row) => {
+      const rawUser = row.users as { name: string; generation: number | null } | null;
+      return {
+        id: row.id,
+        part: row.part,
+        user_id: row.user_id,
+        name: row.name,
+        photo_url: row.photo_url,
+        user: rawUser ? { name: rawUser.name, generation: rawUser.generation } : null,
+      };
+    });
+    return (
+      <Card className="border-border/60 shadow-sm overflow-hidden">
+        <CardHeader className="border-b bg-muted/20 pb-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Users className="size-5 text-primary" />
+              <CardTitle className="text-lg font-bold tracking-tight">LINEUP</CardTitle>
+            </div>
+            <Badge variant="secondary" className="text-xs font-semibold">
+              총 {performers.length}명
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="p-5 sm:p-6">
+          <PerformerCardGrid
+            performers={performers}
+            currentUserId={user?.id}
+            isAdmin={isAdmin}
+            gigId={numericId}
+          />
+        </CardContent>
+      </Card>
+    );
+  }
 
   // 공연 날짜 상태 계산
   const dDay = getDDay(gig.perform_date);
@@ -239,7 +351,6 @@ export async function GigDetailInner({ gigId }: GigDetailInnerProps) {
                 alt={gig.title || "공연 포스터"}
                 className="w-full h-full object-cover rounded-2xl block"
                 sizes="(min-width: 768px) 340px, 288px"
-                preload
               />
             </div>
           ) : (
@@ -351,121 +462,35 @@ export async function GigDetailInner({ gigId }: GigDetailInnerProps) {
             {/* 주요 액션 버튼 (공연 참여 & 선곡회의 + 참가 신청 Dialog) - 승인 회원 또는 관리자에게 표시 */}
             {canParticipate && (
               <div className="pt-2">
-                <GigDetailActions
-                  gig={gig}
-                  existingRsvp={userRsvp}
-                  isCurrentUserPerformer={isCurrentUserPerformer}
-                  defaultPart={userProfile?.part ?? ""}
-                  userName={userProfile?.name ?? user?.email ?? "부원"}
-                  isLoggedIn={isLoggedIn}
-                />
+                <Suspense fallback={<div role="status" className="h-11 w-64 rounded-lg bg-muted/50 animate-pulse motion-reduce:animate-none"><span className="sr-only">공연 참여 상태를 불러오는 중…</span></div>}>
+                  <ParticipationActions />
+                </Suspense>
               </div>
             )}
           </div>
         </div>
       </div>
 
-      {/* 3. SETLIST 섹션 (순서 1순위: 곡 제목 - 아티스트 - 해당 곡 연주자 명단) */}
-      <Card className="border-border/60 shadow-sm overflow-hidden">
-        <CardHeader className="border-b bg-muted/20 pb-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Music2 className="size-5 text-primary" />
-              <CardTitle className="text-lg font-bold tracking-tight">SETLIST</CardTitle>
-            </div>
-            <Badge variant="secondary" className="text-xs font-semibold">
-              총 {setlists.length}곡
-            </Badge>
-          </div>
-        </CardHeader>
-        <CardContent className="p-6">
-          {setlists.length === 0 ? (
-            <div className="text-center py-12 space-y-3">
-              <p className="text-sm text-muted-foreground">
-                아직 등록된 셋리스트가 없습니다.
-              </p>
-              {isAdmin && (
-                <Button asChild variant="outline" size="sm">
-                  <Link href={`/gigs/${numericId}/edit`}>
-                    <Pencil className="size-3.5 mr-1.5" />
-                    셋리스트 등록하기
-                  </Link>
-                </Button>
-              )}
-            </div>
-          ) : (
-            <div className="divide-y divide-border/50">
-              {setlists.map((song, idx) => (
-                <div
-                  key={song.id}
-                  className="py-4 first:pt-0 last:pb-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3 group hover:bg-muted/10 px-3 rounded-xl transition-colors"
-                >
-                  <div className="flex items-start gap-3.5 min-w-0">
-                    <span className="text-xs font-mono font-bold text-muted-foreground shrink-0 mt-1">
-                      #{idx + 1}
-                    </span>
-                    <div className="space-y-1 min-w-0">
-                      <div className="flex items-baseline gap-2 flex-wrap">
-                        <h4 className="text-base font-bold text-foreground">
-                          {song.title || "제목 없음"}
-                        </h4>
-                        {song.artist && (
-                          <span className="text-xs font-medium text-muted-foreground">
-                            — {song.artist}
-                          </span>
-                        )}
-                      </div>
-                      {/* 해당 곡 연주자 명단 (가변 세션 JSON 지원) */}
-                      {song.session_members && (() => {
-                        const slots = parseSessionSlots(song.session_members).filter(
-                          (slot) => slot.members.length > 0
-                        );
-                        if (slots.length === 0) return null;
-                        return (
-                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground pt-1 flex-wrap">
-                            {slots.map((slot) => (
-                              <span
-                                key={slot.sessionName}
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-muted/60 text-[11px] font-medium text-foreground/85 border border-border/50"
-                              >
-                                <span className="text-primary font-semibold">{slot.sessionName}</span>
-                                <span>{slot.members.join(" ")}</span>
-                              </span>
-                            ))}
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* 4. LINEUP 섹션 (순서 2순위: 세로 직사각형 카드 및 3:4 둥근 직사각형 사진, 관리자/본인 사진 수정 지원) */}
-      <Card className="border-border/60 shadow-sm overflow-hidden">
-        <CardHeader className="border-b bg-muted/20 pb-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Users className="size-5 text-primary" />
-              <CardTitle className="text-lg font-bold tracking-tight">LINEUP</CardTitle>
-            </div>
-            <Badge variant="secondary" className="text-xs font-semibold">
-              총 {performers.length}명
-            </Badge>
-          </div>
-        </CardHeader>
-        <CardContent className="p-5 sm:p-6">
-          <PerformerCardGrid
-            performers={performers}
-            currentUserId={user?.id}
-            isAdmin={isAdmin}
-            gigId={numericId}
-          />
-        </CardContent>
-      </Card>
+      <Suspense fallback={<DetailSectionSkeleton title="SETLIST" label="셋리스트를 불러오는 중…" />}>
+        <SetlistSection />
+      </Suspense>
+      <Suspense fallback={<DetailSectionSkeleton title="LINEUP" label="공연자 명단을 불러오는 중…" />}>
+        <LineupSection />
+      </Suspense>
     </div>
+  );
+}
+
+function DetailSectionSkeleton({ title, label }: { title: string; label: string }) {
+  return (
+    <Card role="status" className="border-border/60 shadow-sm overflow-hidden">
+      <CardHeader className="border-b bg-muted/20 pb-4">
+        <CardTitle className="text-lg font-bold tracking-tight">{title}</CardTitle>
+      </CardHeader>
+      <CardContent className="p-6">
+        <span className="sr-only">{label}</span>
+        <div aria-hidden="true" className="h-24 rounded-xl bg-muted/50 animate-pulse motion-reduce:animate-none" />
+      </CardContent>
+    </Card>
   );
 }

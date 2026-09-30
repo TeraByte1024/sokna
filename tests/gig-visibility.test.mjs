@@ -6,7 +6,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import React from "react";
-import { renderToStaticMarkup } from "react-dom/server";
+import { renderToStaticMarkup, renderToReadableStream } from "react-dom/server";
 import ts from "typescript";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -130,14 +130,18 @@ for (const viewer of viewerCases) {
     }
     assert.equal(html.includes("회원 공개</div>"), viewer.visibleIds.includes(membersGig.id));
     assert.equal(html.includes("비공개</div>"), Boolean(viewer.options.admin));
-    assert.equal(html.includes('href="/gigs/new"'), Boolean(viewer.options.admin));
+    const { AddGigButton } = loadSource("app/gigs/page.tsx", fixture.mocks);
+    const adminButton = renderToStaticMarkup(await AddGigButton());
+    assert.equal(adminButton.includes('href="/gigs/new"'), Boolean(viewer.options.admin));
   });
 
   test(`${viewer.name} can read only permitted gig details, including legacy gigs`, async () => {
     for (const gig of allGigs) {
       const fixture = visibilityFixture({ ...viewer.options, gig });
       const { GigDetailInner } = loadSource("app/gigs/[id]/gig-detail-inner.tsx", fixture.mocks);
-      const html = renderToStaticMarkup(await GigDetailInner({ gigId: String(gig.id) }));
+      const stream = await renderToReadableStream(await GigDetailInner({ gigId: String(gig.id) }));
+      await stream.allReady;
+      const html = await new Response(stream).text();
       const allowed = viewer.visibleIds.includes(gig.id);
       assert.equal(html.includes(gig.title), allowed, `${viewer.name}: ${gig.title}`);
       assert.equal(html.includes(gig.location), allowed);

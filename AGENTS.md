@@ -14,6 +14,7 @@
 
 ## Git 작업 원칙
 - **커밋 메시지는 반드시 영어로 작성**: 커밋 제목과 본문, 사용자에게 제안하는 커밋 메시지 모두 영어로 작성합니다. 대화가 한국어여도 이 규칙을 적용하며, 사용자가 해당 요청에서 다른 언어를 명시한 경우에만 예외로 합니다.
+- **커밋 제목 컨벤션**: 커밋 제목과 사용자에게 제안하는 커밋 메시지는 `type: lowercase subject` 형식으로 작성합니다. 예: `feat: improve gig page loading`. 변경 유형에 맞는 Conventional Commits 타입(`feat`, `fix`, `docs`, `refactor`, `test`, `chore` 등)을 사용합니다.
 - **임의 Push 금지**: 사용자의 명시적인 지시 없이는 어떠한 경우에도 임의로 `git push`를 실행하지 않습니다.
 
 자세한 문서 목록 및 구조는 [docs/README.md](file:///c:/dev/sokna/docs/README.md)를 참고하십시오.

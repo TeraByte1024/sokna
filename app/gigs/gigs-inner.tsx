@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ResponsiveImage } from "@/components/ui/responsive-image";
 import { Badge } from "@/components/ui/badge";
@@ -9,7 +8,7 @@ import { canViewGig } from "@/lib/gig-visibility";
 import { getDDay } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/server";
 import { SUPABASE_GIGS_TABLE } from "@/lib/supabase/gigs";
-import { Plus, Calendar, Music, History, Sparkles, MapPin, Lock, Users } from "lucide-react";
+import { Calendar, Music, History, Sparkles, MapPin, Lock, Users } from "lucide-react";
 
 function formatDate(d: string | null) {
 	if (!d) return "—";
@@ -42,7 +41,6 @@ export async function GigsInner() {
 			<p className="text-center py-10 text-destructive">문제가 발생했습니다.</p>
 		);
 
-	const { isAdmin } = viewer;
 	const allGigs: Gig[] = (rows ?? []).map((r) =>
 		mapGigRow(r as Record<string, unknown>),
 	);
@@ -69,25 +67,6 @@ export async function GigsInner() {
 
 	return (
 		<div className="flex flex-col gap-12 w-full max-w-5xl mx-auto pb-20">
-			{/* 타이틀 섹션 */}
-			<div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between border-b pb-6">
-				<div>
-					<h1 className="text-3xl font-extrabold tracking-tight text-foreground">
-						공연 정보
-					</h1>
-					<p className="text-muted-foreground mt-1.5 text-sm">
-						소리로 크는 나무가 준비한 공연을 확인하세요.
-					</p>
-				</div>
-				{isAdmin && (
-					<Button asChild className="shadow-sm font-semibold">
-						<Link href="/gigs/new">
-							<Plus className="size-4 mr-1.5" /> 공연 추가
-						</Link>
-					</Button>
-				)}
-			</div>
-
 			{/* 1. 예정된 공연 섹션 */}
 			<section className="space-y-6">
 				<div className="flex items-center gap-2 text-primary font-bold text-lg">
@@ -134,7 +113,7 @@ export async function GigsInner() {
 						지난 공연 기록이 없습니다.
 					</p>
 				) : (
-					<GigGrid list={pastGigs} isPast preloadFirst={upcomingGigs.length === 0} />
+					<GigGrid list={pastGigs} isPast />
 				)}
 			</section>
 		</div>
@@ -144,15 +123,13 @@ export async function GigsInner() {
 function GigGrid({
 	list,
 	isPast = false,
-	preloadFirst = true,
 }: {
 	list: Gig[];
 	isPast?: boolean;
-	preloadFirst?: boolean;
 }) {
 	return (
 		<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-			{list.map((gig, index) => {
+			{list.map((gig) => {
 				const dDay = !isPast ? getDDay(gig.perform_date) : null;
 
 				return (
@@ -170,7 +147,6 @@ function GigGrid({
 										alt={gig.title || "공연 포스터"}
 										className="w-full h-full object-cover"
 										sizes="(min-width: 1024px) 300px, (min-width: 640px) 50vw, 100vw"
-										preload={preloadFirst && index === 0}
 									/>
 								) : (
 									<div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center bg-gradient-to-br from-indigo-500/15 via-purple-500/10 to-muted">
