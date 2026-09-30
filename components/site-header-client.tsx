@@ -15,16 +15,18 @@ const mobileLinks = [
 
 interface SiteHeaderClientProps {
   authButton: React.ReactNode;
+  leading?: React.ReactNode;
 }
 
-export function SiteHeaderClient({ authButton }: SiteHeaderClientProps) {
+export function SiteHeaderClient({ authButton, leading }: SiteHeaderClientProps) {
   const pathname = usePathname();
 
   return (
     <>
       <header className="sticky top-0 z-50 flex w-full items-center justify-center border-b border-foreground/10 bg-background/90 backdrop-blur-md">
         <div className="flex h-14 w-full max-w-5xl items-center justify-between gap-3 px-5 text-sm md:h-16">
-          <div className="flex min-w-0 items-center gap-5 font-semibold">
+          <div className="flex min-w-0 items-center gap-3 font-semibold sm:gap-5">
+            {leading}
             <Link href="/" className="flex shrink-0 items-center transition-opacity hover:opacity-90">
               <Image
                 src="/logo.svg"

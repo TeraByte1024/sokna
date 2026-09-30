@@ -41,8 +41,11 @@ docs/
 │   ├── 11-gig-join.md             # 공연 참가 신청 페이지 (/gigs/[id]/join) 명세
 │   ├── 12-gig-edit.md             # 공연 수정 페이지 (/gigs/[id]/edit) [관리자] 명세
 │   ├── 13-profile.md              # 회원 정보 수정 페이지 (/profile) 명세
-│   └── 14-admin-members.md        # 관리자 회원 관리 페이지 (/admin/members) 명세
+│   ├── 14-admin-members.md        # 관리자 회원 관리 페이지 (/admin/members) 명세
+│   ├── 15-admin-approvals.md      # 가입/공연 신청 승인 (/admin/approvals)
+│   └── 16-admin-gigs.md           # 공연 관리 (/admin/gigs)
 ├── features/                      # 도메인별 기능 명세
+│   ├── admin-console.md           # 관리자 화면 재구성 및 신청 검토
 │   ├── roles-and-permissions.md   # 역할별(방문자/회원/참여자/관리자) 기능 매트릭스 및 권한 가이드
 │   ├── authentication.md          # 인증, 세션 관리 및 관리자 권한 명세
 │   ├── gigs.md                    # 공연(Gigs) 및 참여자(Performers) 관리 명세
@@ -76,12 +79,15 @@ docs/
 | **11** | [공연 참가 신청](./pages/11-gig-join.md) | `/gigs/[id]/join` | **로그인 회원 전용**: 비회원 차단, 선곡회의 일정 확인, 참가 여부(참여/불참/미정) 제출, 이탈 방지 팝업 |
 | **12** | [공연 수정](./pages/12-gig-edit.md) | `/gigs/[id]/edit` | **관리자 전용**: 공연 기본 정보, 일정, 포스터, 공개 여부 및 세션원 명단 수정, 이탈 방지 팝업 |
 | **13** | [회원 정보 수정](./pages/13-profile.md) | `/profile` | **로그인 회원 전용**: 이름, 기수, 담당 세션 파트, 행사 소식 수신 동의 수정, 이탈 방지 팝업 |
-| **14** | [관리자 회원 관리](./pages/14-admin-members.md) | `/admin/members` | **관리자 전용**: 가입 대기 회원 승인/반려, 부원 정보 수정, 관리자 권한 관리, 이탈 방지 팝업 |
+| **14** | [회원(관리자) 관리](./pages/14-admin-members.md) | `/admin/members` | 승인 회원 검색·필터·정렬 및 관리자 권한 관리 |
+| **15** | [가입/공연 신청 승인](./pages/15-admin-approvals.md) | `/admin/approvals` | 가입·공연 참가 신청 승인/반려 |
+| **16** | [공연 관리](./pages/16-admin-gigs.md) | `/admin/gigs` | 공연별 확정 참여자와 신청 비고 |
 
 
 ### ⚙️ 시스템 및 도메인 기능 명세
 | 분류 | 문서명 | 주요 내용 |
 | :--- | :--- | :--- |
+| **Feature** | [admin-console.md](./features/admin-console.md) | 관리자 메뉴와 공연 신청 검토 상태 |
 | **Feature** | [roles-and-permissions.md](./features/roles-and-permissions.md) | **방문자 / 일반 회원 / 세션 참여자 / 관리자별 기능 매트릭스** |
 | **Feature** | [authentication.md](./features/authentication.md) | Supabase Auth, 쿠키 기반 세션 갱신, 관리자 권한 판별 |
 | **Feature** | [login-methods.md](./features/login-methods.md) | Google·카카오 계정 연결·해제, 마지막 수단 보호 및 제공자 로고 |

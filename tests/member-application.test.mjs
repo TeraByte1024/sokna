@@ -108,6 +108,8 @@ function fixture(rows, { isAdmin = true, userId = "admin", queryError = null, sa
     "@/lib/notifications": { getUnreadNotificationCount: async () => 0 },
     "@/components/site-layout": { SiteLayout: fragment },
     "@/components/page-container": { PageContainer: fragment },
+    "@/components/admin/admin-page-heading": { AdminPageHeading: () => null },
+    "./approvals-client": { ApprovalsClient: ({ initialMembers }) => React.createElement("div", null, initialMembers.map((item) => item.id).join(",")) },
     "./admin-members-client": {
       AdminMembersClient: ({ initialPendingMembers }) => React.createElement("div", null, initialPendingMembers.map((item) => item.id).join(",")),
     },
@@ -128,8 +130,8 @@ test("admin initial and refreshed lists exclude social drafts and malformed prof
   const response = await f.load("app/admin/members/actions.ts").getPendingMembersAction();
   assert.equal(response.ok, true);
   assert.deepEqual(response.data.map((item) => item.id), ["email-applicant", "custom-session"]);
-  const page = await f.load("app/admin/members/page.tsx").default();
-  assert.equal(renderToStaticMarkup(page), "<div>email-applicant,custom-session</div>");
+  const page = await f.load("app/admin/approvals/page.tsx").default();
+  assert.match(renderToStaticMarkup(page), /email-applicant,custom-session/);
 });
 
 test("admin header count includes only submitted applications", async () => {

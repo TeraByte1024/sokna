@@ -118,7 +118,9 @@ export function GigJoinDialog({
       const result = await submitGigRsvp(formData);
       if (result.ok) {
         toast.success(
-          existingRsvp
+          existingRsvp?.review_status === "rejected" && status === "going"
+            ? "공연 참여를 다시 신청했습니다. 관리자 승인을 기다려 주세요."
+            : existingRsvp
             ? "참가 신청 내역이 수정되었습니다."
             : status === "going"
             ? "참여 신청이 완료되었습니다. 관리자 승인을 기다려 주세요."
@@ -173,14 +175,18 @@ export function GigJoinDialog({
                   <Badge
                     variant="outline"
                     className={
-                      existingRsvp.status === "going"
+                      existingRsvp.status === "going" && existingRsvp.review_status === "rejected"
+                        ? "text-destructive border-destructive/40 bg-destructive/10 text-[11px]"
+                        : existingRsvp.status === "going"
                         ? "text-amber-500 border-amber-500/40 bg-amber-500/10 text-[11px]"
                         : existingRsvp.status === "not_going"
                         ? "text-destructive border-destructive/40 bg-destructive/10 text-[11px]"
                         : "text-amber-500 border-amber-500/40 bg-amber-500/10 text-[11px]"
                     }
                   >
-                    {existingRsvp.status === "going"
+                    {existingRsvp.status === "going" && existingRsvp.review_status === "rejected"
+                      ? "반려됨 · 저장하면 재신청"
+                      : existingRsvp.status === "going"
                       ? "승인 대기 중"
                       : existingRsvp.status === "not_going"
                       ? "불참 등록됨"
@@ -425,7 +431,7 @@ export function GigJoinDialog({
                 ) : (
                   <>
                     <Check className="size-3.5" />
-                    저장
+                    {existingRsvp?.review_status === "rejected" && status === "going" ? "재신청" : "저장"}
                   </>
                 )}
               </Button>

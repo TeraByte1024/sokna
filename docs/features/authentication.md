@@ -21,7 +21,7 @@ SOKNA 애플리케이션은 **Supabase Auth**와 `@supabase/ssr`을 결합하여
    - 프로필 입력 완료 시 관리자 승인 대기(`pending`) 상태로 전환되며, users 트리거가 같은 트랜잭션으로 관리자 알림을 만들고 해당 이벤트를 즉시 발송합니다. 이미 완성된 pending 신청의 프로필 재저장에는 알림을 중복 생성하지 않습니다.
    - OAuth 최초 로그인으로 생성된 `public.users` 레코드도 DB 기본값은 `pending`이지만, **가입 신청 전 계정**으로 취급합니다. 기수(1 이상의 정수)와 공백이 아닌 세션이 저장되기 전에는 관리자 승인 대기 명단·헤더 알림 건수·본인의 승인 대기 배지에서 제외합니다.
    - `hasCompletedMemberProfile()`로 프로필 등록 화면 진입과 신청 완료 여부를 공통 판별합니다. 미작성 계정의 `/profile` 접근은 `/auth/complete-profile`로 안내하며, 등록 완료 후 관리자 페이지와 공통 레이아웃을 갱신합니다.
-3. **관리자 승인 (`/admin/members`)**:
+3. **관리자 승인 (`/admin/approvals`)**:
    - 관리자가 독립된 관리자 전용 페이지에서 신청 내역을 검토한 후 승인(`status = 'approved'`) 또는 거절(`status = 'rejected'`)합니다.
    - 승인 시 해당 회원에게 "가입 승인 완료" 인앱 알림이 등록됩니다. 회원이 마케팅 알림에 동의하고 기기 토큰을 등록한 경우 동일 outbox 레코드를 cron 주기와 무관하게 웹 푸시로 즉시 발송하며, 클릭 시 `/members`로 이동합니다.
    - 승인 상태 전이는 `pending` 상태에서만 허용하여 중복 승인에 따른 알림 중복 생성을 방지합니다.
@@ -90,7 +90,7 @@ SOKNA 애플리케이션은 **Supabase Auth**와 `@supabase/ssr`을 결합하여
 - **관리자 (Admin)**:
    - `public.admins` 테이블의 ID가 검증된 Auth 사용자 ID와 일치하는 사용자.
    - 공연 등록 (`/gigs/new`) 권한 보유.
-   - 회원 가입 승인/거절, 관리자 권한 부여/해제 및 회원 정보 수정 권한 보유 (`/admin/members`).
+   - 회원 가입 승인/반려(`/admin/approvals`), 관리자 권한 부여/해제 및 회원 정보 수정(`/admin/members`) 권한 보유.
    - `lib/auth-admin.ts`의 `getIsAdmin()` 함수를 통해 서버 사이드에서 판별:
      ```ts
      const allowed = await getIsAdmin();

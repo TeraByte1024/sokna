@@ -502,7 +502,7 @@ test("an owned Google identity can be removed while another usable login method 
     assert.ok(result.message.length > 0);
     assert.deepEqual(f.operations, [
       ["createClient"], ["getUser"], ["unlinkIdentity", primaryGoogleIdentity],
-      ["refreshSession"], ["revalidatePath", "/profile"], ["revalidatePath", "/admin/members"],
+      ["refreshSession"], ["revalidatePath", "/profile"], ["revalidatePath", "/admin/members"], ["revalidatePath", "/admin/approvals"],
     ]);
     assert.deepEqual(f.cookieWrites, []);
   }
@@ -561,7 +561,7 @@ test("a completed unlink stays successful when session refresh errors or throws"
     assert.doesNotMatch(result.message, /private/);
     assert.equal(f.operations.filter(([name]) => name === "unlinkIdentity").length, 1);
     assert.equal(did(f, "signOut"), false);
-    assert.deepEqual(f.operations.filter(([name]) => name === "revalidatePath"), [["revalidatePath", "/profile"], ["revalidatePath", "/admin/members"]]);
+    assert.deepEqual(f.operations.filter(([name]) => name === "revalidatePath"), [["revalidatePath", "/profile"], ["revalidatePath", "/admin/members"], ["revalidatePath", "/admin/approvals"]]);
   }
 });
 

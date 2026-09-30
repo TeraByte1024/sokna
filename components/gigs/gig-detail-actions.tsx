@@ -48,6 +48,9 @@ export function GigDetailActions({
     if (!existingRsvp) {
       return <UserCheck className={`${sizeClass} shrink-0`} />;
     }
+    if (existingRsvp.status === "going" && existingRsvp.review_status === "rejected") {
+      return <XCircle className={`${sizeClass} text-rose-300 shrink-0`} />;
+    }
     if (existingRsvp.status === "going") {
       return <Clock className={`${sizeClass} text-amber-300 shrink-0`} />;
     }
@@ -60,6 +63,7 @@ export function GigDetailActions({
   const getStatusTitle = () => {
     if (isCurrentUserPerformer) return "공연 참여 승인 완료";
     if (!existingRsvp) return "공연 참여 등록";
+    if (existingRsvp.status === "going" && existingRsvp.review_status === "rejected") return "참여 신청 반려됨 (클릭 시 재신청)";
     if (existingRsvp.status === "going") return "참여 승인 대기 중 (클릭 시 수정)";
     if (existingRsvp.status === "not_going") return "불참으로 등록됨 (클릭 시 수정)";
     return "미정으로 등록됨 (클릭 시 수정)";

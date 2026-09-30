@@ -56,9 +56,13 @@ export async function AuthButton() {
   }
 
   if (isAdmin) {
-    // 관리자일 경우 대기 중인 회원가입 건수 조회
-    const { data: pendingApplications } = await getPendingMemberApplications(supabase);
-    pendingCount = pendingApplications?.length ?? 0;
+    // 관리자일 경우 가입 및 공연 신청 대기 건수 조회
+    const [{ data: pendingApplications }, { count: pendingGigCount }] = await Promise.all([
+      getPendingMemberApplications(supabase),
+      supabase.from("gig_rsvps").select("id", { count: "exact", head: true })
+        .eq("status", "going").eq("review_status", "pending"),
+    ]);
+    pendingCount = (pendingApplications?.length ?? 0) + (pendingGigCount ?? 0);
   }
 
   return (
@@ -66,13 +70,13 @@ export async function AuthButton() {
       {/* 관리자 바로가기 버튼 */}
       {isAdmin && (
         <Button asChild size="sm" variant="outline" className="h-8 gap-1.5 border-primary/40 hover:border-primary">
-          <Link href="/admin/members">
+          <Link href="/admin/approvals">
             {pendingCount > 0 ? (
               <ShieldAlert className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
             ) : (
               <ShieldCheck className="w-3.5 h-3.5 text-primary" />
             )}
-            <span className="font-semibold hidden sm:inline">회원 관리</span>
+            <span className="font-semibold hidden sm:inline">관리자</span>
             {pendingCount > 0 && (
               <Badge variant="destructive" className="px-1.5 py-0 text-[11px] h-4 leading-none">
                 {pendingCount}

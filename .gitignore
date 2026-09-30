@@ -50,3 +50,4 @@ supabase/.storage/
 
 # temporary scratchpad scripts
 /scratch/
+.codex-remote-attachments

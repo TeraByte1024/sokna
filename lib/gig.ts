@@ -128,6 +128,7 @@ export type GigRsvp = {
   gig_id: number;
   user_id: string;
   status: GigRsvpStatus;
+  review_status?: "pending" | "approved" | "rejected";
   part: string | null;
   note: string | null;
   created_at: string;

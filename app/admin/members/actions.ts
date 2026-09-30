@@ -90,6 +90,7 @@ export async function approveMemberAction(
     }
 
     revalidatePath("/admin/members");
+    revalidatePath("/admin/approvals");
     revalidatePath("/members");
     return { ok: true, message: "회원가입이 승인되었습니다." };
   } catch (err) {
@@ -109,19 +110,24 @@ export async function rejectMemberAction(
     }
 
     const supabase = await createClient();
-    const { error: updateError } = await supabase
+    const { data: rejected, error: updateError } = await supabase
       .from("users")
       .update({
         status: "rejected",
       })
-      .eq("id", userId);
+      .eq("id", userId)
+      .eq("status", "pending")
+      .select("id")
+      .maybeSingle();
 
     if (updateError) {
       console.error("회원 거절 실패:", updateError);
       return { ok: false, error: updateError.message };
     }
 
+    if (!rejected) return { ok: false, error: "이미 처리되었거나 대기 중이 아닌 신청입니다." };
     revalidatePath("/admin/members");
+    revalidatePath("/admin/approvals");
     return { ok: true, message: "가입 신청이 거절되었습니다." };
   } catch (err) {
     console.error("회원 거절 예외:", err);
@@ -145,6 +151,7 @@ export async function grantAdminAction(
     const { data: user, error: userError } = await supabase
       .from("users")
       .select("id, name, email")
+      .eq("status", "approved")
       .eq("id", userId)
       .single();
 
@@ -197,6 +204,7 @@ export async function grantAdminAction(
     }
 
     revalidatePath("/admin/members");
+    revalidatePath("/admin/approvals");
     return { ok: true, message: `${user.name} 님에게 관리자 권한을 부여했습니다.` };
   } catch (err) {
     console.error("관리자 권한 부여 예외:", err);
@@ -262,6 +270,7 @@ export async function revokeAdminAction(
     }
 
     revalidatePath("/admin/members");
+    revalidatePath("/admin/approvals");
     return {
       ok: true,
       message: `${targetAdmin.name || targetAdmin.email} 님의 관리자 권한을 해제했습니다.`,
@@ -290,7 +299,7 @@ export async function updateMemberByAdminAction(
       return { ok: false, error: "이름은 필수 항목입니다." };
     }
 
-    if (generation < 1) {
+    if (!Number.isSafeInteger(generation) || generation < 1) {
       return { ok: false, error: "기수는 1 이상이어야 합니다." };
     }
 
@@ -324,6 +333,7 @@ export async function updateMemberByAdminAction(
     }
 
     revalidatePath("/admin/members");
+    revalidatePath("/admin/approvals");
     revalidatePath("/members");
     revalidatePath("/", "layout");
     return { ok: true, message: `${trimmedName} 님의 회원 정보를 수정했습니다.` };

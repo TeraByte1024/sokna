@@ -133,6 +133,7 @@ export async function GigDetailInner({ gigId }: GigDetailInnerProps) {
         gig_id: rsvpRow.gig_id,
         user_id: rsvpRow.user_id,
         status: rsvpRow.status as "going" | "not_going" | "undecided",
+        review_status: rsvpRow.review_status as "pending" | "approved" | "rejected",
         part: rsvpRow.part,
         note: rsvpRow.note,
         created_at: rsvpRow.created_at,

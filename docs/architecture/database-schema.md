@@ -204,21 +204,24 @@ erDiagram
 | `status` | `text` | NO | - | 참여 상태 (`'going'`, `'not_going'`, `'undecided'`) |
 | `part` | `text` | YES | null | 참여 시 희망 세션 파트. 여러 세션은 쉼표와 공백으로 구분 (예: `기타, 드럼`) |
 | `note` | `text` | YES | null | 전달 사항 및 특이사항 메모 |
+| `review_status` | `text` | NO | `pending` | 관리자 검토 상태 (`pending`, `approved`, `rejected`). 참여 의사 `status`와 별개 |
+| `reviewed_at` | `timestamptz` | YES | null | 마지막 승인/반려 시각. 마이그레이션 이전 승인 기록은 null |
+| `reviewed_by` | `uuid` | YES | null | 마지막 처리 관리자 ID. 관리자 권한 회수 후에도 기록 보존 |
 | `created_at` | `timestamptz` | NO | `now()` | 등록 일시 |
 | `updated_at` | `timestamptz` | NO | `now()` | 수정 일시 |
 
 > **Unique 제약조건**: `UNIQUE(gig_id, user_id)` (공연별 회원당 1개의 RSVP 레코드 유지)
 
-> **참여 신청 알림** (`20260930010000_notify_gig_rsvp_requested.sql`, 2026-09-30 운영 DB 적용 완료): INSERT에서 `status = going`이거나 UPDATE로 불참·미정에서 `going`으로 전환될 때만 AFTER 트리거가 관리자별 `notifications`를 같은 트랜잭션에 생성합니다. 세션·메모만 재저장해도 중복 생성하지 않습니다. 이벤트 키는 RSVP ID와 해당 전환의 `updated_at` UTC 밀리초 시각을 결합하며, 재신청 시 새 전환을 구분합니다. 푸시 미동의 관리자도 인앱 알림은 받습니다.
+> **기존 참여 신청 알림** (`20260930010000_notify_gig_rsvp_requested.sql`, 2026-09-30 운영 DB 적용 완료): 새 검토 상태 마이그레이션 적용 전에는 INSERT에서 `status = going`이거나 UPDATE로 불참·미정에서 `going`으로 전환될 때만 AFTER 트리거가 관리자별 `notifications`를 같은 트랜잭션에 생성합니다. 세션·메모만 재저장해도 중복 생성하지 않습니다. 이벤트 키는 RSVP ID와 해당 전환의 `updated_at` UTC 밀리초 시각을 결합하며, 재신청 시 새 전환을 구분합니다. 푸시 미동의 관리자도 인앱 알림은 받습니다.
 
-> **참여 승인 처리** (`20260926000000_review_gig_rsvps.sql`):
-> - `going`은 참여 신청이며, 승인 여부는 같은 `(gig_id, user_id)`의 `performers` 존재로 판단합니다. 승인된 RSVP는 보존하고 관리자 대기 목록에서는 제외합니다.
-> - `review_gig_rsvp(p_gig_id bigint, p_rsvp_id bigint, p_updated_at timestamptz, p_decision text)`는 `approve` 시 쉼표로 구분된 신청 세션 전체를 공연자 `part`에 그대로 INSERT, `ignore` 시 RSVP를 DELETE합니다. 무시는 재신청 가능한 미선택 상태로 돌아갑니다.
-> - `SECURITY DEFINER`, 빈 `search_path`, 명시적 스키마 참조 및 `auth.uid()`/`is_admin()` 권한 검사. PUBLIC 실행 권한을 회수하고, `20260926001000_restrict_gig_rsvp_rpc.sql`로 Supabase 기본 권한에 포함될 수 있는 `anon`의 직접 실행 권한도 회수합니다. 사용자 역할 중 authenticated만 실행 가능하며 관리자 여부는 함수 내부에서 다시 검사합니다.
-> - `FOR UPDATE`로 신청을 잠그고 `updated_at`을 비교합니다. 이미 공연자이거나 신청이 없거나 변경되었거나 `going`이 아니면 `false`를 반환하며 데이터를 변경하지 않습니다. 세션이 없는 신청은 승인할 수 없습니다.
-> - RSVP SELECT RLS는 본인 또는 `public.is_admin()`으로 관리자 전체 조회를 허용합니다. 다른 회원은 타인의 신청/비고를 읽을 수 없습니다.
-> - INSERT/UPDATE에는 승인 완료 회원·관리자이며 상위 공연을 조회할 수 있어야 한다는 제한형 RLS를 추가합니다. SELECT/DELETE의 기존 본인·관리자 권한은 유지하여 승인이나 공연 접근 권한을 잃어도 본인의 이전 신청을 확인·삭제할 수 있습니다. `submitGigRsvp`도 가입 승인 여부와 실제 공연자의 재제출, 비공개 공연 권한을 검사합니다.
-> - 2026-09-26 운영 DB 적용 및 마이그레이션 이력 기록 완료. 기존 신청/공연자 레코드는 변경하지 않았습니다.
+> **참여 신청 검토** (`20260930020000_admin_console_reviews.sql`, 2026-09-30 운영 DB 적용 완료):
+> - 참여 의사 `going`과 검토 결과를 분리합니다. `going + pending`이며 같은 공연의 공연자가 아닌 신청만 승인 대기 목록에 표시합니다. 기존 `going` RSVP 중 `performers`가 있는 건은 `approved`로 보정합니다.
+> - `review_gig_rsvp(p_gig_id, p_rsvp_id, p_updated_at, p_decision)`은 관리자 권한과 신청 버전을 확인하고 행을 잠급니다. `approve`는 공연자를 등록하고 `approved`, `reject`는 RSVP를 보존하고 `rejected`로 기록합니다. 처리 관리자·시각을 함께 저장합니다. 이미 변경·처리된 요청은 false입니다.
+> - 공연자를 수동 등록해도 연결된 대기 RSVP는 승인 기록으로 전환합니다. 공연자 명단에서 제거한 뒤 회원이 다시 신청을 저장하면 새 대기 상태로 복귀할 수 있습니다.
+> - 일반 회원의 직접 승인·반려·처리 정보 변경 및 승인·반려 기록 삭제는 트리거와 RLS로 차단합니다. 반려된 회원의 참여 신청 재저장은 `pending`으로 전환되고 처리 정보가 초기화됩니다.
+> - `notify_gig_rsvp_requested`는 처음 `going`이 되거나 반려 후 재신청될 때만 관리자 알림을 만듭니다. 대기 신청의 세션·비고 재저장이나 승인·반려 처리에는 중복 알림을 만들지 않습니다. 알림 링크는 `/admin/approvals`이며 기존 신청 알림 링크도 이 경로로 갱신합니다.
+> - `SECURITY DEFINER` 검토 RPC와 알림 함수는 빈 `search_path`를 사용하고 비로그인 직접 실행 권한을 허용하지 않습니다. RSVP 조회 RLS는 본인 또는 관리자에게만 비고를 공개합니다.
+> - 원격 마이그레이션 이력을 확인하고 `npm run types`로 공개 타입을 재생성했습니다.
 
 ### 2.5 `performers` (공연 참여자 매핑)
 공연(`gigs`)에 참가하는 회원(`users`)과 해당 공연에서의 담당 파트를 지정하는 매핑 테이블입니다. (가입 회원이 없는 미연동 더미 공연자도 보존 지원)

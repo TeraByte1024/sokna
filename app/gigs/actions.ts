@@ -480,22 +480,24 @@ export async function submitGigRsvp(formData: FormData): Promise<{ ok: true } | 
 
   revalidatePath(`/gigs/${gigId}`);
   revalidatePath(`/gigs/${gigId}/join`);
-  revalidatePath("/admin/members");
+  revalidatePath("/admin/approvals");
+  revalidatePath("/admin/gigs");
+  revalidatePath(`/admin/gigs/${gigId}`);
   return { ok: true };
 }
 
-/** 관리자만 참여 신청을 승인하거나 무시할 수 있습니다. */
+/** 관리자만 참여 신청을 승인하거나 반려할 수 있습니다. */
 export async function reviewGigRsvp(
   gigId: number,
   rsvpId: number,
   updatedAt: string,
-  decision: "approve" | "ignore"
+  decision: "approve" | "reject"
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!(await getIsAdmin())) {
     return { ok: false, error: "관리자만 참가 신청을 처리할 수 있습니다." };
   }
   if (!Number.isSafeInteger(gigId) || gigId <= 0 || !Number.isSafeInteger(rsvpId) || rsvpId <= 0
-    || !["approve", "ignore"].includes(decision) || !updatedAt || Number.isNaN(Date.parse(updatedAt))) {
+    || !["approve", "reject"].includes(decision) || !updatedAt || Number.isNaN(Date.parse(updatedAt))) {
     return { ok: false, error: "유효하지 않은 참가 신청입니다." };
   }
 
@@ -519,7 +521,9 @@ export async function reviewGigRsvp(
   revalidatePath(`/gigs/${gigId}`);
   revalidatePath(`/gigs/${gigId}/edit`);
   revalidatePath(`/gigs/${gigId}/nominations`);
-  revalidatePath("/admin/members");
+  revalidatePath("/admin/approvals");
+  revalidatePath("/admin/gigs");
+  revalidatePath(`/admin/gigs/${gigId}`);
   if (!reviewed) {
     return { ok: false, error: "이미 처리되었거나 변경된 신청입니다. 최신 내역을 확인해 주세요." };
   }

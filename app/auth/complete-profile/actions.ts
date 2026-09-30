@@ -67,6 +67,7 @@ export async function completeProfileAction(
     }
 
     revalidatePath("/admin/members");
+    revalidatePath("/admin/approvals");
     revalidatePath("/", "layout");
     return { ok: true };
   } catch (err) {

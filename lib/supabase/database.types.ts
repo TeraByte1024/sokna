@@ -67,6 +67,9 @@ export type Database = {
           id: number
           note: string | null
           part: string | null
+          review_status: string
+          reviewed_at: string | null
+          reviewed_by: string | null
           status: string
           updated_at: string
           user_id: string
@@ -77,6 +80,9 @@ export type Database = {
           id?: never
           note?: string | null
           part?: string | null
+          review_status?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           status: string
           updated_at?: string
           user_id: string
@@ -87,6 +93,9 @@ export type Database = {
           id?: never
           note?: string | null
           part?: string | null
+          review_status?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           status?: string
           updated_at?: string
           user_id?: string

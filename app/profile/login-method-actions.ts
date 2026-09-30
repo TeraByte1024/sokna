@@ -109,6 +109,7 @@ export async function unlinkSocialIdentityAction(
   try {
     revalidatePath("/profile");
     revalidatePath("/admin/members");
+    revalidatePath("/admin/approvals");
   } catch {
     refreshFailed = true;
   }

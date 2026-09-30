@@ -137,7 +137,7 @@ test("custom session is preserved and submission does not create a performer", a
   assert.equal(fixture.writes[0].table, "gig_rsvps");
   assert.equal(fixture.writes[0].payload.part, "어쿠스틱 기타");
   assert.equal(fixture.writes[0].payload.user_id, "member-id");
-  assert.ok(fixture.invalidations.includes("/admin/members"));
+  assert.ok(fixture.invalidations.includes("/admin/approvals"));
 });
 
 test("multiple RSVP sessions are trimmed, deduplicated, and stored for approval", async () => {
@@ -170,15 +170,15 @@ test("non-admin review is rejected before DB writes", async () => {
   assert.equal(fixture.writes.length, 0);
 });
 
-test("approval and ignore pass the exact request version to the atomic RPC", async () => {
-  for (const decision of ["approve", "ignore"]) {
+test("approval and rejection pass the exact request version to the atomic RPC", async () => {
+  for (const decision of ["approve", "reject"]) {
     const fixture = actionsFixture({ admin: true });
     assert.equal((await fixture.actions.reviewGigRsvp(1, 2, "2026-09-26T12:00:00.123456Z", decision)).ok, true);
     assert.equal(fixture.writes[0].name, "review_gig_rsvp");
     assert.equal(fixture.writes[0].payload.p_decision, decision);
     assert.equal(fixture.writes[0].payload.p_updated_at, "2026-09-26T12:00:00.123456Z");
     assert.ok(fixture.invalidations.includes("/gigs/1/nominations"));
-    assert.ok(fixture.invalidations.includes("/admin/members"));
+    assert.ok(fixture.invalidations.includes("/admin/approvals"));
   }
 });
 
@@ -228,6 +228,17 @@ test("pending and ignored requests retain enabled participation buttons", () => 
   }
 });
 
+test("rejected application offers reapplication without losing the saved request", () => {
+  const rejected = { ...rsvp, review_status: "rejected" };
+  const { GigDetailActions } = loadSource("components/gigs/gig-detail-actions.tsx", uiMocks);
+  const actionsHtml = renderToStaticMarkup(React.createElement(GigDetailActions, { gig, existingRsvp: rejected, isLoggedIn: true, isCurrentUserPerformer: false }));
+  assert.match(actionsHtml, /반려됨/);
+  const { GigJoinDialog } = loadSource("components/gigs/gig-join-dialog.tsx", uiMocks);
+  const dialogHtml = renderToStaticMarkup(React.createElement(GigJoinDialog, { gig, isOpen: true, onClose() {}, existingRsvp: rejected }));
+  assert.match(dialogHtml, /반려됨/);
+  assert.match(dialogHtml, /재신청/);
+  assert.match(dialogHtml, /어쿠스틱 기타/);
+});
 test("new or ignored RSVP opens with no choice and saving disabled", () => {
   const { GigJoinDialog } = loadSource("components/gigs/gig-join-dialog.tsx", uiMocks);
   const html = renderToStaticMarkup(React.createElement(GigJoinDialog, { gig, isOpen: true, onClose() {}, existingRsvp: null }));
@@ -349,30 +360,26 @@ test("saved sessions can be toggled independently and submitted together", async
   assert.deepEqual(submissions[0].getAll("part"), ["기타", "베이스", "바이올린", "비올라"]);
 });
 
-test("admin table shows gig details on one row, omits undecided responses and pending chips", () => {
-  const { GigRsvpManager } = loadSource("components/gigs/gig-rsvp-manager.tsx", uiMocks);
-  const rsvps = [
-    { ...rsvp, gigTitle: "가을 공연", note: "늦게 도착", user: { name: "참여자", generation: 39 } },
-    { ...rsvp, id: 3, gig_id: 2, gigTitle: "겨울 공연", status: "not_going", user: { name: "불참자" } },
-    { ...rsvp, id: 4, gigTitle: "미정 공연", status: "undecided", user: { name: "미정자" } },
-  ];
-  const html = renderToStaticMarkup(React.createElement(GigRsvpManager, { rsvps }));
-  assert.match(html, /참여자 참여 신청 승인/);
-  assert.match(html, /참여자 참여 신청 무시/);
-  assert.doesNotMatch(html, /(?:불참자|미정자) 참여 신청 (?:승인|무시)/);
-  assert.match(html, /text-emerald-600/);
-  assert.match(html, /lucide-trash-2/);
-  assert.doesNotMatch(html, /미정|승인 대기/);
-  const headers = [...html.matchAll(/<th\b[^>]*>(.*?)<\/th>/g)].map((match) => match[1]);
-  assert.deepEqual(headers, ["공연제목", "이름", "기수", "신청세션", "비고", "승인", "무시"]);
-  const rows = [...html.matchAll(/<tr\b[^>]*>(.*?)<\/tr>/g)].map((match) => match[1]);
-  assert.equal(rows.length, 3);
-  assert.match(rows[1], /가을 공연.*참여자.*39기.*어쿠스틱 기타.*늦게 도착/);
-  assert.match(rows[1], /href="\/gigs\/1"/);
-  assert.match(rows[2], /href="\/gigs\/2"/);
+test("approval screen shows a pending gig request with its note and review actions", () => {
+  const mocks = {
+    ...uiMocks,
+    "@/app/admin/members/actions": { approveMemberAction() {}, rejectMemberAction() {} },
+    "@/components/admin/member-edit-dialog": { MemberEditDialog: () => null },
+    "@/components/ui/sonner": { toast: { success() {}, error() {} } },
+  };
+  const { ApprovalsClient } = loadSource("app/admin/approvals/approvals-client.tsx", mocks);
+  const html = renderToStaticMarkup(React.createElement(ApprovalsClient, {
+    initialMembers: [],
+    initialRsvps: [{ id: 2, gig_id: 1, part: "어쿠스틱 기타", note: "늦게 도착", updated_at: rsvp.updated_at, gigTitle: "가을 공연", user: { name: "참여자", generation: 39 } }],
+    memberError: false, rsvpError: false,
+  }));
+  assert.match(html, /가을 공연/);
+  assert.match(html, /참여자/);
+  assert.match(html, /늦게 도착/);
+  assert.match(html, /href="\/admin\/gigs\/1"/);
+  assert.match(html, /승인/);
+  assert.match(html, /반려/);
 });
-
-
 test("RSVP schema failures report missing setup and never write", async (context) => {
   const log = context.mock.method(console, "error", () => {});
   for (const code of ["42703", "PGRST204"]) {

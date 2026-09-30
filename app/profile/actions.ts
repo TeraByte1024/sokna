@@ -114,6 +114,7 @@ export async function updateMyProfileAction(
     revalidatePath("/profile");
     revalidatePath("/members");
     revalidatePath("/admin/members");
+    revalidatePath("/admin/approvals");
     revalidatePath("/", "layout");
 
     return { ok: true, message: "회원 정보가 성공적으로 수정되었습니다." };
