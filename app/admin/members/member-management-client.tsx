@@ -20,6 +20,7 @@ import {
 
 type SortKey = "generation-high" | "generation-low" | "name" | "approved-desc" | "approved-asc";
 const collator = new Intl.Collator("ko");
+const koreanDate = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" });
 type FilterOption = { value: string; label: string };
 
 function MemberFilterDropdown({
@@ -256,7 +257,8 @@ export function MemberManagementClient({
                 <dt className="text-muted-foreground">세션</dt><dd>{member.part || "-"}</dd>
                 <dt className="text-muted-foreground">이메일</dt><dd className="break-all">{member.email || "-"}</dd>
                 <dt className="text-muted-foreground">마케팅 수신</dt><dd>{member.marketing_opt_in ? "동의" : "미동의"}</dd>
-                <dt className="text-muted-foreground">관리자 임명일</dt><dd>{admin ? new Date(admin.created_at).toLocaleDateString("ko-KR") : "-"}</dd>
+                <dt className="text-muted-foreground">가입 승인일</dt><dd>{member.approved_at ? koreanDate.format(new Date(member.approved_at)) : "-"}</dd>
+                {admin && <><dt className="text-muted-foreground">관리자 임명일</dt><dd>{koreanDate.format(new Date(admin.created_at))}</dd></>}
               </dl>
               <div className="flex flex-wrap justify-end gap-2 border-t pt-4">
                 <Button variant="outline" onClick={() => { setSelected(null); setEditing(member); }}>회원 정보 수정</Button>
