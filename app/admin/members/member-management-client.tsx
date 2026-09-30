@@ -18,7 +18,7 @@ import {
   type AdminRecord,
 } from "./actions";
 
-type SortKey = "generation-desc" | "generation-asc" | "name" | "approved-desc" | "approved-asc";
+type SortKey = "generation-high" | "generation-low" | "name" | "approved-desc" | "approved-asc";
 const collator = new Intl.Collator("ko");
 type FilterOption = { value: string; label: string };
 
@@ -73,7 +73,7 @@ export function MemberManagementClient({
   const [generation, setGeneration] = useState("");
   const [part, setPart] = useState("");
   const [adminFilter, setAdminFilter] = useState("all");
-  const [sort, setSort] = useState<SortKey>("generation-desc");
+  const [sort, setSort] = useState<SortKey>("generation-high");
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [processing, setProcessing] = useState<string | null>(null);
   const [editing, setEditing] = useState<AdminMember | null>(null);
@@ -82,7 +82,7 @@ export function MemberManagementClient({
   useEffect(() => setMembers(initialMembers), [initialMembers]);
   useEffect(() => setAdmins(initialAdmins), [initialAdmins]);
   const adminIds = useMemo(() => new Set(admins.map((admin) => admin.id)), [admins]);
-  const generations = useMemo(() => [...new Set(members.map((member) => member.generation).filter((value): value is number => value !== null))].sort((a, b) => b - a), [members]);
+  const generations = useMemo(() => [...new Set(members.map((member) => member.generation).filter((value): value is number => value !== null))].sort((a, b) => a - b), [members]);
   const parts = useMemo(() => [...new Set(members.map((member) => member.part?.trim()).filter((value): value is string => Boolean(value)))].sort(collator.compare), [members]);
 
   const activeFilterCount = Number(Boolean(generation)) + Number(Boolean(part)) + Number(adminFilter !== "all");
@@ -101,8 +101,16 @@ export function MemberManagementClient({
       const nameOrder = collator.compare(a.name, b.name);
       switch (sort) {
         case "name": return nameOrder;
-        case "generation-asc": return (a.generation ?? Infinity) - (b.generation ?? Infinity) || nameOrder;
-        case "generation-desc": return (b.generation ?? -Infinity) - (a.generation ?? -Infinity) || nameOrder;
+        case "generation-high":
+          if (a.generation === null && b.generation === null) return nameOrder;
+          if (a.generation === null) return 1;
+          if (b.generation === null) return -1;
+          return a.generation - b.generation || nameOrder;
+        case "generation-low":
+          if (a.generation === null && b.generation === null) return nameOrder;
+          if (a.generation === null) return 1;
+          if (b.generation === null) return -1;
+          return b.generation - a.generation || nameOrder;
         case "approved-asc": return (a.approved_at ?? "").localeCompare(b.approved_at ?? "") || nameOrder;
         case "approved-desc": return (b.approved_at ?? "").localeCompare(a.approved_at ?? "") || nameOrder;
       }
@@ -189,8 +197,8 @@ export function MemberManagementClient({
             <span>검색 결과 {visibleMembers.length}명</span>
             <MemberFilterDropdown label="회원 정렬" value={sort} onChange={(value) => setSort(value as SortKey)} className="w-auto min-w-36"
               options={[
-                { value: "generation-desc", label: "기수 높은 순" },
-                { value: "generation-asc", label: "기수 낮은 순" },
+                { value: "generation-high", label: "기수 높은 순" },
+                { value: "generation-low", label: "기수 낮은 순" },
                 { value: "name", label: "이름순" },
                 { value: "approved-desc", label: "최근 승인순" },
                 { value: "approved-asc", label: "오래된 승인순" },

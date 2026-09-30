@@ -1,9 +1,7 @@
 "use client";
 
-import React, { useRef, useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -19,7 +17,6 @@ import {
   ClipboardType,
   ChevronDown,
   ChevronUp,
-  Users,
   Trash2,
   Loader2,
   Check,
@@ -27,7 +24,6 @@ import {
   Link2,
   Plus,
   X,
-  Filter,
   ArrowUpDown,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -707,7 +703,7 @@ export function PerformerSelector({
                     }}
                     className="flex items-center justify-between cursor-pointer py-1.5"
                   >
-                    <span>기수 역순 (높은 기수부터)</span>
+                    <span>기수 역순 (낮은 기수부터)</span>
                     {sortField === "generation" && sortOrder === "desc" && (
                       <Check className="size-3.5 text-primary" />
                     )}
@@ -918,7 +914,7 @@ export function PerformerSelector({
                   ) : (
                     <tr>
                       <td colSpan={6} className="py-8 text-center text-muted-foreground text-xs">
-                        '{selectedSessionFilter}' 세션에 배정된 공연자가 없습니다.
+                        &apos;{selectedSessionFilter}&apos; 세션에 배정된 공연자가 없습니다.
                       </td>
                     </tr>
                   )}

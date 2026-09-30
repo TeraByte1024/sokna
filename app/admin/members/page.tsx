@@ -15,7 +15,7 @@ export default async function AdminMembersPage() {
       .from("users")
       .select("id, name, generation, part, email, status, applied_at, approved_at, marketing_opt_in")
       .eq("status", "approved")
-      .order("generation", { ascending: false })
+      .order("generation", { ascending: true, nullsFirst: false })
       .order("name", { ascending: true }),
     supabase
       .from("admins")
