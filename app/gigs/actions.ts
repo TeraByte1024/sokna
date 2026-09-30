@@ -6,6 +6,7 @@ import { getIsAdmin } from "@/lib/auth-admin";
 import { getGigViewer } from "@/lib/gig-viewer";
 import { SUPABASE_GIGS_TABLE } from "@/lib/supabase/gigs";
 import { getGigVisibility, isGigVisibility } from "@/lib/gig-visibility";
+import { processPendingPushNotifications } from "@/lib/push-notifications";
 import { mergeLinkedGigPerformers, planGigPerformerChanges, type IncomingGigPerformer } from "@/lib/gig-performer-reconcile";
 
 export type GigActionResult = { ok: true; gigId?: number } | { ok: false; error: string };
@@ -446,7 +447,7 @@ export async function submitGigRsvp(formData: FormData): Promise<{ ok: true } | 
     return { ok: false, error: "비공개 공연에는 참가 신청을 할 수 없습니다." };
   }
 
-  const { error } = await supabase.from("gig_rsvps").upsert(
+  const { data: savedRsvp, error } = await supabase.from("gig_rsvps").upsert(
     {
       gig_id: gigId,
       user_id: user.id,
@@ -456,11 +457,25 @@ export async function submitGigRsvp(formData: FormData): Promise<{ ok: true } | 
       updated_at: new Date().toISOString(),
     },
     { onConflict: "gig_id,user_id" }
-  );
+  ).select("id, updated_at").single();
 
-  if (error) {
+  if (error || !savedRsvp) {
     console.error("RSVP 제출 실패:", error);
     return { ok: false, error: "참가 신청 처리에 실패했습니다." };
+  }
+
+  if (status === "going") {
+    // The DB trigger creates the notification only when a request enters going.
+    // A repeated save has no matching event, so this dispatch is a no-op.
+    try {
+      await processPendingPushNotifications({
+        eventType: "gig_rsvp_requested",
+        eventKey: `gig-rsvp:${savedRsvp.id}:${new Date(savedRsvp.updated_at).toISOString()}`,
+      });
+    } catch (pushError) {
+      // The RSVP and notification are committed; cron retries pending delivery.
+      console.warn("공연 참여 신청 즉시 푸시 실패, 재시도 대기:", pushError);
+    }
   }
 
   revalidatePath(`/gigs/${gigId}`);

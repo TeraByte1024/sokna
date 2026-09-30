@@ -209,6 +209,8 @@ erDiagram
 
 > **Unique 제약조건**: `UNIQUE(gig_id, user_id)` (공연별 회원당 1개의 RSVP 레코드 유지)
 
+> **참여 신청 알림** (`20260930010000_notify_gig_rsvp_requested.sql`): INSERT에서 `status = going`이거나 UPDATE로 불참·미정에서 `going`으로 전환될 때만 AFTER 트리거가 관리자별 `notifications`를 같은 트랜잭션에 생성합니다. 세션·메모만 재저장해도 중복 생성하지 않습니다. 이벤트 키는 RSVP ID와 해당 전환의 `updated_at` UTC 밀리초 시각을 결합하며, 재신청 시 새 전환을 구분합니다. 푸시 미동의 관리자도 인앱 알림은 받습니다.
+
 > **참여 승인 처리** (`20260926000000_review_gig_rsvps.sql`):
 > - `going`은 참여 신청이며, 승인 여부는 같은 `(gig_id, user_id)`의 `performers` 존재로 판단합니다. 승인된 RSVP는 보존하고 관리자 대기 목록에서는 제외합니다.
 > - `review_gig_rsvp(p_gig_id bigint, p_rsvp_id bigint, p_updated_at timestamptz, p_decision text)`는 `approve` 시 쉼표로 구분된 신청 세션 전체를 공연자 `part`에 그대로 INSERT, `ignore` 시 RSVP를 DELETE합니다. 무시는 재신청 가능한 미선택 상태로 돌아갑니다.
@@ -329,7 +331,7 @@ erDiagram
 | :--- | :--- | :--- | :--- | :--- |
 | `id` | `uuid` | NO | `gen_random_uuid()` | 알림 식별자 |
 | `user_id` | `uuid` | YES | `auth.uid()` | FK → users(id), 삭제 시 SET NULL |
-| `event_type` | `text` | NO | `'legacy'` | member_approval_requested, member_approved, nomination_added, legacy |
+| `event_type` | `text` | NO | `'legacy'` | member_approval_requested, member_approved, gig_rsvp_requested, nomination_added, legacy |
 | `event_key` | `text` | NO | 임의 UUID 문자열 | 이벤트 식별자. 공통 생성 함수는 업무 이벤트 키를 명시 |
 | `title`, `body`, `link` | `text` | YES | null | 생성 시 확정한 제목·본문·내부 이동 경로 |
 | `created_at` | `timestamptz` | NO | `now()` | 인앱 알림 생성 일시 |
@@ -349,7 +351,7 @@ erDiagram
 
 읽음 상태는 푸시 발송 상태와 독립적입니다. 본인 알림은 수신 동의와 관계없이 알림함에 표시하며, `(user_id, created_at DESC, id DESC)` 목록 인덱스와 미확인 행의 `user_id` 부분 인덱스를 사용합니다. 기존 RLS와 GRANT는 변경하지 않습니다. 읽음 서버 액션은 로그인 계정과 요청 계정을 대조한 후 본인의 미확인 행에서 `read_at`만 수정합니다. 모두 읽음은 목록의 기준 시각까지로 제한합니다. [알림함 명세](../features/notification-inbox.md)를 참고하십시오.
 
-**공통 생성 경로**: 내부 DB 함수 `create_app_notification(user_id, event_type, event_key, context, notification_id?)`가 이벤트별 문구를 생성합니다. PUBLIC/anon/authenticated 직접 실행 권한은 없습니다. 완성된 가입 신청의 users 트리거, 후보곡 INSERT의 nominations 트리거, 관리자 전용 `approve_member_with_notification` RPC가 호출하여 업무 변경과 알림 생성을 같은 트랜잭션으로 저장합니다. 승인 RPC는 이미 처리된 사용자의 경우 false를 반환합니다.
+**공통 생성 경로**: 내부 DB 함수 `create_app_notification(user_id, event_type, event_key, context, notification_id?)`가 이벤트별 문구를 생성합니다. PUBLIC/anon/authenticated 직접 실행 권한은 없습니다. 완성된 가입 신청의 users 트리거, 공연 참여 신청의 gig_rsvps 트리거, 후보곡 INSERT의 nominations 트리거, 관리자 전용 `approve_member_with_notification` RPC가 호출하여 업무 변경과 알림 생성을 같은 트랜잭션으로 저장합니다. 승인 RPC는 이미 처리된 사용자의 경우 false를 반환합니다.
 
 **큐 이관**: `gig_notification_queue`와 `push_eligible`을 제거했습니다. 미처리 큐와 연결이 불명확한 구 임의 UUID 알림이 있으면 마이그레이션이 SQLSTATE 55000으로 중단됩니다. 미처리 큐는 이전 UUIDv5와 같은 ID로 이관해 기존 알림을 덮어쓰지 않습니다. 기존 sent는 accepted가 됩니다. 24시간 이상 지난 큐에서 신규 생성한 알림은 인앱에 보존하되 동의자의 푸시는 failed/retry_window_expired로 종결합니다. [전환 및 처리 명세](../features/notification-outbox.md)를 참고하십시오.
 

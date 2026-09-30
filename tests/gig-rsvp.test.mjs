@@ -49,7 +49,12 @@ function actionsFixture(options = {}) {
               : options.performer ?? null,
           error: table === "gigs" ? options.gigError ?? null : table === "users" ? options.profileError ?? null : options.performerError ?? null,
         }),
-        upsert: async (payload) => { writes.push({ table, payload }); return { error: null }; },
+        upsert: (payload) => {
+          writes.push({ table, payload });
+          return { select: () => ({ single: async () => ({
+            data: { id: 42, updated_at: payload.updated_at }, error: null,
+          }) }) };
+        },
       };
       return query;
     },
@@ -60,6 +65,7 @@ function actionsFixture(options = {}) {
     "next/cache": { revalidatePath: (value) => invalidations.push(value) },
     "@/lib/auth-admin": { getIsAdmin: async () => Boolean(options.admin) },
     "@/lib/supabase/server": { createClient: async () => client },
+    "@/lib/push-notifications": { processPendingPushNotifications: async () => ({ processedCount: 0, sentCount: 0 }) },
   });
   return { actions, writes, invalidations };
 }

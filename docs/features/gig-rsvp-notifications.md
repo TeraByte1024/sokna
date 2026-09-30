@@ -1,0 +1,52 @@
+# 공연 참여 신청 관리자 알림 명세서
+
+> 작성일자: 2026-09-30  
+> 상태: 구현 완료, DB 마이그레이션 적용 대기
+
+## 1. 배경 및 목적
+
+회원이 공연 참여를 신청해도 관리자는 회원 관리 화면에 직접 들어가기 전에는 새 신청을 알기 어렵다. 기존 계정 알림함과 푸시 outbox를 이용해 관리자가 승인 대상을 확인할 수 있게 한다.
+
+## 2. 세부 요구사항
+
+### 2.1 사용자 시나리오
+
+1. 승인된 회원이 공연에서 세션을 선택해 `going`으로 신청하면 관리자 계정마다 알림이 생성된다.
+2. 관리자는 공연명, 신청자 이름·기수, 신청 세션을 알림에서 확인하고 `/admin/members`의 참여 신청 현황으로 이동한다.
+3. 회원이 승인 대기 중 세션·메모를 수정하면 기존 신청을 유지하며 새 알림을 만들지 않는다.
+4. 불참·미정에서 `going`으로 다시 신청하거나, 관리자가 신청을 무시한 뒤 재신청하면 새 알림을 만든다.
+
+### 2.2 비즈니스 로직 및 제약사항
+
+- 기존 `submitGigRsvp`의 인증·가입 승인·공개 범위·세션 검증을 유지한다.
+- `gig_rsvps` INSERT/UPDATE의 `going` 진입에만 DB AFTER 트리거가 작동한다. 관리자 본인의 신청도 모든 관리자 계정에 알린다.
+- RSVP 저장과 알림 생성을 같은 트랜잭션으로 처리한다. 관리자별 계정 알림은 푸시 동의 여부와 관계없이 생성된다.
+- `(user_id, event_type, event_key)` 제약으로 관리자별 중복을 막는다. 이벤트 키는 RSVP ID와 `going` 진입 시의 `updated_at` UTC 시각이다.
+- 알림 본문은 내부 `create_app_notification` 함수에서만 조립한다. 클라이언트가 알림 수신자나 문구를 지정할 수 없다.
+
+## 3. 데이터 모델 변경
+
+- `notifications.event_type` 체크 제약에 `gig_rsvp_requested`를 추가한다.
+- `notify_gig_rsvp_requested()` 트리거 함수를 추가한다. 테이블 컬럼과 RLS는 변경하지 않는다.
+- 마이그레이션: `supabase/migrations/20260930010000_notify_gig_rsvp_requested.sql`. 기존 RSVP를 소급 발송하지 않는다.
+
+## 4. API / Server Action 명세
+
+### `submitGigRsvp(formData)`
+
+- 경로: `app/gigs/actions.ts`.
+- 성공 응답은 기존 `{ ok: true }`를 유지한다.
+- 저장된 RSVP의 ID·`updated_at`으로 해당 `going` 이벤트만 `processPendingPushNotifications`에 전달한다. 기존 `going` 신청을 재저장하면 대응 이벤트가 없으므로 발송하지 않는다.
+- 즉시 발송 오류는 RSVP 성공 응답을 바꾸지 않는다. pending outbox는 기존 cron 재시도로 처리한다.
+- 운영에 SQL 마이그레이션과 서버 코드를 함께 적용해야 한다.
+
+## 5. UI / UX
+
+- 신청 다이얼로그와 관리자 참여 신청 목록은 기존 UI를 사용한다.
+- 관리자 알림함 항목의 링크는 `/admin/members`이다.
+
+## 6. 검증
+
+- 기존 RSVP 회귀 테스트와 TypeScript·Lint 정적 검증을 수행한다.
+- 실제 기기 푸시 발송 및 발송 테스트는 수행하지 않는다.
+
