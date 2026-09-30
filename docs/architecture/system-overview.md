@@ -37,7 +37,6 @@ c:\dev\sokna\
 │   │   ├── new/                   # 공연 등록 (관리자)
 │   │   ├── actions.ts             # 공연 생성/관리 Server Actions
 │   │   └── page.tsx               # 공연 목록 페이지
-│   ├── protected/                 # 보호된 인증 전용 라우트
 │   ├── globals.css                # 글로벌 CSS 및 Tailwind 설정
 │   └── layout.tsx                 # 루트 레이아웃 (Theme, Fonts, Header, Footer)
 ├── components/                    # 재사용 가능한 UI 컴포넌트
