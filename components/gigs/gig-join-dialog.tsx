@@ -12,20 +12,8 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Calendar,
-  Clock,
-  MapPin,
-  CheckCircle2,
-  XCircle,
-  HelpCircle,
-  Check,
-  Loader2,
-  X,
-  UserCheck,
-  Lock,
-  Plus,
-} from "lucide-react";
+import { Calendar, Clock, MapPin, Check, Loader2, X, UserCheck, Lock, Plus } from "lucide-react";
+import { PositiveStatusIcon as CheckCircle2, NegativeStatusIcon as XCircle, UnknownStatusIcon as HelpCircle } from "@/components/ui/status-icons";
 import { toast } from "sonner";
 
 interface GigJoinDialogProps {

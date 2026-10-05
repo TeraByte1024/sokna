@@ -96,6 +96,10 @@ for (const [actionName, operation] of [["createGig", "insert"], ["updateGig", "u
       assert.equal(write.payload.is_public, visibility === "public");
       if (operation === "update") assert.deepEqual(write.filters, [["id", 42]]);
       assert.ok(fixture.invalidations.includes("/gigs"));
+      if (actionName === "updateGig") {
+        assert.ok(fixture.invalidations.includes("/admin/gigs"));
+        assert.ok(fixture.invalidations.includes("/admin/gigs/42"));
+      }
     }
   });
 

@@ -1,50 +1,13 @@
-import { Suspense } from "react";
-import { SiteLayout } from "@/components/site-layout";
-import { PageContainer } from "@/components/page-container";
-import { GigFormSkeleton } from "@/components/gigs/gig-loading-skeleton";
-import { GigEditInner } from "./gig-edit-inner";
-import { getGigRow } from "@/lib/gig-server-data";
+﻿import { notFound, redirect } from "next/navigation";
 import { getIsAdmin } from "@/lib/auth-admin";
 import type { Metadata } from "next";
 
-interface PageProps {
-  params: Promise<{ id: string }>;
-}
+export const metadata: Metadata = { title: "공연 관리" };
 
-export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+export default async function GigEditPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const numericId = Number(id);
-
-  if (isNaN(numericId)) {
-    return {
-      title: "공연 수정하기",
-    };
-  }
-
-  if (!(await getIsAdmin())) {
-    return { title: "공연 수정하기 | 소리로 크는 나무" };
-  }
-  const { data: gig } = await getGigRow(numericId);
-
-  return {
-    title: gig?.title ? `${gig.title} 수정 | 소리로 크는 나무` : "공연 수정하기 | 소리로 크는 나무",
-    description: "공연 정보 및 세션 명단 수정",
-  };
-}
-
-async function GigEditLoader({ params }: PageProps) {
-  const { id } = await params;
-  return <GigEditInner gigId={id} />;
-}
-
-export default function GigEditPage({ params }: PageProps) {
-  return (
-    <SiteLayout>
-      <PageContainer className="p-4 sm:p-10">
-        <Suspense fallback={<GigFormSkeleton label="공연 수정 화면을 불러오는 중…" />}>
-          <GigEditLoader params={params} />
-        </Suspense>
-      </PageContainer>
-    </SiteLayout>
-  );
+  const gigId = Number(id);
+  if (!Number.isSafeInteger(gigId) || gigId <= 0) notFound();
+  if (!(await getIsAdmin())) redirect(`/gigs/${gigId}`);
+  redirect(`/admin/gigs/${gigId}#gig-basic-info`);
 }

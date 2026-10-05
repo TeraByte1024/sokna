@@ -35,6 +35,7 @@ import {
   ArrowLeft,
   Calendar,
   Check,
+  Save,
   Globe,
   ImageIcon,
   ListMusic,
@@ -91,6 +92,10 @@ interface GigFormProps {
   gig?: GigFormData;
   initialPerformers?: Performer[];
   initialSetlists?: SetlistItem[];
+  embedded?: boolean;
+  afterBasicInfo?: React.ReactNode;
+  performerNotes?: Record<string, string>;
+  performerNotesLoadError?: boolean;
 }
 
 function formatDeadlineInput(value?: string | null): string {
@@ -701,6 +706,10 @@ export function GigForm({
   gig,
   initialPerformers = [],
   initialSetlists = [],
+  embedded = false,
+  afterBasicInfo,
+  performerNotes,
+  performerNotesLoadError,
 }: GigFormProps) {
   const supabase = createClient();
   const [pending, setPending] = useState(false);
@@ -756,7 +765,7 @@ export function GigForm({
   const [globalSessionOrder, setGlobalSessionOrder] = useState<string[] | null>(null);
 
   // 6. 페이지 이탈 방지 확인 팝업 (isDirty 감지 및 이벤트 인터셉트)
-  const backLink = mode === "create" ? "/gigs" : `/gigs/${gig?.id}`;
+  const backLink = mode === "create" ? "/gigs" : embedded ? "/admin/gigs" : `/gigs/${gig?.id}`;
 
   // 작성 중 변경 사항 여부 (isDirty) 감지
   const isDirty = useMemo(() => {
@@ -1446,7 +1455,7 @@ export function GigForm({
             ? result.gigId
               ? `/gigs/${result.gigId}`
               : "/gigs"
-            : `/gigs/${gig?.id}`;
+            : embedded ? `/admin/gigs/${gig?.id}` : `/gigs/${gig?.id}`;
 
         window.location.href = targetUrl;
         return;
@@ -1474,7 +1483,8 @@ export function GigForm({
     mode === "create" ? "공연 등록" : "수정 완료";
 
   return (
-    <div className="w-full max-w-3xl mx-auto space-y-6">
+    <div className={embedded ? "w-full space-y-6" : "w-full max-w-3xl mx-auto space-y-6"}>
+      {!embedded && <>
       {/* 상단 네비게이션 */}
       <div className="flex items-center justify-between">
         <Link
@@ -1495,6 +1505,7 @@ export function GigForm({
         </p>
       </div>
 
+      </>}
       <form
         className="w-full space-y-8"
         onSubmit={handleFormSubmit}
@@ -1517,7 +1528,7 @@ export function GigForm({
         )}
 
         {/* 1. 기본 정보 섹션 */}
-        <Card className="border-border/70 shadow-sm overflow-hidden">
+        <Card id={embedded ? "gig-basic-info" : undefined} className="scroll-mt-24 border-border/70 shadow-sm overflow-hidden">
           <CardHeader className="bg-muted/30 pb-4 border-b border-border/60">
             <CardTitle className="text-base font-bold flex items-center gap-2">
               <Music className="size-4 text-primary" />
@@ -1946,7 +1957,8 @@ export function GigForm({
         </Card>
 
         {/* 2. SETLIST 관리 섹션 */}
-        <Card className="border-border/70 shadow-sm overflow-hidden">
+        {afterBasicInfo}
+        <Card id={embedded ? "gig-setlist" : undefined} className="scroll-mt-24 border-border/70 shadow-sm overflow-hidden">
           <CardHeader className="bg-muted/30 pb-4 border-b border-border/60">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
@@ -2172,7 +2184,7 @@ export function GigForm({
         </Card>
 
         {/* 3. 공연자 관리 섹션 */}
-        <Card className="border-border/70 shadow-sm overflow-hidden">
+        <Card id={embedded ? "gig-performers" : undefined} className="scroll-mt-24 border-border/70 shadow-sm overflow-hidden">
           <CardHeader className="bg-muted/30 pb-4 border-b border-border/60">
             <div className="flex items-center justify-between">
               <div>
@@ -2193,6 +2205,8 @@ export function GigForm({
               setSearch={setSearch}
               results={searchResults}
               selected={performers}
+              performerNotes={performerNotes}
+              performerNotesLoadError={performerNotesLoadError}
               onAdd={addPerformer}
               onRemove={removePerformer}
               onAddDummy={addDummyPerformer}
@@ -2233,7 +2247,7 @@ export function GigForm({
               </>
             ) : (
               <>
-                <Check className="size-4 mr-1.5" /> {submitButtonText}
+                <Save className="size-4 mr-1.5" /> {submitButtonText}
               </>
             )}
           </Button>

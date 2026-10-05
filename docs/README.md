@@ -88,6 +88,8 @@ docs/
 | 분류 | 문서명 | 주요 내용 |
 | :--- | :--- | :--- |
 | **Feature** | [admin-console.md](./features/admin-console.md) | 관리자 메뉴와 공연 신청 검토 상태 |
+| **Feature** | [ui-icons.md](./features/ui-icons.md) | 공통 상태 아이콘과 기능별 아이콘 통일 규칙 |
+| **Feature** | [admin-performer-song-responses.md](./features/admin-performer-song-responses.md) | 공연자·세션별 곡 응답·메모, 곡 상세 바로가기, 공연 수정 통합 |
 | **Feature** | [roles-and-permissions.md](./features/roles-and-permissions.md) | **방문자 / 일반 회원 / 세션 참여자 / 관리자별 기능 매트릭스** |
 | **Feature** | [authentication.md](./features/authentication.md) | Supabase Auth, 쿠키 기반 세션 갱신, 관리자 권한 판별 |
 | **Feature** | [login-methods.md](./features/login-methods.md) | Google·카카오 계정 연결·해제, 마지막 수단 보호 및 제공자 로고 |

@@ -388,6 +388,8 @@ export async function updateGig(formData: FormData): Promise<GigActionResult> {
   revalidatePath(`/gigs/${gigId}`);
   revalidatePath(`/gigs/${gigId}/nominations`);
   revalidatePath(`/gigs/${gigId}/edit`);
+  revalidatePath("/admin/gigs");
+  revalidatePath(`/admin/gigs/${gigId}`);
   revalidatePath("/");
 
   return { ok: true, gigId };

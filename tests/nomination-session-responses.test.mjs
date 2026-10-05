@@ -6,6 +6,7 @@ import { test } from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import ts from "typescript";
 import * as nomination from "../lib/nomination.ts";
+import * as statusIcons from "../components/ui/status-icons.ts";
 
 const performers = [
   { id: 1, userId: "keyboard-user", name: "건반 참여자", part: "건반" },
@@ -35,6 +36,7 @@ function drawerFixture() {
       },
     },
     "@/lib/nomination": nomination,
+    "@/components/ui/status-icons": statusIcons,
     "@/lib/supabase/client": { createClient: () => ({}) },
     "@/lib/utils": { cn: (...classes) => classes.filter(Boolean).join(" ") },
     "@/components/ui/button": { Button: "button" },

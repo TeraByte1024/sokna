@@ -27,16 +27,28 @@ interface GigEditFormProps {
   };
   initialPerformers: Performer[];
   initialSetlists: SetlistItem[];
+  embedded?: boolean;
+  afterBasicInfo?: React.ReactNode;
+  performerNotes?: Record<string, string>;
+  performerNotesLoadError?: boolean;
 }
 
 export function GigEditForm({
   gig,
   initialPerformers,
   initialSetlists,
+  embedded = false,
+  afterBasicInfo,
+  performerNotes,
+  performerNotesLoadError,
 }: GigEditFormProps) {
   return (
     <GigForm
       mode="edit"
+      embedded={embedded}
+      afterBasicInfo={afterBasicInfo}
+      performerNotes={performerNotes}
+      performerNotesLoadError={performerNotesLoadError}
       gig={{
         id: gig.id,
         title: gig.title,

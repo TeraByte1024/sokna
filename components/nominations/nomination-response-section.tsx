@@ -12,17 +12,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { saveNominationResponsesAction } from "@/app/gigs/[id]/nominations/actions";
-import {
-	CheckCircle2,
-	HelpCircle,
-	XCircle,
-	MessageSquare,
-	Loader2,
-	Save,
-	Pencil,
-	X,
-	Layers,
-} from "lucide-react";
+import { MessageSquare, Loader2, Save, Pencil, X } from "lucide-react";
+import { PositiveStatusIcon as CheckCircle2, UnknownStatusIcon as HelpCircle, NegativeStatusIcon as XCircle } from "@/components/ui/status-icons";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -59,7 +50,7 @@ export function NominationResponseSection({
 				requiredParts,
 				recommendedVocals,
 				responses,
-			} as any,
+			},
 			performers,
 			currentUserId,
 		);

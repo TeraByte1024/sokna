@@ -7,7 +7,7 @@
 - **목적**:
   - 공연 공식 일정, 진행 상태, 대형 포스터, 확정된 정식 SETLIST(곡명, 아티스트, 연주자 명단), 프로필 사진 위주의 공연자 명단을 표시.
   - 히어로 섹션과 모바일 하단 플로팅 바에서 `공연 참가`(`/gigs/[id]/join`) 및 `선곡회의`(`/gigs/[id]/nominations`)로 즉시 이동할 수 있는 핵심 CTA 제공.
-  - 상단 액션 바에서 `공연 공유`(Web Share API 및 클립보드 복사) 및 관리자용 `공연 수정`(`/gigs/[id]/edit`) 버튼 제공.
+  - 상단 액션 바에서 `공연 공유`(Web Share API 및 클립보드 복사) 및 관리자용 `공연 수정`(`/admin/gigs/[id]`) 버튼 제공. 셋리스트가 없을 때 `셋리스트 등록하기`는 같은 관리자 페이지의 `#gig-setlist` 섹션으로 이동.
 
 ---
 
@@ -69,7 +69,7 @@
 1. **상단 액션 바**:
    - `[← 공연 목록으로]` 뒤로가기
    - `[공연 공유]` (`ShareGigButton`): 모바일 Web Share API 지원 시 시스템/카카오톡 공유 시트 호출, 미지원/PC 환경에서는 클립보드 복사 처리
-   - `[공연 수정]`: 관리자 전용 (`/gigs/:id/edit`)
+   - `[공연 수정]`: 관리자 전용 (`/admin/gigs/:id`)
 2. **히어로 섹션 (Hero Section - 메인 CTA)**:
    - 포스터 이미지를 대폭 확대하고, 데스크톱에서 우측 `[공연 참여] | [선곡회의]` 버튼 하단 라인까지 포스터 높이가 자연스럽게 일치하도록 정렬(`md:items-stretch`, `md:self-stretch`).
    - 주요 정보를 **세로 2~3행**으로 깔끔하게 배치 (선곡회의 정보는 다이얼로그에만 집중 노출):
@@ -96,7 +96,7 @@
 6. **LINEUP 섹션 (2순위)**:
    - 세로로 긴 직사각형 카드 형태(`grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5`).
    - 프로필 사진: **3:4 비율의 모서리가 둥근 직사각형**(`rounded-xl aspect-[3/4] object-cover`).
-   - 각 카드마다 이번 공연 기준 배정된 세션(파트) 배지 및 기수 표기.
+   - 각 카드마다 이번 공연 기준 배정된 세션 배지 및 기수 표기.
    - **프로필 사진 수정 권한**:
      - **일반 참여자**: 로그인한 본인의 카드(`p.user_id === currentUserId`)에만 `[나]` 식별 배지와 함께 사진 등록/변경/삭제 버튼이 노출되며, **오직 자신의 프로필 사진만을 수정/삭제**할 수 있습니다 (타 참여자 카드에는 수정 버튼 미노출 및 서버 액션 차단).
      - **관리자(Admin)**: 모든 참여자 카드에 사진 등록/변경/삭제 버튼이 노출되어 일괄 관리할 수 있습니다 (`updatePerformerPhoto`).
@@ -112,4 +112,4 @@
 - 공연 액션 관리: [components/gigs/gig-detail-actions.tsx](file:///d:/dev/sokna/components/gigs/gig-detail-actions.tsx)
 - 공연 참가 신청 다이얼로그: [components/gigs/gig-join-dialog.tsx](file:///d:/dev/sokna/components/gigs/gig-join-dialog.tsx)
 - 공연 공유 버튼: [components/gigs/share-gig-button.tsx](file:///d:/dev/sokna/components/gigs/share-gig-button.tsx)
-- 공연 수정 페이지: [app/gigs/[id]/edit/page.tsx](file:///d:/dev/sokna/app/gigs/[id]/edit/page.tsx)
+- 공연 관리 및 수정 페이지: [app/admin/gigs/[id]/page.tsx](../../app/admin/gigs/%5Bid%5D/page.tsx)

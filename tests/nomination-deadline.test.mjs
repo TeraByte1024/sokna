@@ -61,7 +61,7 @@ const linkMock = { __esModule: true, default: ({ children, ...props }) => React.
 const uiMocks = {
   "next/link": linkMock,
   "next/dynamic": { __esModule: true, default: () => () => null },
-  "next/navigation": { useParams: () => ({ id: "1" }), useRouter: () => ({ push() {}, refresh() {} }) },
+  "next/navigation": { useParams: () => ({ id: "1" }), useRouter: () => ({ push() {}, refresh() {} }), useSearchParams: () => new URLSearchParams() },
   "@/app/gigs/[id]/nominations/actions": { updateNominationViewAction() {} },
   sonner: { toast: { success() {}, error() {} } },
 };
@@ -78,6 +78,22 @@ function renderPanel({ admin = false, meeting = closedMeeting, deadline = null }
     initialLastViewedTimestamp: null,
   }));
 }
+
+test("song deep links open only a song loaded for the current gig", () => {
+  const song = { id: 10, gigId: 1, title: "직접 연결 곡", artist: "", requiredParts: [], recommendedVocals: [], responses: [], links: [], createdAt: "2026-10-05", updatedAt: "2026-10-05", createdBy: null };
+  for (const [query, opens] of [["song=10", true], ["song=99", false], ["song=invalid", false], ["", false]]) {
+    const { NominationPanel } = loadSource("components/nominations/nomination-panel.tsx", {
+      ...uiMocks,
+      "next/navigation": { ...uiMocks["next/navigation"], useSearchParams: () => new URLSearchParams(query) },
+      "next/dynamic": { __esModule: true, default: () => ({ song }) => song ? React.createElement("div", { "data-song-detail": song.id }, song.title) : null },
+    });
+    const html = renderToStaticMarkup(React.createElement(NominationPanel, {
+      initialIsAdmin: true, initialSongs: [song], initialUserId: "admin", initialPerformer: null,
+      initialPerformers: [], initialGigInfo: { title: "공연", meetingDate: "" }, initialLastViewedTimestamp: null,
+    }));
+    assert.equal(html.includes('data-song-detail="10"'), opens, query);
+  }
+});
 
 test("deadline details appear only when an explicit deadline is set", () => {
   for (const meeting of [openMeeting, closedMeeting]) {

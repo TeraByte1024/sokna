@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AlertCircle, CheckCircle2, KeyRound, Loader2, Mail } from "lucide-react";
+import { AlertCircle, KeyRound, Loader2, Mail } from "lucide-react";
+import { PositiveStatusIcon as CheckCircle2 } from "@/components/ui/status-icons";
 import { GoogleLogo } from "@/components/google-logo";
 import { KakaoLogo } from "@/components/kakao-logo";
 import { getSocialProviderLabel, isSocialProvider, type SocialProvider } from "@/lib/auth/social-providers";

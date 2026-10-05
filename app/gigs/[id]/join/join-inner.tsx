@@ -21,20 +21,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Calendar,
-  Clock,
-  MapPin,
-  Music,
-  CheckCircle2,
-  XCircle,
-  HelpCircle,
-  ChevronDown,
-  Check,
-  Loader2,
-  ArrowLeft,
-  ExternalLink,
-} from "lucide-react";
+import { Calendar, Clock, MapPin, Music, ChevronDown, Check, Loader2, ArrowLeft } from "lucide-react";
+import { PositiveStatusIcon as CheckCircle2, NegativeStatusIcon as XCircle, UnknownStatusIcon as HelpCircle } from "@/components/ui/status-icons";
 import { toast } from "sonner";
 
 interface JoinInnerProps {

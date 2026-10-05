@@ -79,3 +79,7 @@ c:\dev\sokna\
 ### 4.2 데이터 변경 및 캐싱 전략 (Mutations & Caching)
 - 데이터 변경은 Next.js **Server Actions**(`app/gigs/actions.ts`, `app/gigs/[id]/nominations/actions.ts`)를 통해 수행됩니다.
 - 변경 완료 후 `revalidatePath('/path')`를 호출하여 Next.js 서버 캐시를 무효화하고 최신 데이터를 클라이언트에 전달합니다.
+
+### 4.3 공통 UI 아이콘
+
+- 응답·참가·완료 상태는 `components/ui/status-icons.ts`의 가능·불가능은 원 없이, 미응답은 원 안의 물음표로 표시하는 공통 Lucide 선형 아이콘을 재사용합니다. 관리자 응답 표는 곡 상세와 같은 둥근 직사각형 배지로 한 번 감쌉니다. 메모·비고, 수정, 삭제, 저장 등 같은 기능은 [공통 기능 아이콘 명세](../features/ui-icons.md)의 매핑을 따릅니다.

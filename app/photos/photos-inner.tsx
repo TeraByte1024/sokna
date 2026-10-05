@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Camera,
   Plus,
-  Edit2,
+  Pencil,
   Trash2,
   X,
   Loader2,
@@ -260,7 +260,7 @@ export function PhotosInner({ initialPhotos, isAdmin }: PhotosInnerProps) {
                         className="p-1.5 text-slate-200 hover:text-indigo-400 rounded-md hover:bg-slate-800 transition-colors"
                         title="수정"
                       >
-                        <Edit2 className="size-3.5" />
+                        <Pencil className="size-3.5" />
                       </button>
                       <button
                         onClick={(e) => handleDelete(photo.id, e)}

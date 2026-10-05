@@ -30,19 +30,8 @@ import {
   usePushNotificationDevice,
 } from "@/components/push-notification-settings";
 import { cn } from "@/lib/utils";
-import {
-  User,
-  Mail,
-  Sparkles,
-  ShieldCheck,
-  Crown,
-  Clock,
-  Loader2,
-  LogOut,
-  CheckCircle2,
-  AlertCircle,
-  Bell,
-} from "lucide-react";
+import { User, Mail, Sparkles, ShieldCheck, Crown, Clock, Loader2, LogOut, AlertCircle, Bell } from "lucide-react";
+import { PositiveStatusIcon as CheckCircle2 } from "@/components/ui/status-icons";
 
 export interface ProfileUser {
   id: string;

@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Users,
   Plus,
-  Edit2,
+  Pencil,
   Trash2,
   X,
   Loader2,
@@ -14,7 +14,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import {
   addMemberAction,
   updateMemberAction,
@@ -232,7 +231,7 @@ export function MembersInner({ initialMembers, isAdmin }: MembersInnerProps) {
                             className="p-1 text-slate-400 hover:text-indigo-600 rounded-md hover:bg-slate-200 dark:hover:bg-zinc-700"
                             title="수정"
                           >
-                            <Edit2 className="size-3" />
+                            <Pencil className="size-3" />
                           </button>
                           <button
                             onClick={() => handleDelete(member.id)}

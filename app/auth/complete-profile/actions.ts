@@ -36,7 +36,7 @@ export async function completeProfileAction(
 
     const trimmedPart = part.trim();
     if (!trimmedPart) {
-      return { ok: false, error: "세션(파트)을 입력해 주세요." };
+      return { ok: false, error: "세션을 입력해 주세요." };
     }
 
     const appliedAt = new Date().toISOString();

@@ -10,15 +10,8 @@ import {
 } from "@/lib/nomination";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-	X,
-	Users,
-	CheckCircle2,
-	HelpCircle,
-	XCircle,
-	MessageSquare,
-	Mic,
-} from "lucide-react";
+import { X, Users, MessageSquare, Mic } from "lucide-react";
+import { PositiveStatusIcon as CheckCircle2, UnknownStatusIcon as HelpCircle, NegativeStatusIcon as XCircle } from "@/components/ui/status-icons";
 import { cn } from "@/lib/utils";
 
 interface SessionResponsesDialogProps {

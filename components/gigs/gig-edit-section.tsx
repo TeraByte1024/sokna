@@ -6,13 +6,16 @@ import { getIsAdmin } from "@/lib/auth-admin";
 import { getGigVisibility } from "@/lib/gig-visibility";
 import type { Performer } from "@/components/performer-selector";
 
-interface GigEditInnerProps {
+interface GigEditSectionProps {
   gigId: string;
+  performerNotes: Record<string, string>;
+  performerNotesLoadError?: boolean;
+  afterBasicInfo?: React.ReactNode;
 }
 
-export async function GigEditInner({ gigId }: GigEditInnerProps) {
+export async function GigEditSection({ gigId, performerNotes, performerNotesLoadError, afterBasicInfo }: GigEditSectionProps) {
   const numericId = Number(gigId);
-  if (isNaN(numericId)) {
+  if (!Number.isSafeInteger(numericId) || numericId <= 0) {
     notFound();
   }
 
@@ -58,10 +61,15 @@ export async function GigEditInner({ gigId }: GigEditInnerProps) {
     .order("order_num", { ascending: true })
     .order("created_at", { ascending: true });
 
-  const [{ data: performerRows }, { data: setlistRows }] = await Promise.all([
+  const [{ data: performerRows, error: performerError }, { data: setlistRows, error: setlistError }] = await Promise.all([
     performerQuery,
     setlistQuery,
   ]);
+
+  if (performerError || setlistError) {
+    console.error("공연 수정 정보 조회 실패:", performerError || setlistError);
+    return <p role="alert" className="rounded-xl border border-destructive/30 p-4 text-sm text-destructive">수정할 공연자 또는 SETLIST 정보를 불러오지 못했습니다. 새로고침해 주세요.</p>;
+  }
 
   const initialPerformers: Performer[] = (performerRows ?? []).map((row) => {
     const rawUser = row.users as {
@@ -95,6 +103,10 @@ export async function GigEditInner({ gigId }: GigEditInnerProps) {
 
   return (
     <GigEditForm
+      embedded
+      afterBasicInfo={afterBasicInfo}
+      performerNotes={performerNotes}
+      performerNotesLoadError={performerNotesLoadError}
       gig={{
         id: gigRow.id,
         title: gigRow.title,

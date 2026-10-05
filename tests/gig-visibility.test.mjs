@@ -147,7 +147,7 @@ for (const viewer of viewerCases) {
       assert.equal(html.includes(gig.location), allowed);
       assert.equal(html.includes("공연 수록곡"), allowed);
       assert.equal(html.includes("출연 회원"), allowed);
-      assert.equal(html.includes(`href="/gigs/${gig.id}/edit"`), allowed && Boolean(viewer.options.admin));
+      assert.equal(html.includes(`href="/admin/gigs/${gig.id}"`), allowed && Boolean(viewer.options.admin));
       if (allowed) {
         assert.doesNotMatch(html, /공연입니다/);
         assert.equal(html.includes("회원 공개</div>"), [2, 4].includes(gig.id));

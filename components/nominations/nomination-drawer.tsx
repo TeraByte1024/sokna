@@ -16,25 +16,8 @@ import {
 	type NominationResponseStatus,
 	type NominationTimestamp,
 } from "@/lib/nomination";
-import {
-	X,
-	Music2,
-	User,
-	CalendarDays,
-	History,
-	FileText,
-	Quote,
-	Layers,
-	Play,
-	Pencil,
-	Link2,
-	CheckCircle2,
-	HelpCircle,
-	XCircle,
-	Users,
-	MessageSquare,
-	Star,
-} from "lucide-react";
+import { X, Music2, User, CalendarDays, History, FileText, Quote, Layers, Play, Pencil, Link2, Users, MessageSquare, Star } from "lucide-react";
+import { PositiveStatusIcon as CheckCircle2, UnknownStatusIcon as HelpCircle, NegativeStatusIcon as XCircle } from "@/components/ui/status-icons";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { createClient } from "@/lib/supabase/client";

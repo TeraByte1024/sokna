@@ -25,12 +25,15 @@ import {
   Plus,
   X,
   ArrowUpDown,
+  MessageSquare,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { PerformerMappingDialog } from "@/components/gigs/performer-mapping-dialog";
 import { SessionAssignmentDialog } from "@/components/gigs/session-assignment-dialog";
 import { PerformerSessionSearch } from "@/components/gigs/performer-session-search";
+import { PerformerDetailsDialog } from "@/components/gigs/performer-details-dialog";
+import { PerformerDeleteDialog } from "@/components/gigs/performer-delete-dialog";
 
 export interface Performer {
   performerId?: number;
@@ -59,6 +62,8 @@ interface Props {
   onMapPerformer?: (index: number, mappedUser: Performer, oldName: string) => void;
   onUpdatePart: (index: number, part: string) => void;
   onUpdatePhoto?: (index: number, photoUrl: string) => void;
+  performerNotes?: Record<string, string>;
+  performerNotesLoadError?: boolean;
 }
 
 export type PerformerSortField = "name" | "generation" | "default";
@@ -76,8 +81,13 @@ export function PerformerSelector({
   onBulkAddPerformers,
   onMapPerformer,
   onUpdatePart,
+  performerNotes,
+  performerNotesLoadError = false,
 }: Props) {
   const supabase = createClient();
+  const [detailIndex, setDetailIndex] = useState<number | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ performer: Performer; index: number } | null>(null);
+  const detailPerformer = detailIndex === null ? null : selected[detailIndex];
   const [showPasteBox, setShowPasteBox] = useState(false);
   const [pasteText, setPasteText] = useState("");
   const [dummyName, setDummyName] = useState("");
@@ -628,7 +638,7 @@ export function PerformerSelector({
               <button
                 type="button"
                 onClick={() => setIsAddSessionDialogOpen(true)}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20 transition-all shrink-0 cursor-pointer shadow-2xs"
+                className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20 transition-all shrink-0 cursor-pointer shadow-2xs"
                 title="새 세션 추가 및 인원 할당"
               >
                 <Plus className="size-3" />
@@ -647,7 +657,7 @@ export function PerformerSelector({
                     <th
                       scope="col"
                       onClick={() => handleSortHeader("default")}
-                      className="px-3 py-2.5 w-10 text-center font-mono cursor-pointer hover:bg-muted/80 hover:text-foreground select-none transition-colors"
+                      className="hidden sm:table-cell px-3 py-2.5 w-10 text-center font-mono cursor-pointer hover:bg-muted/80 hover:text-foreground select-none transition-colors"
                       title="등록순 정렬"
                     >
                       #
@@ -676,7 +686,7 @@ export function PerformerSelector({
                     <th
                       scope="col"
                       onClick={() => handleSortHeader("generation")}
-                      className="px-3 py-2.5 w-16 text-center cursor-pointer hover:bg-muted/80 hover:text-foreground select-none transition-colors group"
+                      className="px-2 sm:px-3 py-2.5 w-16 text-center cursor-pointer hover:bg-muted/80 hover:text-foreground select-none transition-colors group"
                       title="기수순 정렬 (클릭하여 오름/내림차순 전환)"
                     >
                       <div className="flex items-center justify-center gap-1">
@@ -694,15 +704,17 @@ export function PerformerSelector({
                         )}
                       </div>
                     </th>
-                    <th scope="col" className="px-3 py-2.5 min-w-[150px]">세션 (파트)</th>
-                    <th scope="col" className="px-3 py-2.5 w-16 text-center"></th>
-                    <th scope="col" className="px-3 py-2.5 w-10 text-center"></th>
+                    <th scope="col" className="px-3 py-2.5 sm:min-w-[150px]">세션 (파트)</th>
+                    {performerNotes && <th scope="col" className="px-3 py-2.5">비고</th>}
+                    <th scope="col" className="hidden sm:table-cell px-3 py-2.5 w-16 text-center"></th>
+                    <th scope="col" className="hidden sm:table-cell px-3 py-2.5 w-10 text-center"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/60">
                   {displayedPerformers.length > 0 ? (
                     displayedPerformers.map(({ performer: p, originalIndex: idx }, renderIdx) => {
                       const linked = isPerformerLinked(p);
+                      const note = linked && p.id ? performerNotes?.[p.id]?.trim() : "";
                       const parts = (p.part || "")
                         .split(",")
                         .map((s) => s.trim())
@@ -711,24 +723,28 @@ export function PerformerSelector({
                       return (
                         <tr
                           key={p.performerId ?? p.email ?? p.id ?? `${p.name}-${idx}`}
-                          className={`transition-colors ${
+                          onClick={(event) => {
+                            if ((event.target as HTMLElement).closest("button, input, a")) return;
+                            setDetailIndex(idx);
+                          }}
+                          className={`cursor-pointer transition-colors ${
                             linked ? "hover:bg-muted/20" : "bg-amber-500/5 hover:bg-amber-500/10"
                           }`}
                         >
                           {/* 1. 번호 */}
-                          <td className="px-3 py-2 text-center font-mono text-muted-foreground">
+                          <td className="hidden sm:table-cell px-3 py-2 text-center font-mono text-muted-foreground">
                             {renderIdx + 1}
                           </td>
 
                           {/* 2. 이름 */}
                           <td className="px-3 py-2 font-semibold text-foreground">
                             <span className={linked ? "" : "text-amber-800 dark:text-amber-200"}>
-                              {p.name}
+                              <button type="button" className="text-left hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`${p.name} 상세 정보`} onClick={() => setDetailIndex(idx)}>{p.name}</button>
                             </span>
                           </td>
 
                           {/* 3. 기수 */}
-                          <td className="px-3 py-2 text-center">
+                          <td className="px-2 sm:px-3 py-2 text-center">
                             {p.generation ? (
                               <span className="inline-flex items-center justify-center min-w-[38px] px-1.5 py-0.5 text-[11px] font-bold rounded-md bg-secondary text-secondary-foreground border border-border/50 font-mono">
                                 {p.generation}기
@@ -740,7 +756,7 @@ export function PerformerSelector({
 
                           {/* 4. 세션 (다중 세션 뱃지: 추가 및 삭제 지원) */}
                           <td className="px-3 py-2">
-                            <div className="flex flex-wrap items-center gap-1.5 min-w-[140px]">
+                            <div className="flex flex-wrap items-center gap-1.5 sm:min-w-[140px]">
                               {parts.map((part) => (
                                 <span
                                   key={part}
@@ -753,7 +769,7 @@ export function PerformerSelector({
                                       const nextParts = parts.filter((pt) => pt !== part);
                                       onUpdatePart(idx, nextParts.join(", "));
                                     }}
-                                    className="text-primary/70 hover:text-destructive transition-colors ml-0.5"
+                                    className="hidden sm:inline text-primary/70 hover:text-destructive transition-colors ml-0.5"
                                     title={`${part} 삭제`}
                                   >
                                     <X className="size-2.5" />
@@ -761,29 +777,30 @@ export function PerformerSelector({
                                 </span>
                               ))}
 
-                              <PerformerSessionSearch
+                              <div className="hidden sm:block"><PerformerSessionSearch
                                 currentParts={parts}
                                 onAddPart={(newPart) => {
                                   onUpdatePart(idx, [...parts, newPart].join(", "));
                                 }}
-                              />
+                              /></div>
                             </div>
                           </td>
 
-                          {/* 5. 수동 매핑 버튼 (미연동 툴팁 통합) */}
-                          <td className="px-3 py-2 text-center">
-                            {linked ? (
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleOpenMapping(p, idx)}
-                                className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground gap-1"
-                                title="다른 부원 계정으로 매핑 변경"
+                          {performerNotes && <td className="px-3 py-2">
+                            {performerNotesLoadError ? <span className="text-destructive">조회 실패</span>
+                              : note ? <div
+                                className="flex items-center gap-1.5 text-xs text-foreground bg-muted/60 p-1.5 sm:px-3 rounded-xl border border-border/60 w-fit max-w-[260px] min-w-0"
+                                title={note}
                               >
-                                <Link2 className="size-3" />
-                                <span className="text-[11px]">변경</span>
-                              </Button>
+                                <MessageSquare className="size-3 text-primary shrink-0 opacity-80" />
+                                <span className="hidden sm:inline truncate font-medium">{note}</span><span className="sr-only sm:hidden">비고 있음</span>
+                              </div> : <span className="hidden sm:inline text-muted-foreground">-</span>}
+                          </td>}
+
+                          {/* 이미 연동된 공연자는 상태만 표시하고 미연동 공연자만 매핑 가능 */}
+                          <td className="hidden sm:table-cell px-3 py-2 text-center">
+                            {linked ? (
+                              <span className="inline-flex items-center gap-1 whitespace-nowrap text-[11px] text-muted-foreground"><Check className="size-3" />연동됨</span>
                             ) : (
                               <Button
                                 type="button"
@@ -799,12 +816,12 @@ export function PerformerSelector({
                           </td>
 
                           {/* 6. 삭제 버튼 */}
-                          <td className="px-3 py-2 text-center">
+                          <td className="hidden sm:table-cell px-3 py-2 text-center">
                             <Button
                               type="button"
                               variant="ghost"
                               size="icon"
-                              onClick={() => onRemove(idx)}
+                              onClick={() => setDeleteTarget({ performer: p, index: idx })}
                               className="size-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors rounded-lg"
                               aria-label={`${p.name} 삭제`}
                             >
@@ -816,7 +833,7 @@ export function PerformerSelector({
                     })
                   ) : (
                     <tr>
-                      <td colSpan={6} className="py-8 text-center text-muted-foreground text-xs">
+                      <td colSpan={performerNotes ? 7 : 6} className="py-8 text-center text-muted-foreground text-xs">
                         &apos;{selectedSessionFilter}&apos; 세션에 배정된 공연자가 없습니다.
                       </td>
                     </tr>
@@ -834,6 +851,27 @@ export function PerformerSelector({
           </div>
         )}
       </div>
+      {detailPerformer && detailIndex !== null && <PerformerDetailsDialog
+        key={detailPerformer.performerId ?? detailPerformer.id ?? detailIndex}
+        performer={detailPerformer}
+        note={isPerformerLinked(detailPerformer) && detailPerformer.id ? performerNotes?.[detailPerformer.id] : undefined}
+        notesLoadError={performerNotesLoadError}
+        onClose={() => setDetailIndex(null)}
+        onSave={(part) => { onUpdatePart(detailIndex, part); setDetailIndex(null); }}
+        onLink={(part) => {
+          onUpdatePart(detailIndex, part);
+          setDetailIndex(null);
+          handleOpenMapping({ ...detailPerformer, part }, detailIndex);
+        }}
+        onDelete={() => {
+          setDeleteTarget({ performer: detailPerformer, index: detailIndex });
+          setDetailIndex(null);
+        }}
+      />}
+      {deleteTarget && <PerformerDeleteDialog name={deleteTarget.performer.name} onClose={() => setDeleteTarget(null)} onConfirm={() => {
+        onRemove(deleteTarget.index);
+        setDeleteTarget(null);
+      }} />}
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { CalendarDays, ClipboardCheck, Menu, Users, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { ADMIN_GIG_SECTIONS } from "@/lib/admin-gig-sections";
 
 const links = [
   { href: "/admin/approvals", label: "가입/공연 신청 승인", icon: ClipboardCheck },
@@ -106,6 +107,14 @@ export function AdminMenuDrawer() {
         <nav aria-label="관리자 메뉴">
           <AdminLinks pathname={pathname} onNavigate={closeDrawer} />
         </nav>
+        {/^\/admin\/gigs\/\d+$/.test(pathname) && <nav aria-label="공연별 메뉴" className="mt-5 border-t border-border pt-4 sm:hidden">
+          <p className="mb-2 px-3 text-xs font-semibold text-muted-foreground">공연별 메뉴</p>
+          {ADMIN_GIG_SECTIONS.map(([id, label]) => <a key={id} href={`#${id}`} className="flex min-h-11 items-center rounded-lg px-3 py-2 text-sm font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={(event) => {
+            event.preventDefault();
+            document.getElementById(id)?.scrollIntoView({ block: "start" });
+            closeDrawer();
+          }}>{label}</a>)}
+        </nav>}
       </dialog>
     </>
   );

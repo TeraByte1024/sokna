@@ -213,7 +213,7 @@ export async function GigDetailInner({ gigId }: GigDetailInnerProps) {
               </p>
               {isAdmin && (
                 <Button asChild variant="outline" size="sm">
-                  <Link href={`/gigs/${numericId}/edit`}>
+                  <Link href={`/admin/gigs/${numericId}#gig-setlist`}>
                     <Pencil className="size-3.5 mr-1.5" />
                     셋리스트 등록하기
                   </Link>
@@ -331,7 +331,7 @@ export async function GigDetailInner({ gigId }: GigDetailInnerProps) {
           <ShareGigButton gigId={numericId} gigTitle={gig.title} />
           {isAdmin && (
             <Button asChild variant="outline" size="sm" className="h-8 text-xs font-semibold gap-1.5 border-border/80">
-              <Link href={`/gigs/${numericId}/edit`}>
+              <Link href={`/admin/gigs/${numericId}`}>
                 <Pencil className="size-3.5" />
                 공연 수정
               </Link>

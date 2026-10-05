@@ -8,7 +8,7 @@ import {
 } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
 	Plus,
 	AlarmClock,
@@ -124,10 +124,12 @@ export function NominationPanel({
 }: NominationPanelProps) {
 	const params = useParams();
 	const router = useRouter();
+	const searchParams = useSearchParams();
+	const linkedSongId = Number(searchParams.get("song"));
 	const gigId = params.id as string;
 	const [songs, setSongs] = useState<Nomination[]>(initialSongs);
-	const [selectedSong, setSelectedSong] = useState<Nomination | null>(null);
-	const [hasOpenedDrawer, setHasOpenedDrawer] = useState(false);
+	const [selectedSong, setSelectedSong] = useState<Nomination | null>(() => initialSongs.find((song) => song.id === linkedSongId) ?? null);
+	const [hasOpenedDrawer, setHasOpenedDrawer] = useState(() => initialSongs.some((song) => song.id === linkedSongId));
 	const currentUser = useMemo(() => ({ id: initialUserId }), [initialUserId]);
 	const currentPerformer = initialPerformer;
 	const performers = initialPerformers;
@@ -155,6 +157,14 @@ export function NominationPanel({
 	useEffect(() => {
 		setSongs(initialSongs);
 	}, [initialSongs]);
+
+	useEffect(() => {
+		const linkedSong = initialSongs.find((song) => song.id === linkedSongId);
+		if (linkedSong) {
+			setSelectedSong(linkedSong);
+			setHasOpenedDrawer(true);
+		}
+	}, [linkedSongId, initialSongs]);
 
 	useEffect(() => {
 		if (initialLastViewedTimestamp) {

@@ -94,7 +94,7 @@ export function SignUpForm({
     const part =
       selectedPreset === "직접 입력" ? customPart.trim() : selectedPreset;
     if (!part) {
-      setError("세션(파트)을 선택하거나 입력해 주세요.");
+      setError("세션을 선택하거나 입력해 주세요.");
       setIsLoading(false);
       return;
     }

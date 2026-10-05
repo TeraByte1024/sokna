@@ -1,6 +1,7 @@
 "use client";
 
-import { ExternalLink, MessageCircle, Mail, Phone, CheckCircle, Info } from "lucide-react";
+import { ExternalLink, MessageCircle, Mail, Phone, Info } from "lucide-react";
+import { PositiveStatusIcon as CheckCircle } from "@/components/ui/status-icons";
 import { ANNIVERSARY_CONFIG } from "@/lib/anniversary";
 
 export function AttendanceForm() {

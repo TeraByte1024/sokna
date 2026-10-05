@@ -569,7 +569,7 @@ export interface EligibleSession {
  * - 로컬 커스텀 세션인 경우 모든 공연 참여자
  */
 export function getEligibleSessionsForUser(
-  song: Nomination,
+  song: Pick<Nomination, "requiredParts" | "recommendedVocals" | "responses">,
   performers: RecommendedVocal[],
   currentUserId?: string | null,
 ): EligibleSession[] {

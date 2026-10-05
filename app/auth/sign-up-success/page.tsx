@@ -7,7 +7,8 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { Clock, CheckCircle2 } from "lucide-react";
+import { Clock } from "lucide-react";
+import { PositiveStatusIcon as CheckCircle2 } from "@/components/ui/status-icons";
 
 export default function Page() {
   return (

@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { type Gig, type GigRsvp } from "@/lib/gig";
 import { Button } from "@/components/ui/button";
-import { UserCheck, Music2, CheckCircle2, XCircle, HelpCircle, Clock } from "lucide-react";
+import { UserCheck, Music2, Clock } from "lucide-react";
+import { PositiveStatusIcon as CheckCircle2, NegativeStatusIcon as XCircle, UnknownStatusIcon as HelpCircle } from "@/components/ui/status-icons";
 import { GigJoinDialog } from "@/components/gigs/gig-join-dialog";
 
 interface GigDetailActionsProps {
