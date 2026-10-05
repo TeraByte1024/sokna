@@ -30,6 +30,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { PerformerMappingDialog } from "@/components/gigs/performer-mapping-dialog";
 import { SessionAssignmentDialog } from "@/components/gigs/session-assignment-dialog";
+import { PerformerSessionSearch } from "@/components/gigs/performer-session-search";
 
 export interface Performer {
   performerId?: number;
@@ -58,104 +59,6 @@ interface Props {
   onMapPerformer?: (index: number, mappedUser: Performer, oldName: string) => void;
   onUpdatePart: (index: number, part: string) => void;
   onUpdatePhoto?: (index: number, photoUrl: string) => void;
-}
-
-const COMMON_PARTS = [
-  "보컬",
-  "기타",
-  "일렉기타",
-  "어쿠스틱기타",
-  "베이스",
-  "드럼",
-  "건반",
-  "신디사이저",
-  "코러스",
-  "브라스",
-  "색소폰",
-];
-
-function PerformerPartDropdown({
-  currentParts,
-  onAddPart,
-}: {
-  currentParts: string[];
-  onAddPart: (part: string) => void;
-}) {
-  const [customPart, setCustomPart] = useState("");
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground border border-dashed border-border/80 transition-colors"
-          title="세션 추가"
-        >
-          <Plus className="size-2.5" />
-          <span>추가</span>
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-44 max-h-72 overflow-y-auto">
-        <DropdownMenuLabel className="text-[11px] font-medium text-muted-foreground">
-          세션 종류 추가
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        {COMMON_PARTS.map((cPart) => {
-          const isAlready = currentParts.includes(cPart);
-          return (
-            <DropdownMenuItem
-              key={cPart}
-              disabled={isAlready}
-              onClick={() => {
-                if (!isAlready) onAddPart(cPart);
-              }}
-              className="text-xs cursor-pointer flex items-center justify-between py-1.5"
-            >
-              <span className={isAlready ? "text-muted-foreground" : "font-medium"}>
-                {cPart}
-              </span>
-              {isAlready && <Check className="size-3 text-muted-foreground" />}
-            </DropdownMenuItem>
-          );
-        })}
-        <DropdownMenuSeparator />
-        <div className="p-1.5 flex gap-1">
-          <Input
-            type="text"
-            placeholder="직접 입력..."
-            value={customPart}
-            onChange={(e) => setCustomPart(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                const trimmed = customPart.trim().replaceAll("키보드", "건반");
-                if (trimmed && !currentParts.includes(trimmed)) {
-                  onAddPart(trimmed);
-                  setCustomPart("");
-                }
-              }
-            }}
-            className="h-7 text-xs bg-background"
-          />
-          <Button
-            type="button"
-            size="sm"
-            disabled={!customPart.trim() || currentParts.includes(customPart.trim().replaceAll("키보드", "건반"))}
-            onClick={() => {
-              const trimmed = customPart.trim().replaceAll("키보드", "건반");
-              if (trimmed && !currentParts.includes(trimmed)) {
-                onAddPart(trimmed);
-                setCustomPart("");
-              }
-            }}
-            className="h-7 px-2 text-xs"
-          >
-            추가
-          </Button>
-        </div>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
 }
 
 export type PerformerSortField = "name" | "generation" | "default";
@@ -858,7 +761,7 @@ export function PerformerSelector({
                                 </span>
                               ))}
 
-                              <PerformerPartDropdown
+                              <PerformerSessionSearch
                                 currentParts={parts}
                                 onAddPart={(newPart) => {
                                   onUpdatePart(idx, [...parts, newPart].join(", "));

@@ -115,8 +115,8 @@ export function isPerformerInSessionFamily(p: Performer, sessionName: string): b
     return true;
   }
 
-  const isKeySession = /건반|키보드|피아노|신디/i.test(sessionLower);
-  const isKeyPerformer = /건반|키보드|피아노|신디/i.test(partLower);
+  const isKeySession = /건반|키보드|피아노|신디|브라스|brass/i.test(sessionLower);
+  const isKeyPerformer = /건반|키보드|피아노|신디|브라스|brass/i.test(partLower);
   if (isKeySession && isKeyPerformer) return true;
 
   const isGuitarSession = /기타|guitar|일렉|어쿠스틱/i.test(sessionLower);
