@@ -919,8 +919,9 @@ export function NominationDrawer({
 															{/* 참여자 정보 & 응답 뱃지 */}
 															<div className="flex items-center gap-2 min-w-0 flex-wrap sm:flex-nowrap">
 																<Badge
+																	variant="outline"
 																	className={cn(
-																		"h-6 px-2 text-[11px] font-bold shrink-0 gap-1 rounded-lg",
+																		"h-6 px-2 text-[11px] font-bold shrink-0 gap-1 rounded-lg shadow",
 																		isAvail
 																			? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30"
 																			: isUnavail
@@ -952,7 +953,7 @@ export function NominationDrawer({
 																	)}
 																	{m.isRecommendedVocal && (
 																		<span
-																			className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30 shrink-0 inline-flex items-center justify-center cursor-help"
+																			className="h-6 sm:h-auto text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30 shrink-0 inline-flex items-center justify-center cursor-help"
 																			title="작성자가 이 세션으로 추천한 부원입니다."
 																		>
 																			<Star className="size-2.5 fill-current sm:hidden" />

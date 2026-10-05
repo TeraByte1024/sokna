@@ -184,8 +184,9 @@ export function NominationResponseSection({
 	const renderStatusBadge = (status: NominationResponseStatus) => {
 		return (
 			<Badge
+				variant="outline"
 				className={cn(
-					"h-6 px-2 text-[11px] font-bold shrink-0 gap-1 rounded-lg",
+					"h-6 px-2 text-[11px] font-bold shrink-0 gap-1 rounded-lg shadow",
 					status === "available"
 						? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30"
 						: status === "unavailable"
