@@ -307,37 +307,8 @@ export function NominationDrawer({
 			};
 		});
 
-		(song?.responses || [])
-			.filter((r) => r.sessionPart === selectedSessionPart)
-			.forEach((r) => {
-				const alreadyInList = members.some(
-					(item) =>
-						(item.userId && r.userId && item.userId === r.userId) ||
-						item.name === r.user?.name,
-				);
-				if (!alreadyInList) {
-					const isMe = Boolean(currentUserId && r.userId === currentUserId);
-					const isRec = isMatchingVocal(
-						{
-							userId: r.userId,
-							name: r.user?.name || "",
-							generation: r.user?.generation,
-						},
-						song?.recommendedVocals || [],
-					);
-					members.push({
-						key: `resp-${r.id}-${selectedSessionPart}`,
-						userId: r.userId,
-						name: r.user?.name || "참여자",
-						generation: r.user?.generation ?? null,
-						part: r.user?.part ?? null,
-						status: r.status,
-						comment: r.comment,
-						isMe,
-						isRecommendedVocal: isRec,
-					});
-				}
-			});
+		// 응답 기록으로 현재 세션에 배정되지 않은 사람을 목록에 추가하지 않는다.
+		// 참여자와 표시 파트는 공연 배정 기준이며, 프로필 파트나 과거 응답은 기준이 아니다.
 
 		// 정렬: 본인 최우선 > 추천 보컬 > 가능 > 미응답 > 불가능
 		return members.sort((a, b) => {

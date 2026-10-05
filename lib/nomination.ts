@@ -537,12 +537,18 @@ export const DEFAULT_PRESET_SESSIONS = [
 ];
 
 /**
- * 특정 세션 파트가 공연 전체 참여자에게 할당된 세션 풀에 없는 로컬 커스텀 세션인지 판별
+ * 기본 세션을 제외하고 공연 전체 참여자에게 할당되지 않은 로컬 커스텀 세션인지 판별
  */
 export function isLocalCustomSession(
   sessionPart: string,
   gigAssignedSessions: string[],
 ): boolean {
+  // 기본 악기는 배정자가 없어도 모든 참여자에게 개방되는 커스텀 세션이 아니다.
+  const isPresetSession = DEFAULT_PRESET_SESSIONS.some((preset) =>
+    isPerformerMatchingSessionPart(sessionPart, preset),
+  );
+  if (isPresetSession) return false;
+
   const hasPerformerWithPart = gigAssignedSessions.some((assigned) =>
     isPerformerMatchingSessionPart(assigned, sessionPart),
   );
