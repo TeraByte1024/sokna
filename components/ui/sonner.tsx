@@ -32,6 +32,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
         },
       }}
       position="top-right"
+      mobileOffset={{ bottom: "calc(6rem + env(safe-area-inset-bottom, 0px))" }}
       richColors
       closeButton={false}
       duration={3500}

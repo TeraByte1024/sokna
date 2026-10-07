@@ -6,6 +6,7 @@ import { getIsAdmin } from "@/lib/auth-admin";
 import { SUPABASE_GIGS_TABLE } from "@/lib/supabase/gigs";
 import { isNominationClosed } from "@/lib/nomination-deadline";
 import type { NominationFormValues } from "@/lib/nomination";
+import { hasNominationContentChanged } from "@/lib/nomination-response-review";
 import { recordLastViewedNomination } from "@/lib/nomination-views";
 import { processPendingPushNotifications } from "@/lib/push-notifications";
 
@@ -208,7 +209,7 @@ export async function updateNomination(
 	// 대상 곡 정보 확인
 	const { data: song, error: fetchErr } = await supabase
 		.from("nominations")
-		.select("id, created_by")
+		.select("id, created_by, title, artist, required_parts, sheet_exists, sheet_note, description, links, recommended_vocals")
 		.eq("id", id)
 		.single();
 
@@ -248,24 +249,38 @@ export async function updateNomination(
 		}
 	}
 
-	const { error } = await supabase
-		.from("nominations")
-		.update({
-			title: payload.title,
-			artist: payload.artist || null,
-			required_parts: payload.requiredParts,
-			sheet_exists: payload.sheetExists,
-			sheet_note: payload.sheetNote || "",
-			description: payload.description || "",
-			links: (payload.links ?? []) as unknown as import("@/lib/supabase/database.types").Json,
-			recommended_vocals: (payload.recommendedVocals ?? []) as unknown as import("@/lib/supabase/database.types").Json,
-			updated_at: new Date().toISOString(),
-		})
-		.eq("id", id);
+	const content = {
+		title: payload.title,
+		artist: payload.artist || null,
+		required_parts: payload.requiredParts,
+		sheet_exists: payload.sheetExists,
+		sheet_note: payload.sheetNote || "",
+		description: payload.description || "",
+		links: (payload.links ?? []) as unknown as import("@/lib/supabase/database.types").Json,
+		recommended_vocals: (payload.recommendedVocals ?? []) as unknown as import("@/lib/supabase/database.types").Json,
+	};
+	if (!hasNominationContentChanged(song, content)) return;
 
-	if (error) {
+	const { data: updated, error } = await supabase
+		.from("nominations")
+		.update({ ...content, updated_at: new Date().toISOString() })
+		.eq("id", id)
+		.select("id, updated_at")
+		.single();
+
+	if (error || !updated) {
 		console.error("Nomination update error:", error);
-		throw new Error("곡 수정 중 오류가 발생했습니다: " + error.message);
+		throw new Error("곡 수정 중 오류가 발생했습니다: " + (error?.message || "수정 결과를 확인할 수 없습니다."));
+	}
+
+	// 수정 트리거가 생성한 이 변경의 기존 응답자 알림만 즉시 처리합니다.
+	try {
+		await processPendingPushNotifications({
+			eventType: "nomination_updated",
+			eventKey: "nomination-updated:" + updated.id + ":" + new Date(updated.updated_at).toISOString(),
+		});
+	} catch (pushError) {
+		console.warn("후보곡 수정 즉시 푸시 실패, 재시도 대기:", pushError);
 	}
 
 	revalidatePath(`/gigs/${gigId}/nominations`);
@@ -335,8 +350,9 @@ export async function saveNominationResponsesAction(
 			throw new Error("이 공연의 참여자만 세션 응답을 남길 수 있습니다.");
 		}
 
+		const updatedAt = new Date().toISOString();
 		if (responses.length === 0) {
-			return { ok: true };
+			return { ok: true, updatedAt } as const;
 		}
 
 		// upsert 대상 레코드 생성
@@ -346,7 +362,7 @@ export async function saveNominationResponsesAction(
 			session_part: r.sessionPart,
 			status: r.status,
 			comment: r.comment?.trim() || "",
-			updated_at: new Date().toISOString(),
+			updated_at: updatedAt,
 		}));
 
 		const { error: upsertError } = await supabase
@@ -361,13 +377,13 @@ export async function saveNominationResponsesAction(
 		}
 
 		revalidatePath(`/gigs/${gigId}/nominations`);
-		return { ok: true };
+		return { ok: true, updatedAt } as const;
 	} catch (err: unknown) {
 		console.error("saveNominationResponsesAction catch error:", err);
 		return {
 			ok: false,
 			error: err instanceof Error ? err.message : "응답 저장에 실패했습니다.",
-		};
+		} as const;
 	}
 }
 

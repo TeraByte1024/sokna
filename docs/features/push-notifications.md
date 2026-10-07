@@ -108,6 +108,8 @@ FCM Web Push로 모바일/데스크톱 브라우저에 다음 이벤트를 알�
 - 이벤트 종류는 `nomination_added`, 키는 `nomination:<후보곡 ID>`입니다. 새 후보곡마다 별도 이벤트를 만들고 등록 액션은 이 종류·키로 저장된 outbox를 즉시 처리합니다. 후보곡 수정은 새 등록 알림을 만들지 않습니다.
 - 푸시 동의와 관계없이 인앱 내역을 저장합니다. 생성 당시 미동의자의 알림은 `skipped`/`not_opted_in`으로 종결하며 나중에 동의해도 재발송하지 않습니다.
 
+- 새 후보곡 알림의 링크는 `/gigs/<공연 ID>/nominations?song=<후보곡 ID>`입니다. 알림함과 푸시에서 같은 링크를 사용해 해당 곡 상세를 바로 엽니다. 기존 알림의 저장된 링크는 유지합니다.
+
 ### 3.4 공통 처리기와 스케줄러
 
 - 즉시 처리와 cron은 `processPendingPushNotifications({ eventType?, eventKey?, userId?, notificationIds?, limit? })` 하나를 사용합니다. 명시적으로 빈 ID 목록을 전달하면 처리하지 않으며 기본 한도는 50개입니다.

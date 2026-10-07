@@ -8,16 +8,19 @@
 
 ## 2. 생성 및 수신 정책
 - 후보곡 INSERT와 수신자별 알림 생성은 AFTER INSERT 트리거로 같은 트랜잭션에서 처리한다. 공연 참여 계정 중 등록자를 제외하며 푸시 미동의자도 인앱 알림은 저장한다.
+- 후보곡 원문 UPDATE는 수정 후에도 기존에 응답한 세션에 응답할 수 있는 현재 공연 참여자에게만 수정 알림을 생성한다. 없어진 세션의 과거 응답만 있거나 응답 대상에서 제외된 사용자는 수신하지 않으며 수정자는 제외한다. 계정당 한 번만 생성하고 같은 내용 저장은 생략한다. [후보곡 수정 알림 명세](./nomination-update-notifications.md)를 따른다. 수정 알림 마이그레이션은 2026-10-08 연결된 DB에 적용했고 원격 이력과 타입 재생성을 확인했다. 시험 알림은 보내지 않았다.
 - 완성된 가입 신청이 pending으로 진입할 때 users 트리거가 관리자 알림을 만든다. 이메일/Google 신청의 문구와 생성 경로를 통합한다. 미완성 OAuth 사용자와 이미 완성된 pending 프로필 재저장은 새 알림을 만들지 않는다.
 - 승인 RPC는 기존 관리자 검사와 pending 상태 전이를 유지하고 공통 DB 함수로 승인 알림을 함께 저장한다.
 - 공연 RSVP가 처음 `going`으로 저장되거나 불참·미정에서 `going`으로 바뀌면 `gig_rsvps` 트리거가 관리자별 참여 신청 알림을 같은 트랜잭션에서 만든다. `going` 상태의 세션·메모 재저장은 알림을 다시 만들지 않는다. 신청자가 관리자인 경우에도 전체 관리자 계정에 동일하게 생성한다.
 - 서버 액션은 이미 저장된 해당 이벤트를 즉시 발송한다. 중단/전송 실패는 동일 notifications 행에서 복구한다.
 - 알림함, 로그인 계정별 기기 수신, 동의, 읽음, 기기 로컬 복구 정책은 유지한다. 사용자가 알림함에서 개별 또는 모두 삭제한 notifications 행은 발송 대기에서도 제거된다. 진행 중 또는 FCM 접수된 전송의 회수는 보장하지 않는다. [삭제 API와 UI](./notification-inbox.md)를 따른다.
 
+- 새 후보곡 등록 알림은 등록 트리거가 전달하는 `nomination_id`를 이용해 `/gigs/<공연 ID>/nominations?song=<후보곡 ID>` 링크를 저장한다. 알림함과 푸시 클릭 모두 해당 후보곡 상세를 바로 열며, 기존 알림의 링크는 유지한다. `20261008010000_link_new_nomination_notifications.sql`을 2026-10-08 연결된 DB에 적용했고 원격 이력과 `npm run types` 성공을 확인했다.
+
 ## 3. 스키마
 - `gig_notification_queue` 제거. pending/processing은 결정적 UUIDv5로 notifications에 이관하며 기존 UUIDv5 행은 덮어쓰지 않는다. 구 운영 버전은 임의 UUID를 사용했으므로, 잠금 후 미처리 큐와 같은 공연·큐 생성 이후의 연결 불명 알림이 있으면 SQLSTATE 55000으로 전체 전환을 중단한다. 메시지 내용만으로 임의 병합하지 않는다.
 - `notifications.event_type`, `event_key` 추가. 수신자와 이벤트 종류·키에 고유 제약을 둔다.
-- 이벤트 종류: member_approval_requested, member_approved, gig_rsvp_requested, nomination_added, legacy.
+- 이벤트 종류: member_approval_requested, member_approved, gig_rsvp_requested, nomination_added, nomination_updated, legacy.
 - `push_eligible` 제거. 발송 제외는 skipped 상태로 표현한다. 직접 INSERT의 기본값도 skipped이며, 공통 생성 함수만 수신 동의자를 pending으로 지정한다.
 - `push_status`: pending(대기/재시도), accepted(대상 기기 FCM 접수 완료), skipped(동의/기기/사용자 없음), failed(영구 실패/기한 만료).
 - `push_attempts`, `push_next_attempt_at`을 정수/시각 컬럼으로 분리한다.

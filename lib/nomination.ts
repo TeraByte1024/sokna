@@ -591,7 +591,7 @@ export function getEligibleSessionsForUser(
   uniqueRequiredParts.forEach((part) => {
     const isRec = Boolean(
       part.includes("보컬") &&
-        song.recommendedVocals?.some((v) => v.userId === currentUserId),
+        song.recommendedVocals?.some((v) => v.userId === currentUserId || v.id === currentPerformer.id),
     );
     const isAssigned = isPerformerMatchingSessionPart(currentPerformer.part, part);
     const isLocalCustom = isLocalCustomSession(part, allAssignedParts);

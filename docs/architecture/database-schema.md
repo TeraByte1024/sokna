@@ -264,6 +264,8 @@ erDiagram
 > - `UPDATE`: 해당 곡 등록자(`created_by = performers.id AND user_id = auth.uid()`) 또는 관리자(`is_admin()`)
 > - `DELETE`: 해당 곡 등록자(`created_by = performers.id AND user_id = auth.uid()`) 또는 관리자(`is_admin()`)
 
+> **후보곡 수정 알림 (2026-10-08 연결된 DB 적용 완료)**: `20261008000000_notify_nomination_updated.sql`은 원문 변경의 BEFORE 트리거로 `updated_at`을 DB 현재 시각/기존 시각 + 1ms 중 큰 값으로 정하고, AFTER 트리거로 기존 응답자 중 수정 후에도 해당 응답 세션에 응답 가능한 현재 공연 참여자에게만 알림을 만듭니다. 삭제된 필요 세션/추천 제외/배정 변경으로 과거 응답만 남은 사용자와 수정자는 제외하며 계정당 한 번 생성합니다. 상태가 미정인 저장 응답도 포함하지만 응답 없는 사용자는 제외합니다. 내부 세션 매칭 함수는 프리셋 별칭·추천 보컬·미배정 자유 세션 규칙을 따릅니다. 내부 함수들은 빈 search_path와 직접 실행 권한 제한을 사용하고 기존 RLS를 유지합니다. 원격 마이그레이션 이력과 `npm run types` 재생성을 확인했으며 공개 타입에 `nomination_session_matches`가 추가되었습니다. 테스트/시험 푸시는 실행하지 않았습니다. [기능 명세](../features/nomination-update-notifications.md).
+
 ### 2.7 `setlists` (공연 확정 셋리스트)
 공연 정보 페이지에 표시되는 최종 확정 연주 곡 및 세션 명단, 연주 순서입니다. (관리자만 등록/수정/삭제 가능)
 
@@ -334,7 +336,7 @@ erDiagram
 | :--- | :--- | :--- | :--- | :--- |
 | `id` | `uuid` | NO | `gen_random_uuid()` | 알림 식별자 |
 | `user_id` | `uuid` | YES | `auth.uid()` | FK → users(id), 삭제 시 SET NULL |
-| `event_type` | `text` | NO | `'legacy'` | member_approval_requested, member_approved, gig_rsvp_requested, nomination_added, legacy |
+| `event_type` | `text` | NO | `'legacy'` | member_approval_requested, member_approved, gig_rsvp_requested, nomination_added, nomination_updated, legacy |
 | `event_key` | `text` | NO | 임의 UUID 문자열 | 이벤트 식별자. 공통 생성 함수는 업무 이벤트 키를 명시 |
 | `title`, `body`, `link` | `text` | YES | null | 생성 시 확정한 제목·본문·내부 이동 경로 |
 | `created_at` | `timestamptz` | NO | `now()` | 인앱 알림 생성 일시 |
@@ -347,6 +349,8 @@ erDiagram
 | `push_progress` | `jsonb` | NO | 두 빈 배열을 가진 객체 | successfulProfileIds 및 failures(profileId, code, retryable) |
 | `push_error` | `text` | YES | null | 짧은 미발송/실패 사유 코드 |
 
+- `nomination_updated`는 2026-10-08 마이그레이션 적용 후 허용됩니다. 이벤트 키는 `nomination-updated:<곡 ID>:<DB 수정 시각 UTC 밀리초 ISO>`이며, 원문 변경마다 달라지는 키로 기존 알림을 덮어쓰지 않습니다.
+- `nomination_added` 알림은 등록 트리거가 `nomination_id`를 전달하고 `/gigs/<공연 ID>/nominations?song=<후보곡 ID>` 링크를 저장합니다. 알림함과 푸시 클릭에서 해당 후보곡 상세를 바로 엽니다. 기존 알림의 링크는 변경하지 않습니다.
 - `UNIQUE(user_id, event_type, event_key)`로 수신자별 중복 생성을 막습니다. 메시지 템플릿 변경은 이미 저장된 내용과 읽음 상태를 바꾸지 않습니다.
 - 대기 행만 포함하는 `notifications_push_due_idx(push_next_attempt_at, created_at, id)`로 처리할 행을 제한합니다. processing 상태와 별도 선점 회수 작업은 제거하고 pending의 다음 시각을 5분 뒤로 옮깁니다. 완료 저장도 선점 시각을 비교합니다.
 - 일시 오류는 생성 후 24시간까지 pending에서 재시도하며 성공·영구 실패 기기는 제외합니다. accepted는 FCM 접수 완료이고, 화면 표시나 읽음을 보증하지 않습니다. skipped는 동의/현재 기기 없음, failed는 영구 오류/기한 만료입니다.
@@ -354,7 +358,7 @@ erDiagram
 
 읽음 상태는 푸시 발송 상태와 독립적입니다. 본인 알림은 수신 동의와 관계없이 알림함에 표시하며, `(user_id, created_at DESC, id DESC)` 목록 인덱스와 미확인 행의 `user_id` 부분 인덱스를 사용합니다. 기존 RLS와 GRANT는 변경하지 않습니다. 읽음 서버 액션은 로그인 계정과 요청 계정을 대조한 후 본인의 미확인 행에서 `read_at`만 수정합니다. 모두 읽음은 목록의 기준 시각까지로 제한합니다. [알림함 명세](../features/notification-inbox.md)를 참고하십시오.
 
-**공통 생성 경로**: 내부 DB 함수 `create_app_notification(user_id, event_type, event_key, context, notification_id?)`가 이벤트별 문구를 생성합니다. PUBLIC/anon/authenticated 직접 실행 권한은 없습니다. 완성된 가입 신청의 users 트리거, 공연 참여 신청의 gig_rsvps 트리거, 후보곡 INSERT의 nominations 트리거, 관리자 전용 `approve_member_with_notification` RPC가 호출하여 업무 변경과 알림 생성을 같은 트랜잭션으로 저장합니다. 승인 RPC는 이미 처리된 사용자의 경우 false를 반환합니다.
+**공통 생성 경로**: 내부 DB 함수 `create_app_notification(user_id, event_type, event_key, context, notification_id?)`가 이벤트별 문구를 생성합니다. PUBLIC/anon/authenticated 직접 실행 권한은 없습니다. 완성된 가입 신청의 users 트리거, 공연 참여 신청의 gig_rsvps 트리거, 후보곡 INSERT의 nominations 트리거와 원문 UPDATE의 기존 응답자 알림 트리거(2026-10-08 적용), 관리자 전용 `approve_member_with_notification` RPC가 호출하여 업무 변경과 알림 생성을 같은 트랜잭션으로 저장합니다. 승인 RPC는 이미 처리된 사용자의 경우 false를 반환합니다.
 
 **큐 이관**: `gig_notification_queue`와 `push_eligible`을 제거했습니다. 미처리 큐와 연결이 불명확한 구 임의 UUID 알림이 있으면 마이그레이션이 SQLSTATE 55000으로 중단됩니다. 미처리 큐는 이전 UUIDv5와 같은 ID로 이관해 기존 알림을 덮어쓰지 않습니다. 기존 sent는 accepted가 됩니다. 24시간 이상 지난 큐에서 신규 생성한 알림은 인앱에 보존하되 동의자의 푸시는 failed/retry_window_expired로 종결합니다. [전환 및 처리 명세](../features/notification-outbox.md)를 참고하십시오.
 

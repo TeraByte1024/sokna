@@ -16,7 +16,7 @@ import {
 	type NominationResponseStatus,
 	type NominationTimestamp,
 } from "@/lib/nomination";
-import { X, Music2, User, CalendarDays, History, FileText, Quote, Layers, Play, Pencil, Link2, Users, MessageSquare, Star } from "lucide-react";
+import { X, Music2, User, CalendarDays, History, FileText, Quote, Layers, Play, Pencil, Link2, Users, MessageSquare } from "lucide-react";
 import { PositiveStatusIcon as CheckCircle2, UnknownStatusIcon as HelpCircle, NegativeStatusIcon as XCircle } from "@/components/ui/status-icons";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -521,7 +521,7 @@ export function NominationDrawer({
 		<>
 			<aside
 				className={cn(
-					"fixed inset-y-0 right-0 z-[100] w-full max-w-lg bg-background/95 backdrop-blur-md shadow-2xl border-l border-border transition-transform duration-300 ease-in-out transform flex flex-col",
+					"fixed inset-y-0 inset-x-0 z-[100] w-auto bg-background transition-transform duration-300 ease-in-out transform flex flex-col sm:left-auto sm:w-full sm:max-w-lg sm:bg-background/95 sm:backdrop-blur-md sm:shadow-2xl sm:border-l sm:border-border",
 					song ? "translate-x-0" : "translate-x-full",
 				)}
 			>
@@ -565,7 +565,7 @@ export function NominationDrawer({
 						{/* 스크롤 가능한 메인 바디 */}
 						<div
 							ref={drawerBodyRef}
-							className="flex-1 overflow-y-auto p-6 pb-28 space-y-6 text-left overscroll-contain sm:pb-6"
+							className="flex-1 overflow-y-auto p-6 pb-28 space-y-6 text-left overscroll-contain"
 						>
 							{/* 1. 곡 기본 정보 (타이틀, 아티스트, 뱃지, 추천자, 일시) */}
 							<div className="p-5 rounded-2xl border border-border/80 bg-gradient-to-br from-card to-muted/30 shadow-sm space-y-3">
@@ -648,7 +648,7 @@ export function NominationDrawer({
 															setActiveSeekTime(null);
 														}}
 														className={cn(
-															"text-xs px-2.5 py-1 rounded-lg font-bold border transition-colors shrink-0 flex items-center gap-1.5 max-w-[150px] sm:max-w-[190px] cursor-pointer",
+															"text-xs px-2.5 py-1 rounded-lg font-bold border transition-colors shrink-0 flex items-center gap-1.5 max-w-[150px] cursor-pointer",
 															activeMediaIdx === i
 																? "bg-primary text-primary-foreground border-primary shadow-xs"
 																: "bg-card border-border/80 text-muted-foreground hover:text-foreground hover:bg-muted",
@@ -794,9 +794,6 @@ export function NominationDrawer({
 									<div className="flex items-center gap-2">
 										{!isGigSetlist && (
 											<>
-												<span className="text-[11px] font-medium text-muted-foreground hidden sm:inline">
-													클릭하여 참여자 응답 확인
-												</span>
 												<span className="text-xs font-semibold text-muted-foreground">
 													총 {song.requiredParts?.length ?? 0}명
 												</span>
@@ -837,7 +834,7 @@ export function NominationDrawer({
 														}
 													}}
 													className={cn(
-														"flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs sm:text-sm font-bold shadow-xs transition-all text-left",
+														"flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold shadow-xs transition-all text-left",
 														colorClass,
 														isSelected && "ring-2 ring-primary border-primary shadow-sm",
 														!isGigSetlist
@@ -874,7 +871,7 @@ export function NominationDrawer({
 								{/* 세션 참여자 현황 (기본값 첫 번째 세션 선택, 목록 형태) */}
 								{selectedSessionPart && !isGigSetlist && (
 									<div className="mt-2.5 rounded-2xl border border-border/80 bg-card/60 overflow-hidden shadow-xs animate-in fade-in-50 duration-150 p-3.5 space-y-3">
-										<div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+										<div className="flex flex-col justify-between gap-2">
 											<span className="text-xs font-bold text-foreground flex items-center gap-1.5">
 												<Users className="size-3.5 text-primary" />
 												<span>{selectedSessionPart} 세션 응답 현황</span>
@@ -923,7 +920,7 @@ export function NominationDrawer({
 																<Badge
 																	variant="outline"
 																	className={cn(
-																		"h-6 px-2 text-[11px] font-bold shrink-0 gap-1 rounded-lg shadow",
+																		"h-6 px-2 text-[11px] font-bold shrink-0 gap-1 rounded-lg",
 																		isAvail
 																			? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30"
 																			: isUnavail
@@ -955,11 +952,10 @@ export function NominationDrawer({
 																	)}
 																	{m.isRecommendedVocal && (
 																		<span
-																			className="h-6 sm:h-auto text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30 shrink-0 inline-flex items-center justify-center cursor-help"
+																			className="h-6 text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30 shrink-0 inline-flex items-center justify-center cursor-help"
 																			title="작성자가 이 세션으로 추천한 부원입니다."
 																		>
-																			<Star className="size-2.5 fill-current sm:hidden" />
-																			<span className="hidden sm:inline">추천</span>
+																			추천
 																		</span>
 																	)}
 																	{m.part && (
@@ -998,6 +994,7 @@ export function NominationDrawer({
 								<div className="pt-2 border-t border-border/60">
 									<NominationResponseSection
 										nominationId={song.id}
+										nominationUpdatedAt={song.updatedAt}
 										gigId={String(song.gigId)}
 										currentUserId={currentUserId}
 										canRespond={canRespond}

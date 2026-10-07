@@ -25,18 +25,24 @@ import {
 	CheckCheck,
 	ChevronDown,
 	RotateCcw,
+	LayoutList,
+	List,
+	History,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { PositiveStatusIcon, NegativeStatusIcon, UnknownStatusIcon } from "@/components/ui/status-icons";
 import { Input } from "@/components/ui/input";
 import { LoadingIndicator } from "@/components/ui/loading-indicator";
 import { ResponsiveImage } from "@/components/ui/responsive-image";
 import {
 	type Nomination,
+	type NominationResponseStatus,
 	type RecommendedVocal,
 	getYouTubeVideoId,
 	getYouTubeThumbnailUrl,
+	getEligibleSessionsForUser,
 	isMaleVocalPart,
 	isFemaleVocalPart,
 	sortSessionParts,
@@ -46,6 +52,7 @@ import {
 } from "@/app/gigs/[id]/nominations/actions";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { isNominationResponseOutdated } from "@/lib/nomination-response-review";
 import { getNominationDeadline } from "@/lib/nomination-deadline";
 
 const NominationDrawer = dynamic(
@@ -147,6 +154,7 @@ export function NominationPanel({
 	const [viewedSongIds, setViewedSongIds] = useState<Set<number>>(new Set());
 
 	// 검색 및 필터링 상태
+	const [listDisplay, setListDisplay] = useState<"default" | "compact">("default");
 	const [searchQuery, setSearchQuery] = useState("");
 	const [sheetFilter, setSheetFilter] = useState<"all" | "has_sheet" | "no_sheet">("all");
 	const [partFilter, setPartFilter] = useState<string>("all");
@@ -715,6 +723,35 @@ export function NominationPanel({
 						</button>
 					</div>
 				)}
+
+				{/* 목록 표시 형식 */}
+				<div className="flex items-center justify-end gap-2">
+					<span className="hidden text-xs font-medium text-muted-foreground sm:inline">목록 보기</span>
+					<div role="group" aria-label="목록 표시 형식" className="inline-flex items-center rounded-lg border border-border/80 bg-muted p-0.5">
+						{([
+							["default", "기본", LayoutList],
+							["compact", "간략", List],
+						] as const).map(([value, label, Icon]) => (
+							<button
+								key={value}
+								type="button"
+								aria-label={`${label} 보기`}
+								title={`${label} 보기`}
+								aria-pressed={listDisplay === value}
+								onClick={() => setListDisplay(value)}
+								className={cn(
+									"inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+									listDisplay === value
+										? "bg-background text-foreground shadow-sm"
+										: "text-muted-foreground hover:text-foreground",
+								)}
+							>
+								<Icon className="size-4 shrink-0" aria-hidden="true" />
+								<span className="hidden sm:inline">{label}</span>
+							</button>
+						))}
+					</div>
+				</div>
 			</div>
 
 			{/* 5. 곡 목록 카드 섹션 */}
@@ -786,11 +823,12 @@ export function NominationPanel({
 									setHasOpenedDrawer(true);
 									setSelectedSong(song);
 								}}
-								className="cursor-pointer focus:outline-none"
+								className="cursor-pointer rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
 								role="button"
 								tabIndex={0}
 								onKeyDown={(e) => {
 									if (e.key === "Enter" || e.key === " ") {
+										e.preventDefault();
 										setViewedSongIds((prev) => new Set([...prev, song.id]));
 										setHasOpenedDrawer(true);
 										setSelectedSong(song);
@@ -799,10 +837,12 @@ export function NominationPanel({
 							>
 								<NominationCard
 									song={song}
+									compact={listDisplay === "compact"}
 									index={idx + 1}
 									highlightState={highlightState}
 									currentUserId={currentUser?.id}
 									isCurrentUserPerformer={Boolean(currentPerformer)}
+									performers={performers}
 								/>
 							</div>
 						);
@@ -877,19 +917,39 @@ export function NominationPanel({
  */
 function NominationCard({
 	song,
+	compact = false,
 	index,
 	highlightState,
 	currentUserId,
 	isCurrentUserPerformer,
+	performers,
 }: {
 	song: Nomination & {
 		createdBy?: { name: string; part: string; generation: number | null } | null;
 	};
 	index: number;
+	compact?: boolean;
 	highlightState?: "new" | "updated" | null;
 	currentUserId?: string | null;
 	isCurrentUserPerformer: boolean;
+	performers: RecommendedVocal[];
 }) {
+	const mySessionResponses = useMemo(() => {
+		if (!isCurrentUserPerformer) return [];
+		const eligibleSessions = getEligibleSessionsForUser(song, performers, currentUserId);
+		const sessionOrder = sortSessionParts(eligibleSessions.map(({ sessionPart }) => sessionPart));
+		return eligibleSessions
+			.sort((a, b) => sessionOrder.indexOf(a.sessionPart) - sessionOrder.indexOf(b.sessionPart))
+			.map(({ sessionPart, existingResponse }) => ({ sessionPart, status: existingResponse?.status || "undecided" }));
+	}, [song, performers, currentUserId, isCurrentUserPerformer]);
+
+	const hasOutdatedResponse = useMemo(() => {
+		if (!isCurrentUserPerformer) return false;
+		return getEligibleSessionsForUser(song, performers, currentUserId).some(({ existingResponse }) =>
+			isNominationResponseOutdated(song.updatedAt, existingResponse),
+		);
+	}, [song, performers, currentUserId, isCurrentUserPerformer]);
+
 	const partCounts = useMemo(() => {
 		return (song.requiredParts || []).reduce(
 			(acc, p) => {
@@ -904,25 +964,6 @@ function NominationCard({
 		() => sortSessionParts(Array.from(new Set(song.requiredParts || []))),
 		[song.requiredParts],
 	);
-
-	const mySessionResponses = useMemo(() => {
-		if (!isCurrentUserPerformer || !currentUserId || !song.responses) return [];
-
-		const responseByPart = new Map(
-			song.responses
-				.filter(
-					(response) =>
-						response.userId === currentUserId &&
-						uniqueParts.includes(response.sessionPart),
-				)
-				.map((response) => [response.sessionPart, response]),
-		);
-
-		return uniqueParts.flatMap((part) => {
-			const response = responseByPart.get(part);
-			return response ? [response] : [];
-		});
-	}, [song.responses, uniqueParts, currentUserId, isCurrentUserPerformer]);
 
 	// 첫 번째 유튜브 링크 썸네일 확인
 	const youtubeVideoId = useMemo(() => {
@@ -940,6 +981,7 @@ function NominationCard({
 		<Card
 			className={cn(
 				"group relative overflow-hidden border transition-all duration-200",
+				compact && "[container-type:inline-size]",
 				highlightState === "new"
 					? "border-emerald-500/60 dark:border-emerald-500/70 ring-1 ring-emerald-500/25 bg-emerald-500/[0.03] shadow-xs"
 					: highlightState === "updated"
@@ -955,6 +997,37 @@ function NominationCard({
 				<div className="absolute left-0 top-0 bottom-0 w-1.5 bg-amber-500" />
 			)}
 
+			{compact ? (
+				<CardContent className="flex min-w-0 items-center gap-2 py-3 pl-5 pr-4 sm:gap-3 sm:pl-6">
+					{hasOutdatedResponse && (
+						<Badge variant="outline" title="응답 후 수정됨" aria-label="응답 후 수정됨" className="size-6 shrink-0 justify-center rounded-lg border-amber-500/30 bg-amber-500/10 p-0 text-amber-700 dark:text-amber-300">
+							<History className="size-3.5" aria-hidden="true" />
+						</Badge>
+					)}
+					<div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+						<span className="min-w-0 flex-1 truncate text-sm" title={song.artist ? `${song.title} - ${song.artist}` : song.title}>
+							<span className="font-bold text-foreground group-hover:text-primary">{song.title}</span>
+							{song.artist && <span className="text-muted-foreground"> - {song.artist}</span>}
+						</span>
+						{mySessionResponses.length > 0 && (
+							<div className="flex max-w-[50%] shrink-0 flex-wrap justify-end gap-1" aria-label="나의 응답">
+								{mySessionResponses.map(({ sessionPart, status }) => (
+									<NominationResponseChip key={sessionPart} sessionPart={sessionPart} status={status} />
+								))}
+							</div>
+						)}
+						<span aria-hidden="true" className="hidden shrink-0 text-border md:[@container(min-width:640px)]:inline">|</span>
+						<span
+							className="hidden max-w-[35%] shrink-0 truncate text-xs text-muted-foreground md:[@container(min-width:640px)]:inline"
+							title={`${song.createdBy?.generation ? `${song.createdBy.generation}기 ` : ""}${song.createdBy?.name || "동아리 부원"}`}
+						>
+							{song.createdBy?.generation ? `${song.createdBy.generation}기 ` : ""}
+							{song.createdBy?.name || "동아리 부원"}
+						</span>
+					</div>
+					{highlightState && <span className="sr-only">{highlightState === "new" ? "신규" : "수정됨"}</span>}
+				</CardContent>
+			) : (
 			<CardContent className="p-4 sm:p-5 flex flex-col sm:flex-row items-stretch sm:items-center gap-4 pl-5 sm:pl-6">
 				{/* 썸네일 아트워크 영역 (유튜브 16:9 기본 비율 적용) */}
 				<div className="relative shrink-0 w-full sm:w-36 aspect-video rounded-xl overflow-hidden bg-muted/60 border border-border/60 flex items-center justify-center">
@@ -1041,32 +1114,25 @@ function NominationCard({
 							>
 								{mySessionResponses.length > 0 ? (
 									mySessionResponses.map((response) => (
-										<Badge
+										<NominationResponseChip
 											key={response.sessionPart}
-											variant="outline"
-											className={cn(
-												"h-5 shrink-0 px-1.5 py-0 text-[10px] font-bold",
-												response.status === "available"
-													? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
-													: response.status === "unavailable"
-														? "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-400"
-														: "border-border/70 bg-muted text-muted-foreground",
-											)}
-										>
-											{response.sessionPart}{" "}
-											{response.status === "available"
-												? "가능"
-												: response.status === "unavailable"
-													? "불가능"
-													: "미응답"}
-										</Badge>
+											sessionPart={response.sessionPart}
+											status={response.status}
+										/>
 									))
 								) : (
 									<Badge
 										variant="outline"
-										className="h-5 shrink-0 border-border/70 bg-muted px-1.5 py-0 text-[10px] font-bold text-muted-foreground"
+										className="h-6 max-w-full shrink-0 gap-1 rounded-lg border-border bg-muted px-2 text-[11px] font-bold text-muted-foreground"
 									>
+										<UnknownStatusIcon className="size-3.5 shrink-0" aria-hidden="true" />
 										내 응답 미선택
+									</Badge>
+								)}
+								{hasOutdatedResponse && (
+									<Badge variant="outline" className="h-5 shrink-0 gap-1 border-amber-500/30 bg-amber-500/10 px-1.5 py-0 text-[10px] font-bold text-amber-700 dark:text-amber-300">
+										<History className="size-3" aria-hidden="true" />
+										응답 후 수정됨
 									</Badge>
 								)}
 							</div>
@@ -1089,6 +1155,33 @@ function NominationCard({
 					</div>
 				</div>
 			</CardContent>
+			)}
 		</Card>
+	);
+}
+
+function NominationResponseChip({ sessionPart, status }: {
+	sessionPart: string;
+	status: NominationResponseStatus;
+}) {
+	const label = `${sessionPart} ${status === "available" ? "가능" : status === "unavailable" ? "불가능" : "미선택"}`;
+	const Icon = status === "available" ? PositiveStatusIcon : status === "unavailable" ? NegativeStatusIcon : UnknownStatusIcon;
+	return (
+		<Badge
+			variant="outline"
+			title={label}
+			aria-label={label}
+			className={cn(
+				"h-6 max-w-full shrink-0 gap-1 rounded-lg px-2 text-[11px] font-bold",
+				status === "available"
+					? "border-emerald-500/30 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+					: status === "unavailable"
+						? "border-rose-500/30 bg-rose-500/15 text-rose-700 dark:text-rose-400"
+						: "border-border bg-muted text-muted-foreground",
+			)}
+		>
+			<Icon className="size-3.5 shrink-0" aria-hidden="true" />
+			<span className="min-w-0 truncate">{sessionPart}</span>
+		</Badge>
 	);
 }

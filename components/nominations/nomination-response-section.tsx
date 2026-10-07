@@ -12,13 +12,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { saveNominationResponsesAction } from "@/app/gigs/[id]/nominations/actions";
-import { MessageSquare, Loader2, Save, Pencil, X } from "lucide-react";
+import { MessageSquare, Loader2, Save, Pencil, X, History } from "lucide-react";
 import { PositiveStatusIcon as CheckCircle2, UnknownStatusIcon as HelpCircle, NegativeStatusIcon as XCircle } from "@/components/ui/status-icons";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { isNominationResponseOutdated } from "@/lib/nomination-response-review";
+
+const responseToastOptions = { position: "bottom-center" } as const;
 
 interface NominationResponseSectionProps {
 	nominationId: number;
+	nominationUpdatedAt?: string;
 	gigId: string;
 	currentUserId?: string | null;
 	canRespond: boolean;
@@ -31,6 +35,7 @@ interface NominationResponseSectionProps {
 
 export function NominationResponseSection({
 	nominationId,
+	nominationUpdatedAt,
 	gigId,
 	currentUserId,
 	canRespond,
@@ -67,6 +72,10 @@ export function NominationResponseSection({
 		});
 		return map;
 	}, [responses, currentUserId]);
+
+	const outdatedSessions = eligibleSessions.filter(({ sessionPart }) =>
+		isNominationResponseOutdated(nominationUpdatedAt, myResponsesBySession.get(sessionPart)),
+	);
 
 	// 모달 내부 세션별 임시 폼 상태 (sessionPart -> { status, comment })
 	const [tempForm, setTempForm] = useState<
@@ -106,12 +115,12 @@ export function NominationResponseSection({
 
 	const handleSave = () => {
 		if (!canRespond) {
-			toast.error("공연 참여자만 가능 여부를 등록할 수 있습니다.");
+			toast.error("공연 참여자만 가능 여부를 등록할 수 있습니다.", responseToastOptions);
 			return;
 		}
 
 		if (eligibleSessions.length === 0) {
-			toast.error("응답 가능한 세션이 없습니다.");
+			toast.error("응답 가능한 세션이 없습니다.", responseToastOptions);
 			return;
 		}
 
@@ -129,11 +138,12 @@ export function NominationResponseSection({
 					};
 				});
 
-				await saveNominationResponsesAction(nominationId, gigId, payload);
+				const result = await saveNominationResponsesAction(nominationId, gigId, payload);
+				if (!result.ok) throw new Error(result.error);
 				setIsDialogOpen(false);
-				toast.success("가능 여부 및 메모가 저장되었습니다.");
+				toast.success("가능 여부 및 메모가 저장되었습니다.", responseToastOptions);
 
-				// 클라이언트 상태 낙관적 갱신
+				// 서버 저장 결과로 클라이언트 상태 갱신
 				if (currentUserId) {
 					const currentPerformer =
 						performers.find((p) => p.userId === currentUserId) ||
@@ -159,8 +169,8 @@ export function NominationResponseSection({
 								sessionPart: item.sessionPart,
 								status: data.status,
 								comment: data.comment.trim(),
-								createdAt: existing?.createdAt || new Date().toISOString(),
-								updatedAt: new Date().toISOString(),
+								createdAt: existing?.createdAt || result.updatedAt,
+								updatedAt: result.updatedAt,
 								user: {
 									name: currentPerformer?.name || "나",
 									generation: currentPerformer?.generation ?? null,
@@ -175,7 +185,7 @@ export function NominationResponseSection({
 			} catch (err: unknown) {
 				console.error("Save response error:", err);
 				const msg = err instanceof Error ? err.message : "저장에 실패했습니다.";
-				toast.error(msg);
+				toast.error(msg, responseToastOptions);
 			}
 		});
 	};
@@ -186,7 +196,7 @@ export function NominationResponseSection({
 			<Badge
 				variant="outline"
 				className={cn(
-					"h-6 px-2 text-[11px] font-bold shrink-0 gap-1 rounded-lg shadow",
+					"h-6 px-2 text-[11px] font-bold shrink-0 gap-1 rounded-lg",
 					status === "available"
 						? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30"
 						: status === "unavailable"
@@ -212,11 +222,11 @@ export function NominationResponseSection({
 		);
 	};
 
-	const renderMobileStickyAction = () => {
+	const renderStickyAction = () => {
 		if (!canRespond) return null;
 
 		return (
-			<div className="fixed inset-x-0 bottom-0 z-[120] border-t border-border/70 bg-background/95 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] shadow-[0_-4px_16px_rgba(0,0,0,0.08)] backdrop-blur-md sm:hidden">
+			<div className="fixed inset-x-0 bottom-0 z-[120] border-t border-border/70 bg-background/95 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] shadow-[0_-4px_16px_rgba(0,0,0,0.08)] backdrop-blur-md">
 				<Button
 					type="button"
 					onClick={handleOpenDialog}
@@ -236,19 +246,27 @@ export function NominationResponseSection({
 				나의 응답
 				{eligibleSessions.length > 1 && <span>({eligibleSessions.length}개 세션)</span>}
 			</h4>
-			{canRespond && eligibleSessions.length > 0 && (
-				<Button
-					type="button"
-					size="sm"
-					onClick={handleOpenDialog}
-					className="hidden h-8 px-3 text-xs font-bold shrink-0 gap-1.5 cursor-pointer ml-auto sm:inline-flex"
-				>
-					<Pencil className="size-3.5" />
-					<span>가능 여부 응답</span>
+		</div>
+	);
+
+	const renderReviewNotice = () => outdatedSessions.length > 0 ? (
+		<div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-amber-800 dark:text-amber-300">
+			<div className="flex items-start gap-2">
+				<History className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+				<div className="min-w-0 flex-1 space-y-1">
+					<p className="text-xs font-semibold">마지막 응답 이후 글이 수정되었습니다</p>
+					{eligibleSessions.length > 1 && (
+						<p className="text-[11px]">재확인할 세션: {outdatedSessions.map(({ sessionPart }) => sessionPart).join(", ")}</p>
+					)}
+				</div>
+			</div>
+			{canRespond && (
+				<Button variant="outline" size="sm" className="mt-2 h-7 border-amber-500/30 bg-background text-xs" onClick={handleOpenDialog}>
+					응답 다시 확인
 				</Button>
 			)}
 		</div>
-	);
+	) : null;
 
 	// 참여 가능한 세션이 없을 때
 	if (eligibleSessions.length === 0) {
@@ -273,6 +291,7 @@ export function NominationResponseSection({
 			<>
 				<div className="space-y-2">
 					{renderSectionHeader()}
+				{renderReviewNotice()}
 					<div className="p-3.5 rounded-2xl border border-border/80 bg-card shadow-2xs">
 						<div className="flex items-center gap-2 min-w-0 flex-wrap">
 							{/* 세션 칩 */}
@@ -310,7 +329,7 @@ export function NominationResponseSection({
 					</div>
 				</div>
 
-				{renderMobileStickyAction()}
+				{renderStickyAction()}
 
 				{renderDialog()}
 			</>
@@ -322,6 +341,7 @@ export function NominationResponseSection({
 		<>
 			<div className="space-y-2">
 				{renderSectionHeader()}
+					{renderReviewNotice()}
 				<div className="p-3.5 rounded-2xl border border-border/80 bg-card space-y-1.5 shadow-2xs">
 					{eligibleSessions.map((sessionItem) => {
 						const resp = myResponsesBySession.get(sessionItem.sessionPart);
@@ -372,7 +392,7 @@ export function NominationResponseSection({
 				</div>
 			</div>
 
-			{renderMobileStickyAction()}
+			{renderStickyAction()}
 
 			{renderDialog()}
 		</>
@@ -442,7 +462,7 @@ export function NominationResponseSection({
 											</Badge>
 											{sessionItem.isRecommendedVocal && (
 												<span className="text-[10px] px-1.5 py-0.5 rounded-md bg-amber-500/20 text-amber-700 dark:text-amber-300 font-bold">
-													추천 보컬
+													추천
 												</span>
 											)}
 											{sessionItem.isLocalCustom && (
