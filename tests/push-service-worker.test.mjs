@@ -5,6 +5,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import ts from "typescript";
+import { unstable_doesMiddlewareMatch } from "next/experimental/testing/server.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const origin = "https://sokna.example";
@@ -1142,4 +1143,36 @@ test("the generic delayed notice opens only the public home without exposing a p
   await f.click(f.shown[0].options.data);
   assert.deepEqual(f.opened, [origin + "/"]);
   assert.equal(f.authorizationRequests.length, 1);
+});
+
+test("the public push worker bypasses the auth proxy while protected and authorization routes keep it", () => {
+  const filename = path.join(root, "proxy.ts");
+  const compiled = ts.transpileModule(readFileSync(filename, "utf8"), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  const loaded = { exports: {} };
+  vm.runInNewContext(compiled, {
+    exports: loaded.exports,
+    module: loaded,
+    require(name) {
+      assert.equal(name, "@/lib/supabase/proxy");
+      return { updateSession() { throw new Error("Matcher checks must not access authentication"); } };
+    },
+  }, { filename });
+  const matches = (pathname) => unstable_doesMiddlewareMatch({
+    config: loaded.exports.config,
+    url: origin + pathname,
+  });
+  assert.equal(matches("/firebase-messaging-sw.js"), false);
+  assert.equal(matches("/firebase-messaging-sw.js?version=2"), false);
+  for (const pathname of ["/profile", "/api/push/authorize", "/firebase-messaging-swXjs", "/firebase-messaging-sw.js/private"]) {
+    assert.equal(matches(pathname), true, pathname);
+  }
+});
+
+test("the push worker route serves uncached JavaScript with root-scope registration allowed", async () => {
+  const response = await loadPushRoute();
+  assert.equal(response.headers["Content-Type"], "application/javascript; charset=utf-8");
+  assert.equal(response.headers["Cache-Control"], "no-cache, no-store, must-revalidate");
+  assert.equal(response.headers["Service-Worker-Allowed"], "/");
 });

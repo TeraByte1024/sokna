@@ -229,11 +229,35 @@ export function NominationResponseSection({
 		);
 	};
 
+	const renderSectionHeader = () => (
+		<div className="flex items-center justify-between gap-3">
+			<h4 className="text-xs font-black tracking-wider uppercase text-muted-foreground flex items-center gap-1.5">
+				<MessageSquare className="size-3.5 text-primary" />
+				나의 응답
+				{eligibleSessions.length > 1 && <span>({eligibleSessions.length}개 세션)</span>}
+			</h4>
+			{canRespond && eligibleSessions.length > 0 && (
+				<Button
+					type="button"
+					size="sm"
+					onClick={handleOpenDialog}
+					className="hidden h-8 px-3 text-xs font-bold shrink-0 gap-1.5 cursor-pointer ml-auto sm:inline-flex"
+				>
+					<Pencil className="size-3.5" />
+					<span>가능 여부 응답</span>
+				</Button>
+			)}
+		</div>
+	);
+
 	// 참여 가능한 세션이 없을 때
 	if (eligibleSessions.length === 0) {
 		return (
-			<div className="p-3.5 rounded-2xl border border-border/80 bg-card flex items-center justify-between gap-3 shadow-2xs text-xs text-muted-foreground">
-				<span>나의 응답: 이 곡에서 참여 가능한 배정 세션이 없습니다.</span>
+			<div className="space-y-2">
+				{renderSectionHeader()}
+				<div className="p-3.5 rounded-2xl border border-border/80 bg-card shadow-2xs text-xs text-muted-foreground">
+					이 곡에서 참여 가능한 배정 세션이 없습니다.
+				</div>
 			</div>
 		);
 	}
@@ -247,56 +271,43 @@ export function NominationResponseSection({
 
 		return (
 			<>
-				<div className="p-3.5 rounded-2xl border border-border/80 bg-card flex items-center justify-between gap-3 shadow-2xs">
-					<div className="flex items-center gap-2 min-w-0 flex-wrap">
-						<span className="text-xs font-bold text-muted-foreground shrink-0">
-							나의 응답:
-						</span>
-
-						{/* 세션 칩 */}
-						<Badge
-							variant="outline"
-							className="h-6 px-2 text-[11px] font-bold bg-muted/60 text-foreground border-border/70 rounded-lg shrink-0 gap-1"
-						>
-							<span>{sessionItem.sessionPart}</span>
-							{sessionItem.isRecommendedVocal && (
-								<span className="text-[9px] px-1 py-0.2 rounded bg-amber-500/20 text-amber-700 dark:text-amber-300 font-bold">
-									추천
-								</span>
-							)}
-							{sessionItem.isLocalCustom && (
-								<span className="text-[9px] px-1 py-0.2 rounded bg-primary/10 text-primary font-bold">
-									자유
-								</span>
-							)}
-						</Badge>
-
-						{/* 가능 여부 칩 */}
-						{renderStatusBadge(currentStatus)}
-
-						{/* 작성 메모 (있을 때만 노출) */}
-						{currentComment ? (
-							<div
-								className="flex items-center gap-1.5 text-xs text-foreground bg-muted/60 px-2.5 py-1 rounded-lg border border-border/60 truncate min-w-0 max-w-[140px] sm:max-w-[200px]"
-								title={currentComment}
+				<div className="space-y-2">
+					{renderSectionHeader()}
+					<div className="p-3.5 rounded-2xl border border-border/80 bg-card shadow-2xs">
+						<div className="flex items-center gap-2 min-w-0 flex-wrap">
+							{/* 세션 칩 */}
+							<Badge
+								variant="outline"
+								className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-muted/80 text-muted-foreground border border-border/60 shrink-0 gap-1"
 							>
-								<MessageSquare className="size-3 text-primary shrink-0 opacity-80" />
-								<span className="truncate font-medium">{currentComment}</span>
-							</div>
-						) : null}
-					</div>
+								<span>{sessionItem.sessionPart}</span>
+								{sessionItem.isRecommendedVocal && (
+									<span className="text-[9px] px-1 py-0.2 rounded bg-amber-500/20 text-amber-700 dark:text-amber-300 font-bold">
+										추천
+									</span>
+								)}
+								{sessionItem.isLocalCustom && (
+									<span className="text-[9px] px-1 py-0.2 rounded bg-primary/10 text-primary font-bold">
+										자유
+									</span>
+								)}
+							</Badge>
 
-					{canRespond && (
-						<Button
-							type="button"
-							size="sm"
-							onClick={handleOpenDialog}
-							className="hidden h-8 px-3 text-xs font-bold shrink-0 gap-1.5 cursor-pointer ml-auto sm:inline-flex"
-						>
-							<Pencil className="size-3.5" />
-							<span>가능 여부 응답</span>
-						</Button>
-					)}
+							{/* 가능 여부 칩 */}
+							{renderStatusBadge(currentStatus)}
+
+							{/* 작성 메모 (있을 때만 노출) */}
+							{currentComment ? (
+								<div
+									className="flex basis-full items-start gap-1.5 text-xs text-foreground bg-muted/60 px-2.5 py-1 rounded-lg border border-border/60 min-w-0"
+									title={currentComment}
+								>
+									<MessageSquare className="mt-0.5 size-3 text-primary shrink-0 opacity-80" />
+									<span className="min-w-0 whitespace-pre-wrap break-words font-medium">{currentComment}</span>
+								</div>
+							) : null}
+						</div>
+					</div>
 				</div>
 
 				{renderMobileStickyAction()}
@@ -309,25 +320,9 @@ export function NominationResponseSection({
 	// 2개 이상의 세션에 응답 가능한 경우: 세션별 다중 행 렌더링
 	return (
 		<>
-			<div className="p-3.5 rounded-2xl border border-border/80 bg-card space-y-2.5 shadow-2xs">
-				<div className="flex items-center justify-between gap-3">
-					<span className="text-xs font-bold text-muted-foreground">
-						나의 응답 ({eligibleSessions.length}개 세션)
-					</span>
-					{canRespond && (
-						<Button
-							type="button"
-							size="sm"
-							onClick={handleOpenDialog}
-							className="hidden h-7 px-2.5 text-xs font-bold shrink-0 gap-1 cursor-pointer ml-auto sm:inline-flex"
-						>
-							<Pencil className="size-3" />
-							<span>가능 여부 응답</span>
-						</Button>
-					)}
-				</div>
-
-				<div className="space-y-1.5 pt-0.5">
+			<div className="space-y-2">
+				{renderSectionHeader()}
+				<div className="p-3.5 rounded-2xl border border-border/80 bg-card space-y-1.5 shadow-2xs">
 					{eligibleSessions.map((sessionItem) => {
 						const resp = myResponsesBySession.get(sessionItem.sessionPart);
 						const currentStatus = resp?.status || "undecided";
@@ -342,7 +337,7 @@ export function NominationResponseSection({
 									{/* 세션 칩 */}
 									<Badge
 										variant="outline"
-										className="h-6 px-2 text-[11px] font-bold bg-muted/60 text-foreground border-border/70 rounded-lg shrink-0 gap-1"
+										className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-muted/80 text-muted-foreground border border-border/60 shrink-0 gap-1"
 									>
 										<span>{sessionItem.sessionPart}</span>
 										{sessionItem.isRecommendedVocal && (
@@ -363,11 +358,11 @@ export function NominationResponseSection({
 									{/* 작성 메모 */}
 									{currentComment ? (
 										<div
-											className="flex items-center gap-1.5 text-xs text-foreground bg-background/80 px-2 py-0.5 rounded-lg border border-border/60 truncate min-w-0 max-w-[150px] sm:max-w-[220px]"
+											className="flex basis-full items-start gap-1.5 text-xs text-foreground bg-background/80 px-2 py-0.5 rounded-lg border border-border/60 min-w-0"
 											title={currentComment}
 										>
-											<MessageSquare className="size-3 text-primary shrink-0 opacity-80" />
-											<span className="truncate font-medium">{currentComment}</span>
+											<MessageSquare className="mt-0.5 size-3 text-primary shrink-0 opacity-80" />
+											<span className="min-w-0 whitespace-pre-wrap break-words font-medium">{currentComment}</span>
 										</div>
 									) : null}
 								</div>
@@ -441,7 +436,7 @@ export function NominationResponseSection({
 										<div className="flex items-center gap-1.5">
 											<Badge
 												variant="outline"
-												className="text-xs font-extrabold bg-background text-foreground border-border/80 px-2 py-0.5"
+												className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-muted/80 text-muted-foreground border border-border/60 shrink-0"
 											>
 												{sessionItem.sessionPart}
 											</Badge>

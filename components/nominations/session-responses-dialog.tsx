@@ -242,7 +242,7 @@ export function SessionResponsesDialog({
 						</div>
 						<div className="min-w-0">
 							<h3 className="text-sm font-black tracking-tight text-foreground flex items-center gap-1.5 truncate">
-								세션 참여자 응답 현황
+								세션 응답 현황
 							</h3>
 							<p className="text-xs font-semibold text-muted-foreground truncate">
 								{songTitle}
@@ -361,7 +361,7 @@ export function SessionResponsesDialog({
 								<div
 									key={item.key}
 									className={cn(
-										"p-3 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs",
+										"p-3 rounded-2xl border transition-all flex flex-col gap-2 text-xs",
 										item.isMe
 											? "border-primary/40 bg-primary/5 ring-1 ring-primary/20"
 											: item.isRecommendedVocal
@@ -372,6 +372,7 @@ export function SessionResponsesDialog({
 									{/* 참여자 정보 & 응답 뱃지 */}
 									<div className="flex items-center gap-2.5 min-w-0">
 										<Badge
+											variant="outline"
 											className={cn(
 												"h-6 px-2 text-[11px] font-bold shrink-0 gap-1 rounded-lg",
 												isAvail
@@ -419,9 +420,9 @@ export function SessionResponsesDialog({
 
 									{/* 작성 메모 말풍선 */}
 									{item.comment ? (
-										<div className="flex items-center gap-1.5 text-xs text-foreground bg-muted/60 px-3 py-1.5 rounded-xl border border-border/60 max-w-full sm:max-w-[60%] shrink-0">
-											<MessageSquare className="size-3 text-primary shrink-0 opacity-80" />
-											<span className="truncate font-medium">{item.comment}</span>
+										<div className="flex items-start gap-1.5 text-xs text-foreground bg-muted/60 px-3 py-1.5 rounded-xl border border-border/60 min-w-0">
+											<MessageSquare className="mt-0.5 size-3 text-primary shrink-0 opacity-80" />
+											<span className="min-w-0 whitespace-pre-wrap break-words font-medium">{item.comment}</span>
 										</div>
 									) : (
 										<span className="text-[11px] text-muted-foreground/50 italic hidden sm:inline">

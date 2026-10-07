@@ -84,7 +84,7 @@ test("only an unassigned custom session is open to all gig performers", () => {
 test("guitar response list and shortage chip exclude keyboard performers when guitar is unassigned", () => {
   const tree = drawerFixture()({});
   const html = renderToStaticMarkup(tree);
-  assert.match(html, /기타 가능 여부/);
+  assert.match(html, /기타 세션 응답 현황/);
   assert.doesNotMatch(html, />건반 참여자<|>드럼 참여자</);
   const chip = elements(tree, (node) => node.type === "button" && node.props.title?.startsWith("기타 참여자 응답 현황"))[0];
   assert.match(chip.props.className, /rose/);

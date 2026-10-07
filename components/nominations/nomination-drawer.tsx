@@ -126,7 +126,7 @@ function FormattedTimestampText({
 	}
 
 	return (
-		<span>
+		<span className="whitespace-pre-wrap break-words">
 			{parts.map((part, i) =>
 				typeof part === "string" ? (
 					part
@@ -760,26 +760,28 @@ export function NominationDrawer({
 							)}
 
 							{/* 4. 악보 ('악보 있어요' / '악보 없어요' 및 악보 메모) */}
-							<div className="flex flex-wrap items-center gap-2 text-xs">
-								<span className="font-medium text-muted-foreground shrink-0 flex items-center gap-1">
+							<div className="space-y-2">
+								<h4 className="text-xs font-black tracking-wider uppercase text-muted-foreground flex items-center gap-1.5">
 									<FileText className="size-3.5 text-primary" />
-									악보:
-								</span>
-								<Badge
-									className={cn(
-										"text-xs px-2.5 py-0.5 font-bold tracking-wider",
-										song.sheetExists
-											? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20"
-											: "bg-muted text-muted-foreground border border-border hover:bg-muted",
+									악보
+								</h4>
+								<div className="flex flex-wrap items-center gap-2 text-xs">
+									<Badge
+										className={cn(
+											"text-xs px-2.5 py-0.5 font-bold tracking-wider",
+											song.sheetExists
+												? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20"
+												: "bg-muted text-muted-foreground border border-border hover:bg-muted",
+										)}
+									>
+										{song.sheetExists ? "악보 있어요" : "악보 없어요"}
+									</Badge>
+									{song.sheetNote && (
+										<span className="text-muted-foreground text-xs bg-muted/40 px-2 py-0.5 rounded-md border border-border/60 font-medium whitespace-pre-wrap break-words min-w-0">
+											{song.sheetNote}
+										</span>
 									)}
-								>
-									{song.sheetExists ? "악보 있어요" : "악보 없어요"}
-								</Badge>
-								{song.sheetNote && (
-									<span className="text-muted-foreground text-xs bg-muted/40 px-2 py-0.5 rounded-md border border-border/60 font-medium">
-										{song.sheetNote}
-									</span>
-								)}
+								</div>
 							</div>
 
 							{/* 5. 세션 (충족 시 초록색, 부족 확정 시 빨간색, 인라인 응답 현황 통합) */}
@@ -875,7 +877,7 @@ export function NominationDrawer({
 										<div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
 											<span className="text-xs font-bold text-foreground flex items-center gap-1.5">
 												<Users className="size-3.5 text-primary" />
-												<span>{selectedSessionPart} 가능 여부</span>
+												<span>{selectedSessionPart} 세션 응답 현황</span>
 											</span>
 											<div className="flex items-center gap-1.5 text-[11px] font-semibold">
 												<span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
@@ -901,7 +903,7 @@ export function NominationDrawer({
 										</div>
 
 										{selectedPartMembers.length > 0 ? (
-											<div className="space-y-1.5 max-h-72 overflow-y-auto overscroll-contain pr-0.5">
+											<div className="space-y-1.5">
 												{selectedPartMembers.map((m) => {
 													const isAvail = m.status === "available";
 													const isUnavail = m.status === "unavailable";
@@ -910,14 +912,14 @@ export function NominationDrawer({
 														<div
 															key={m.key}
 															className={cn(
-																"p-3 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs",
+																"p-3 rounded-2xl border transition-all flex flex-col gap-2 text-xs",
 																m.isMe
 																	? "border-primary/40 bg-primary/5 ring-1 ring-primary/20"
 																	: "border-border/80 bg-card hover:border-border",
 															)}
 														>
 															{/* 참여자 정보 & 응답 뱃지 */}
-															<div className="flex items-center gap-2 min-w-0 flex-wrap sm:flex-nowrap">
+															<div className="flex items-center gap-2 min-w-0 flex-wrap">
 																<Badge
 																	variant="outline"
 																	className={cn(
@@ -971,11 +973,11 @@ export function NominationDrawer({
 															{/* 작성 메모 (메모 없으면 굳이 표시하지 않음) */}
 															{m.comment?.trim() ? (
 																<div
-																	className="flex items-center gap-1.5 text-xs text-foreground bg-muted/60 px-3 py-1.5 rounded-xl border border-border/60 max-w-full sm:max-w-[50%] shrink-0 min-w-0"
+																	className="flex items-start gap-1.5 text-xs text-foreground bg-muted/60 px-3 py-1.5 rounded-xl border border-border/60 min-w-0"
 																	title={m.comment}
 																>
-																	<MessageSquare className="size-3 text-primary shrink-0 opacity-80" />
-																	<span className="truncate font-medium">{m.comment}</span>
+																	<MessageSquare className="mt-0.5 size-3 text-primary shrink-0 opacity-80" />
+																	<span className="min-w-0 whitespace-pre-wrap break-words font-medium">{m.comment}</span>
 																</div>
 															) : null}
 														</div>

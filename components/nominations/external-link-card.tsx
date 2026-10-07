@@ -240,7 +240,7 @@ export function ExternalLinkCard({
 
 			{/* 중앙: 메모 / 타이틀 및 URL */}
 			<div className="my-3 space-y-1">
-				<h4 className="text-sm sm:text-base font-bold text-foreground line-clamp-2 break-keep group-hover:text-primary transition-colors">
+				<h4 className="text-sm sm:text-base font-bold text-foreground whitespace-pre-wrap break-words group-hover:text-primary transition-colors">
 					{note?.trim() || `${service.name} 바로가기`}
 				</h4>
 				<p className="text-[11px] font-mono text-muted-foreground truncate opacity-80" title={safeUrl}>
