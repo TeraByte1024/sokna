@@ -444,6 +444,7 @@ export function NominationForm({
 								placeholder="직접 입력"
 								value={newPart}
 								onChange={(e) => setNewPart(e.target.value)}
+								onBlur={(e) => handleAddPart(e.currentTarget.value)}
 								onKeyDown={(e) => {
 									if (e.key === "Enter") {
 										e.preventDefault();
