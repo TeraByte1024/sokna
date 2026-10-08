@@ -5,8 +5,9 @@ import { Lock, ArrowLeft, Users } from "lucide-react";
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
-import { SUPABASE_GIGS_TABLE } from "@/lib/supabase/gigs";
 import { getIsAdmin } from "@/lib/auth-admin";
+import { getAuthUser } from "@/lib/auth-server-data";
+import { getNominationGigRow } from "@/lib/gig-server-data";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -31,12 +32,7 @@ export async function generateMetadata({
 	}
 
 	try {
-		const supabase = await createClient();
-		const { data: gig } = await supabase
-			.from(SUPABASE_GIGS_TABLE)
-			.select("title")
-			.eq("id", numericId)
-			.maybeSingle();
+		const { data: gig } = await getNominationGigRow(numericId);
 
 		return {
 			title: gig?.title
@@ -75,30 +71,23 @@ async function NominationsContent({ params }: PageProps) {
 	}
 
 	const supabase = await createClient();
-
-	// 1. 로그인 인증 확인 (비회원 로그인 리다이렉트)
-	const {
-		data: { user },
-	} = await supabase.auth.getUser();
-
-	if (!user) {
-		redirect(`/auth/login?redirect=/gigs/${numericId}/nominations`);
-	}
-
-	// 2. 관리자 권한 및 공연 참여자(Performer) 여부 검증
-	const [isAdmin, { data: performer }, { data: gig }] = await Promise.all([
+	const authUser = getAuthUser().then(({ data: { user } }) => {
+		if (!user) redirect(`/auth/login?redirect=/gigs/${numericId}/nominations`);
+		return user;
+	});
+	// 공연 조회는 인증과 병렬 실행하고, 관리자·참여자 판정은 같은 사용자 검증을 공유합니다.
+	const [user, isAdmin, { data: gig }, { data: performer }] = await Promise.all([
+		authUser,
 		getIsAdmin(),
-		supabase
-			.from("performers")
-			.select("id, part, name")
-			.eq("gig_id", numericId)
-			.eq("user_id", user.id)
-			.maybeSingle(),
-		supabase
-			.from(SUPABASE_GIGS_TABLE)
-			.select("title, meeting_date, meeting_location, nomination_deadline")
-			.eq("id", numericId)
-			.maybeSingle(),
+		getNominationGigRow(numericId),
+		authUser.then(async (user) => {
+			const { data } = await supabase.from("performers")
+				.select("id, part, name")
+				.eq("gig_id", numericId)
+				.eq("user_id", user.id)
+				.maybeSingle();
+			return { data };
+		}),
 	]);
 
 	// 참여자가 아니고 관리자도 아닌 경우 접근 차단 안내 화면 표시

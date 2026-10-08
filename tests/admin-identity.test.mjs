@@ -31,8 +31,9 @@ function fixture({user={id:"admin",email:"new@example.test"},authError=null,exis
     },
   };
   const shared={"@/lib/supabase/server":{createClient:async()=>client}};
+  const authData=load("lib/auth-server-data.ts",{...shared,react:{cache:fn=>fn}});
   const {getIsAdmin}=load("lib/auth-admin.ts",{
-    ...shared,react:{cache:fn=>fn},"@/lib/supabase/admin":{SUPABASE_ADMINS_TABLE:"admins"},
+    ...shared,react:{cache:fn=>fn},"@/lib/auth-server-data":authData,"@/lib/supabase/admin":{SUPABASE_ADMINS_TABLE:"admins"},
   });
   const actions=load("app/admin/members/actions.ts",{
     ...shared,"next/cache":{revalidatePath(){}},

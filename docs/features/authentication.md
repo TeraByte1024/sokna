@@ -97,6 +97,7 @@ SOKNA 애플리케이션은 **Supabase Auth**와 `@supabase/ssr`을 결합하여
      if (!allowed) return { ok: false, error: "관리자만 접근 가능합니다." };
      ```
    - 단일 요청 내 중복 조회를 줄이기 위해 React `cache()`로 래핑되어 있습니다.
+   - `lib/auth-server-data.ts`의 `getAuthUser()`는 기존 `auth.getUser()` 검증 결과(오류 포함)를 React `cache()`로 한 요청 안에서 공유합니다. 선곡회의 본문과 관리자 판정은 동일한 검증 결과를 사용하며, 요청 간 또는 계정 간 인증 결과를 재사용하지 않습니다. 관리자 조회는 검증 오류나 사용자 부재 시 기존처럼 거부합니다.
 
 ---
 

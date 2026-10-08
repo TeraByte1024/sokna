@@ -1,18 +1,19 @@
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { SUPABASE_ADMINS_TABLE } from "@/lib/supabase/admin";
+import { getAuthUser } from "@/lib/auth-server-data";
 
 async function getIsAdminUncached(): Promise<boolean> {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return false;
 
-  const supabase = await createClient();
   const {
     data: { user },
     error: authError,
-  } = await supabase.auth.getUser();
+  } = await getAuthUser();
 
   if (authError || !user) return false;
 
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from(SUPABASE_ADMINS_TABLE)
     .select("id")

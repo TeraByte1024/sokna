@@ -165,15 +165,19 @@ test("failed saves keep the dialog and notice and show a bottom toast", async ()
   assert.deepEqual(fixture.toasts, [["error", "저장 실패", { position: "bottom-center" }]]);
 });
 
-function serverFixture({ admin = true, error = null } = {}) {
+function serverFixture({ admin = true, error = null, pushResult, pushError } = {}) {
   const writes = [];
   const invalidations = [];
+  const afterCallbacks = [];
+  const notifications = [];
   const client = {
     auth: { getUser: async () => ({ data: { user: { id: "member", user_metadata: {} } }, error: null }) },
     from(table) {
       const query = {
         select() { return query; }, eq() { return query; },
-        single: async () => ({ data: { id: 7, created_by: 2, ...content }, error: null }),
+        single: async () => ({ data: { id: 7, created_by: 2, ...content,
+          updated_at: writes.find((write) => write.table === "nominations")?.payload.updated_at ?? before,
+        }, error: null }),
         maybeSingle: async () => ({ data: { id: 2, user_id: "other", name: table === "users" ? "본인" : "다른 참여자" }, error: null }),
         update(payload) { writes.push({ table, payload }); return query; },
         upsert(payload) { writes.push({ table, payload }); return query; },
@@ -185,20 +189,64 @@ function serverFixture({ admin = true, error = null } = {}) {
   const actions = loadSource("app/gigs/[id]/nominations/actions.ts", {
     "@/lib/supabase/server": { createClient: async () => client },
     "@/lib/auth-admin": { getIsAdmin: async () => admin },
-    "@/lib/nomination-views": {}, "@/lib/push-notifications": {},
+    "@/lib/nomination-views": {},
+    "@/lib/push-notifications": { async processPendingPushNotifications(options) {
+      notifications.push(options);
+      if (pushError) throw pushError;
+      return pushResult ?? { processedCount: 1 };
+    } },
+    "next/server": { after: (callback) => afterCallbacks.push(callback) },
     "next/cache": { revalidatePath: (value) => invalidations.push(value) },
   });
-  return { ...actions, writes, invalidations };
+  return { ...actions, writes, invalidations, notifications, afterCallbacks,
+    runAfter: () => Promise.all(afterCallbacks.map((callback) => callback())),
+  };
 }
 const payload = { title: content.title, artist: "", requiredParts: content.required_parts, sheetExists: false, sheetNote: content.sheet_note, description: content.description, links: content.links, recommendedVocals: content.recommended_vocals };
 test("unchanged song saves skip writes while a real edit updates the timestamp", async () => {
   const fixture = serverFixture();
   await fixture.updateNomination("1", 7, payload);
   assert.equal(fixture.writes.length, 0);
+  assert.equal(fixture.afterCallbacks.length, 0);
   await fixture.updateNomination("1", 7, { ...payload, sheetNote: "새 메모" });
   assert.equal(fixture.writes.length, 1);
   assert.ok(Number.isFinite(Date.parse(fixture.writes[0].payload.updated_at)));
   assert.equal(fixture.invalidations.length, 2);
+  assert.deepEqual(fixture.notifications, []);
+  await fixture.runAfter();
+  assert.deepEqual(fixture.notifications, [{
+    eventType: "nomination_updated",
+    eventKey: `nomination-updated:7:${fixture.writes[0].payload.updated_at}`,
+  }]);
+});
+
+test("slow FCM cannot delay saving an edited nomination", async () => {
+  let finishPush;
+  const fixture = serverFixture({ pushResult: new Promise((resolve) => { finishPush = resolve; }) });
+  const outcome = await Promise.race([
+    fixture.updateNomination("1", 7, { ...payload, sheetNote: "새 메모" }).then(() => "saved"),
+    new Promise((resolve) => setImmediate(() => resolve("blocked"))),
+  ]);
+  assert.equal(outcome, "saved");
+  assert.deepEqual(fixture.notifications, []);
+  const pending = fixture.runAfter();
+  assert.equal(fixture.notifications.length, 1);
+  finishPush({ processedCount: 1 });
+  await pending;
+});
+
+test("background update notification failures do not undo the saved song", async () => {
+  const originalWarn = console.warn;
+  const warnings = [];
+  console.warn = (...args) => warnings.push(args);
+  try {
+    const fixture = serverFixture({ pushError: new Error("FCM unavailable") });
+    await fixture.updateNomination("1", 7, { ...payload, sheetNote: "새 메모" });
+    await fixture.runAfter();
+    assert.equal(fixture.writes.length, 1);
+    assert.equal(fixture.invalidations.length, 2);
+    assert.equal(warnings.length, 1);
+  } finally { console.warn = originalWarn; }
 });
 test("unchanged saves still require ownership before skipping the write", async () => {
   const fixture = serverFixture({ admin: false });

@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { getIsAdmin } from "@/lib/auth-admin";
 import { SUPABASE_GIGS_TABLE } from "@/lib/supabase/gigs";
 import { isNominationClosed } from "@/lib/nomination-deadline";
@@ -13,7 +14,7 @@ import { processPendingPushNotifications } from "@/lib/push-notifications";
 /**
  * 선곡회의 후보곡 등록 액션
  * - nominations 테이블에 저장
- * - DB 트리거가 알림을 함께 저장하고 요청 안에서 즉시 발송
+ * - DB 트리거가 알림을 함께 저장하고 응답 이후에 발송
  */
 export async function addNomination(gigId: string, payload: NominationFormValues) {
 	const supabase = await createClient();
@@ -103,11 +104,17 @@ export async function addNomination(gigId: string, payload: NominationFormValues
 
 	// 후보곡과 알림은 이미 같은 DB 트랜잭션으로 저장되었습니다.
 	try {
-		await processPendingPushNotifications({
-			eventType: "nomination_added", eventKey: "nomination:" + inserted.id,
+		after(async () => {
+			try {
+				await processPendingPushNotifications({
+					eventType: "nomination_added", eventKey: "nomination:" + inserted.id,
+				});
+			} catch (pushError) {
+				console.warn("후보곡 백그라운드 푸시 실패, 재시도 대기:", pushError);
+			}
 		});
 	} catch (pushError) {
-		console.warn("후보곡 즉시 푸시 실패, 재시도 대기:", pushError);
+		console.warn("후보곡 푸시 예약 실패, 재시도 대기:", pushError);
 	}
 
 	// 데이터 캐시 갱신
@@ -273,14 +280,18 @@ export async function updateNomination(
 		throw new Error("곡 수정 중 오류가 발생했습니다: " + (error?.message || "수정 결과를 확인할 수 없습니다."));
 	}
 
-	// 수정 트리거가 생성한 이 변경의 기존 응답자 알림만 즉시 처리합니다.
+	// 수정 트리거가 생성한 이 변경의 기존 응답자 알림을 응답 이후에 처리합니다.
 	try {
-		await processPendingPushNotifications({
-			eventType: "nomination_updated",
-			eventKey: "nomination-updated:" + updated.id + ":" + new Date(updated.updated_at).toISOString(),
+		const eventKey = "nomination-updated:" + updated.id + ":" + new Date(updated.updated_at).toISOString();
+		after(async () => {
+			try {
+				await processPendingPushNotifications({ eventType: "nomination_updated", eventKey });
+			} catch (pushError) {
+				console.warn("후보곡 수정 백그라운드 푸시 실패, 재시도 대기:", pushError);
+			}
 		});
 	} catch (pushError) {
-		console.warn("후보곡 수정 즉시 푸시 실패, 재시도 대기:", pushError);
+		console.warn("후보곡 수정 푸시 예약 실패, 재시도 대기:", pushError);
 	}
 
 	revalidatePath(`/gigs/${gigId}/nominations`);

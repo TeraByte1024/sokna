@@ -133,6 +133,7 @@ function nominationFixture(options = {}) {
   const writes = [];
   const notifications = [];
   const invalidations = [];
+  const afterCallbacks = [];
   const gig = options.missingGig ? null : {
     id: 1,
     title: "테스트 공연",
@@ -148,7 +149,7 @@ function nominationFixture(options = {}) {
         eq() { return query; },
         maybeSingle: async () => ({ data: table === "gigs" ? gig : table === "performers" ? performer : null, error: null }),
         insert(payload) { writes.push({ table, payload }); return query; },
-        single: async () => ({ data: { id: 7 }, error: null }),
+        single: async () => ({ data: options.insertError ? null : { id: 7 }, error: options.insertError ?? null }),
         then(resolve, reject) { return Promise.resolve({ data: table === "performers" && performer ? [performer] : [], error: null }).then(resolve, reject); },
       };
       return query;
@@ -156,11 +157,19 @@ function nominationFixture(options = {}) {
   };
   const mocks = {
     "next/cache": { revalidatePath: (value) => invalidations.push(value) },
+    "next/server": { after(callback) {
+      if (options.afterError) throw options.afterError;
+      afterCallbacks.push(callback);
+    } },
     "@/lib/auth-admin": { getIsAdmin: async () => Boolean(options.admin) },
     "@/lib/supabase/server": { createClient: async () => client },
     "@/lib/nomination-views": { recordLastViewedNomination() {} },
     "@/lib/push-notifications": {
-      processPendingPushNotifications: async (options) => { notifications.push(options); return { processedCount: 1 }; },
+      processPendingPushNotifications: async (pushOptions) => {
+        notifications.push(pushOptions);
+        if (options.pushError) throw options.pushError;
+        return options.pushResult ?? { processedCount: 1 };
+      },
     },
     "next/navigation": { redirect: (destination) => { throw new Error(`REDIRECT:${destination}`); } },
     "next/link": linkMock,
@@ -168,7 +177,9 @@ function nominationFixture(options = {}) {
     "@/components/page-container": { PageContainer: ({ children }) => children },
     "@/components/nominations/nomination-form": { NominationForm: () => React.createElement("form", { "data-nomination-form": true }) },
   };
-  return { mocks, writes, notifications, invalidations };
+  return { mocks, writes, notifications, invalidations, afterCallbacks,
+    runAfter: () => Promise.all(afterCallbacks.map((callback) => callback())),
+  };
 }
 
 const payload = { title: "후보곡", artist: "아티스트", requiredParts: ["기타"], sheetExists: false, description: "", links: [], recommendedVocals: [] };
@@ -206,6 +217,7 @@ test("server actions reject late submissions and the legacy alias without writes
       await assert.rejects(action("1", payload), /마감/);
     }
     assert.deepEqual(fixture.writes, []);
+    assert.deepEqual(fixture.afterCallbacks, []);
     assert.deepEqual(fixture.notifications, []);
     assert.deepEqual(fixture.invalidations, []);
   }
@@ -220,8 +232,11 @@ test("server action allows members before closing and administrators after closi
     assert.equal(fixture.writes[0].table, "nominations");
     assert.equal(fixture.writes[0].payload.gig_id, 1);
     assert.equal(fixture.writes[0].payload.created_by, options.nonPerformer ? null : 3);
-    assert.deepEqual(fixture.notifications, [{ eventType: "nomination_added", eventKey: "nomination:7" }]);
+    assert.deepEqual(fixture.notifications, []);
+    assert.equal(fixture.afterCallbacks.length, 1);
     assert.ok(fixture.invalidations.includes("/gigs/1/nominations"));
+    await fixture.runAfter();
+    assert.deepEqual(fixture.notifications, [{ eventType: "nomination_added", eventKey: "nomination:7" }]);
   }
 });
 
@@ -230,5 +245,55 @@ test("server action does not insert into a missing gig", async () => {
   const { addNomination } = loadSource("app/gigs/[id]/nominations/actions.ts", fixture.mocks);
   await assert.rejects(addNomination("1", payload));
   assert.deepEqual(fixture.writes, []);
+  assert.deepEqual(fixture.afterCallbacks, []);
   assert.deepEqual(fixture.notifications, []);
+});
+
+test("slow FCM delivery cannot delay a saved nomination action", async () => {
+  let finishPush;
+  const pushResult = new Promise((resolve) => { finishPush = resolve; });
+  const fixture = nominationFixture({ pushResult });
+  const { addNomination } = loadSource("app/gigs/[id]/nominations/actions.ts", fixture.mocks);
+  const outcome = await Promise.race([
+    addNomination("1", payload).then(() => "saved"),
+    new Promise((resolve) => setImmediate(() => resolve("blocked"))),
+  ]);
+  assert.equal(outcome, "saved");
+  assert.deepEqual(fixture.notifications, []);
+  const pending = fixture.runAfter();
+  assert.equal(fixture.notifications.length, 1);
+  assert.deepEqual(fixture.invalidations, ["/gigs/1/nominations", "/gigs/1"]);
+  finishPush({ processedCount: 1 });
+  await pending;
+});
+
+test("background delivery or scheduling failures preserve successful saves for outbox recovery", async () => {
+  const originalWarn = console.warn;
+  const warnings = [];
+  console.warn = (...args) => warnings.push(args);
+  try {
+    for (const options of [{ pushError: new Error("FCM unavailable") }, { afterError: new Error("worker unavailable") }]) {
+      const fixture = nominationFixture(options);
+      const { addNomination } = loadSource("app/gigs/[id]/nominations/actions.ts", fixture.mocks);
+      await addNomination("1", payload);
+      assert.equal(fixture.writes.length, 1);
+      assert.equal(fixture.invalidations.length, 2);
+      await fixture.runAfter();
+      assert.equal(fixture.afterCallbacks.length, options.afterError ? 0 : 1);
+    }
+    assert.equal(warnings.length, 2);
+  } finally { console.warn = originalWarn; }
+});
+
+test("failed nomination saves cannot schedule FCM delivery", async () => {
+  const originalError = console.error;
+  console.error = () => {};
+  try {
+    const fixture = nominationFixture({ insertError: { message: "DB error" } });
+    const { addNomination } = loadSource("app/gigs/[id]/nominations/actions.ts", fixture.mocks);
+    await assert.rejects(addNomination("1", payload), /DB error/);
+    assert.deepEqual(fixture.afterCallbacks, []);
+    assert.deepEqual(fixture.notifications, []);
+    assert.deepEqual(fixture.invalidations, []);
+  } finally { console.error = originalError; }
 });

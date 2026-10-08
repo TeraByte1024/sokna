@@ -5,6 +5,7 @@ import {
 	useState,
 	useEffect,
 	useMemo,
+	memo,
 } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
@@ -915,7 +916,7 @@ export function NominationPanel({
 /**
  * 후보곡 개별 카드 컴포넌트
  */
-function NominationCard({
+const NominationCard = memo(function NominationCard({
 	song,
 	compact = false,
 	index,
@@ -934,21 +935,23 @@ function NominationCard({
 	isCurrentUserPerformer: boolean;
 	performers: RecommendedVocal[];
 }) {
-	const mySessionResponses = useMemo(() => {
+	const eligibleSessions = useMemo(() => {
 		if (!isCurrentUserPerformer) return [];
-		const eligibleSessions = getEligibleSessionsForUser(song, performers, currentUserId);
-		const sessionOrder = sortSessionParts(eligibleSessions.map(({ sessionPart }) => sessionPart));
-		return eligibleSessions
-			.sort((a, b) => sessionOrder.indexOf(a.sessionPart) - sessionOrder.indexOf(b.sessionPart))
-			.map(({ sessionPart, existingResponse }) => ({ sessionPart, status: existingResponse?.status || "undecided" }));
+		return getEligibleSessionsForUser(song, performers, currentUserId);
 	}, [song, performers, currentUserId, isCurrentUserPerformer]);
 
+	const mySessionResponses = useMemo(() => {
+		const sessionOrder = sortSessionParts(eligibleSessions.map(({ sessionPart }) => sessionPart));
+		return [...eligibleSessions]
+			.sort((a, b) => sessionOrder.indexOf(a.sessionPart) - sessionOrder.indexOf(b.sessionPart))
+			.map(({ sessionPart, existingResponse }) => ({ sessionPart, status: existingResponse?.status || "undecided" }));
+	}, [eligibleSessions]);
+
 	const hasOutdatedResponse = useMemo(() => {
-		if (!isCurrentUserPerformer) return false;
-		return getEligibleSessionsForUser(song, performers, currentUserId).some(({ existingResponse }) =>
+		return eligibleSessions.some(({ existingResponse }) =>
 			isNominationResponseOutdated(song.updatedAt, existingResponse),
 		);
-	}, [song, performers, currentUserId, isCurrentUserPerformer]);
+	}, [song.updatedAt, eligibleSessions]);
 
 	const partCounts = useMemo(() => {
 		return (song.requiredParts || []).reduce(
@@ -1158,7 +1161,7 @@ function NominationCard({
 			)}
 		</Card>
 	);
-}
+});
 
 function NominationResponseChip({ sessionPart, status }: {
 	sessionPart: string;

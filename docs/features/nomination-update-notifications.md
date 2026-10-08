@@ -28,8 +28,8 @@
 
 ## 4. Server Action
 
-- updateNomination: 기존 권한/동일 내용 검사를 유지한다. UPDATE 결과의 DB updated_at으로 정확한 수정 이벤트 키를 만들고 processPendingPushNotifications를 호출해 해당 이벤트만 즉시 발송한다.
-- 발송 실패는 원문 저장을 실패로 처리하지 않는다. 저장된 outbox로 cron이 재시도한다. DB 직접 수정은 cron이 발송한다.
+- updateNomination: 기존 권한/동일 내용 검사를 유지한다. UPDATE 결과의 DB updated_at으로 정확한 수정 이벤트 키를 만들고 Next.js `after` 콜백 안에서 processPendingPushNotifications를 호출해 해당 이벤트를 응답 이후에 발송한다. 사용자 화면 이동은 FCM 완료를 기다리지 않으며, 내용이 같은 저장은 발송 작업을 등록하지 않는다.
+- 발송 작업 등록 실패와 백그라운드 발송 실패는 원문 저장을 실패로 처리하지 않는다. 저장된 outbox로 cron이 재시도한다. DB 직접 수정은 cron이 발송한다. 이번 응답 분리는 기존 트리거와 스키마를 유지하는 앱 코드 변경이다.
 
 ## 5. UI / 알림 문구
 

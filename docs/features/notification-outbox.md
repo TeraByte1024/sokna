@@ -29,6 +29,7 @@
 
 ## 4. 처리 API
 `processPendingPushNotifications({ eventType?, eventKey?, userId?, notificationIds?, limit? })` 하나로 즉시 처리와 cron을 통합한다.
+후보곡 등록·수정은 기존 DB 트리거로 곡과 outbox 저장을 먼저 완료하고, Next.js `after` 콜백에서 해당 종류·이벤트 키의 발송을 응답 이후에 실행한다. 곡 저장 성공 응답과 목록 이동은 FCM 완료를 기다리지 않는다. 작업 등록·발송 실패는 저장을 되돌리지 않으며 기존 pending outbox로 복구한다. 이번 변경에서는 DB를 수정하지 않는다.
 DB가 pending이며 push_next_attempt_at이 도래한 행만 조회한다. 선점은 push_next_attempt_at을 5분 뒤로 바꾸고 시도 횟수를 증가시킨다. 완료 저장 시 선점 시각과 다음 시각을 비교하여 오래된 실행이 새 실행을 덮어쓰지 못하게 한다. processing 상태 및 별도 회수 UPDATE는 제거한다.
 일시 오류는 기존 1분/5분/15분/1시간과 0~20% 지연, 생성 후 24시간 한도를 유지한다. 성공/영구 실패 기기는 재시도에서 제외한다.
 이메일 가입 액션은 Supabase 가입 결과의 계정 ID와 DB의 applied_at으로 정확한 신청 이벤트 키를 조회한다. 이메일 확인 전 세션이 없어도 해당 신청만 처리하며, 공개 성공 응답은 계정 존재 여부나 처리 건수를 노출하지 않는 `{ ok: true }`로 통일한다.
