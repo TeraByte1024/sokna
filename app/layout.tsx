@@ -17,6 +17,9 @@ export const metadata: Metadata = {
     template: "%s | 소리로 크는 나무",
   },
   description: "한양대 X 한양여대 연합 밴드동아리",
+  verification: {
+    google: "BF6i3XNjuqHzSeTdRvCbCd69Qi6_dA4SO4T2BLE4cLQ",
+  },
   appleWebApp: {
     capable: true,
     title: "소크나",
