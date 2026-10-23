@@ -1,14 +1,13 @@
 import { LEGAL_DOCUMENT_HISTORY } from "@/lib/legal-documents";
-import { PRIVACY_POLICY_HISTORY } from "@/lib/privacy-policy";
 
 export type PublicLegalKind = "terms" | "privacy";
 export type PublicLegalDocument = { postedOn: string; title: string; content: string };
 
 export function publicLegalDocuments(kind: PublicLegalKind): PublicLegalDocument[] {
-  const source: readonly PublicLegalDocument[] = kind === "privacy" ? PRIVACY_POLICY_HISTORY : LEGAL_DOCUMENT_HISTORY
+  const source: readonly PublicLegalDocument[] = LEGAL_DOCUMENT_HISTORY
     .filter((entry) => entry.publiclyListed === true)
-    .flatMap((entry) => entry.documents.filter((document) => document.kind === "terms")
-      .map((document) => ({ postedOn: document.postedOn, title: "이용약관", content: document.content })));
+    .flatMap((entry) => entry.documents.filter((document) => document.kind === kind)
+      .map((document) => ({ postedOn: document.postedOn, title: kind === "terms" ? "이용약관" : "개인정보처리방침", content: document.content })));
   const byDate = new Map<string, PublicLegalDocument>();
   for (const document of source) {
     const previous = byDate.get(document.postedOn);
