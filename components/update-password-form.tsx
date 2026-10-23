@@ -39,7 +39,7 @@ export function UpdatePasswordForm({
     isDirty: isFormDirty,
   });
 
-  const handleForgotPassword = async (e: React.FormEvent) => {
+  const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     const supabase = createClient();
     setIsLoading(true);
@@ -49,10 +49,10 @@ export function UpdatePasswordForm({
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
       markSubmitting();
-      // Update this route to redirect to an authenticated route. The user already has an active session.
+      // 재설정 링크로 인증된 세션에서 비밀번호를 변경한 뒤 홈으로 이동합니다.
       router.push("/");
-    } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : "An error occurred");
+    } catch {
+      setError("비밀번호를 변경하지 못했습니다. 재설정 링크를 다시 열거나 잠시 후 다시 시도해 주세요.");
     } finally {
       setIsLoading(false);
     }
@@ -60,22 +60,23 @@ export function UpdatePasswordForm({
 
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
-      <Card>
+      <Card className="border-border/60 shadow-lg">
         <CardHeader>
-          <CardTitle className="text-2xl">Reset Your Password</CardTitle>
+          <CardTitle className="text-2xl font-bold">새 비밀번호 설정</CardTitle>
           <CardDescription>
-            Please enter your new password below.
+            새로 사용할 비밀번호를 입력해 주세요.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleForgotPassword}>
+          <form onSubmit={handleUpdatePassword}>
             <div className="flex flex-col gap-6">
               <div className="grid gap-2">
-                <Label htmlFor="password">New password</Label>
+                <Label htmlFor="password">새 비밀번호</Label>
                 <Input
                   id="password"
                   type="password"
-                  placeholder="New password"
+                  placeholder="새 비밀번호 입력"
+                  autoComplete="new-password"
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -83,7 +84,7 @@ export function UpdatePasswordForm({
               </div>
               {error && <p className="text-sm text-red-500">{error}</p>}
               <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? "Saving..." : "Save new password"}
+                {isLoading ? "변경 중..." : "비밀번호 변경"}
               </Button>
             </div>
           </form>

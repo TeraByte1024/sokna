@@ -19,7 +19,7 @@ export async function AuthButton() {
   if (!user) {
     return (
       <Button asChild size="sm" variant="default" className="h-8 px-3 text-xs sm:text-sm font-semibold shrink-0 shadow-sm">
-        <Link href="/auth/login">회원 로그인</Link>
+        <Link href="/auth/login">로그인</Link>
       </Button>
     );
   }
@@ -100,9 +100,11 @@ export async function AuthButton() {
           userName={userName}
           userEmail={user.email}
           marketingOptIn={marketingOptIn}
+          isMember={isAdmin || userStatus === "approved"}
+          hasMembershipApplication={hasCompletedProfile}
         />
       </div>
-      {/* 가입 정보 미완성 계정은 프로필 대신 가입 폼으로 이동하므로 로그아웃 경로를 유지합니다. */}
+      {/* 관객 계정도 모바일 헤더에서 바로 로그아웃할 수 있습니다. */}
       {!isAdmin && (!userStatus || userStatus === "pending") && !hasCompletedProfile && (
         <div className="md:hidden">
           <LogoutButton />

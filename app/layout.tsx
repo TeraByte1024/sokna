@@ -3,6 +3,7 @@ import { Geist } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "@/components/ui/sonner";
 import { PushMessageListener } from "@/components/push-message-listener";
+import { LegalConsentGate } from "@/components/legal-consent-gate";
 import "./globals.css";
 
 const defaultUrl = process.env.VERCEL_URL
@@ -48,6 +49,7 @@ export default function RootLayout({
         >
           {children}
           <PushMessageListener />
+          <LegalConsentGate />
           <Toaster />
         </ThemeProvider>
       </body>

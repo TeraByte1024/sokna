@@ -5,7 +5,7 @@ import { CompleteProfileForm } from "./complete-profile-form";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "회원가입 - 소크나",
+  title: "회원 권한 요청 - 소크나",
   description: "소크나 부원 인증을 위한 기수 및 세션 정보 등록",
 };
 
@@ -23,12 +23,12 @@ export default async function CompleteProfilePage() {
   // 기존 프로필 조회
   const { data: profile } = await supabase
     .from("users")
-    .select("name, generation, part, status")
+    .select("name, generation, part, status, marketing_opt_in")
     .eq("id", user.id)
     .maybeSingle();
 
   // 이미 기수와 세션이 입력되어 있고 승인 대기 또는 완료 상태라면 홈으로
-  if (hasCompletedMemberProfile(profile)) {
+  if (profile?.status === "approved" || hasCompletedMemberProfile(profile)) {
     redirect("/");
   }
 
@@ -44,6 +44,7 @@ export default async function CompleteProfilePage() {
         <CompleteProfileForm
           initialName={initialName}
           email={user.email}
+          initialMarketingOptIn={profile?.marketing_opt_in === true}
         />
       </div>
     </div>

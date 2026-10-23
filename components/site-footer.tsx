@@ -24,6 +24,10 @@ export function SiteFooter() {
 								© 2026 SOKNA. All rights reserved.
 							</p>
 						</div>
+						<nav aria-label="서비스 약관" className="flex flex-wrap justify-center gap-x-4 gap-y-2 text-xs md:justify-start">
+							<Link href="/terms" className="text-muted-foreground hover:text-foreground hover:underline underline-offset-4">이용약관</Link>
+							<Link href="/privacy" className="font-semibold text-foreground hover:underline underline-offset-4">개인정보처리방침</Link>
+						</nav>
 					</div>
 
 					{/* 2. SNS 및 테마 스위처 섹션 */}

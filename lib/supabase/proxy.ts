@@ -1,7 +1,10 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { getLoginCompletionDestination } from "@/lib/auth/login-flow";
+import { isPublicLegalPath } from "@/lib/legal-paths";
 
 export async function updateSession(request: NextRequest) {
+  if (isPublicLegalPath(request.nextUrl.pathname)) return NextResponse.next({ request });
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
@@ -51,21 +54,11 @@ export async function updateSession(request: NextRequest) {
     const pathname = request.nextUrl.pathname;
     if (user && pathname === "/auth/login") {
       const redirectParam = request.nextUrl.searchParams.get("redirect");
-      let destination = new URL("/", request.url);
-
-      if (
-        redirectParam?.startsWith("/") &&
-        !redirectParam.startsWith("//") &&
-        !redirectParam.includes("\\")
-      ) {
-        const candidate = new URL(redirectParam, request.url);
-        if (
-          candidate.origin === request.nextUrl.origin &&
-          candidate.pathname.replace(/\/+$/, "") !== "/auth/login"
-        ) {
-          destination = candidate;
-        }
-      }
+      const destination = new URL(getLoginCompletionDestination(
+        redirectParam,
+        request.nextUrl.origin,
+        request.nextUrl.searchParams.get("onboarding"),
+      ), request.url);
 
       const response = NextResponse.redirect(destination);
       supabaseResponse.cookies.getAll().forEach((cookie) =>

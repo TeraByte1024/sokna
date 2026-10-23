@@ -46,6 +46,7 @@ function fixture(rows, { isAdmin = true, userId = "admin", queryError = null, sa
   const invalidations = [];
   const pushBatches = [];
   const writes = [];
+  const profileMenus = [];
   const client = {
     auth: {
       getClaims: async () => ({ data: { claims: { sub: userId, email: `${userId}@example.com` } } }),
@@ -94,6 +95,8 @@ function fixture(rows, { isAdmin = true, userId = "admin", queryError = null, sa
     },
   };
   const mocks = {
+    "@/lib/record-signup-consent": { recordSignupConsent: async () => null },
+    "@/lib/signup-consent": { readSignupConsent: () => null },
     "next/cache": { revalidatePath: (...args) => invalidations.push(args) },
     "next/navigation": { redirect: (url) => { throw new Error(`redirect:${url}`); } },
     "@/lib/auth-admin": { getIsAdmin: async () => isAdmin },
@@ -102,8 +105,9 @@ function fixture(rows, { isAdmin = true, userId = "admin", queryError = null, sa
     "@/lib/push-notifications": {
       processPendingPushNotifications: async (options) => pushBatches.push(options),
     },
-    "./user-profile-menu": { UserProfileMenu: () => null },
+    "./user-profile-menu": { UserProfileMenu: (props) => { profileMenus.push(props); return null; } },
     "./logout-button": { LogoutButton: () => React.createElement("button", null, "로그아웃") },
+    "@/components/logout-button": { LogoutButton: () => React.createElement("button", null, "로그아웃") },
     "./notification-menu": { NotificationMenu: () => null },
     "@/lib/notifications": { getUnreadNotificationCount: async () => 0 },
     "@/components/site-layout": { SiteLayout: fragment },
@@ -117,7 +121,7 @@ function fixture(rows, { isAdmin = true, userId = "admin", queryError = null, sa
     "./complete-profile-form": { CompleteProfileForm: () => React.createElement("div", null, "registration-form") },
     "./profile-form": { ProfileForm: () => React.createElement("div", null, "profile-form") },
   };
-  return { client, notifications, invalidations, pushBatches, writes, load: (file) => loadSource(file, mocks) };
+  return { client, notifications, invalidations, pushBatches, writes, profileMenus, load: (file) => loadSource(file, mocks) };
 }
 
 test("admin initial and refreshed lists exclude social drafts and malformed profiles", async () => {
@@ -148,6 +152,20 @@ test("social login alone produces no admin count or applicant pending badge", as
     const html = renderToStaticMarkup(await f.load("components/auth-button.tsx").AuthButton());
     assert.doesNotMatch(html, /승인 대기 중|animate-pulse|>1</);
     assert.equal(f.notifications.length, 0);
+  }
+});
+
+test("member menu visibility follows approved database status or verified admin access", async () => {
+  for (const [profile, isAdmin, expected] of [
+    [draft(), false, false],
+    [member("social-draft"), false, false],
+    [member("social-draft", { status: "rejected" }), false, false],
+    [member("social-draft", { status: "approved", part: null }), false, true],
+    [draft(), true, true],
+  ]) {
+    const f = fixture([profile], { isAdmin, userId: "social-draft" });
+    renderToStaticMarkup(await f.load("components/auth-button.tsx").AuthButton());
+    assert.equal(f.profileMenus[0].isMember, expected);
   }
 });
 
@@ -189,11 +207,16 @@ test("failed profile saves leave the draft hidden and do not notify admins", asy
   assert.equal(f.invalidations.length, 0);
 });
 
-test("incomplete accounts stay on registration and cannot use the ordinary profile form", async () => {
+test("incomplete accounts can opt into registration while their profile shows an audience account", async () => {
   const f = fixture([draft()], { isAdmin: false, userId: "social-draft" });
   const registration = await f.load("app/auth/complete-profile/page.tsx").default();
   assert.match(renderToStaticMarkup(registration), /registration-form/);
-  await assert.rejects(f.load("app/profile/page.tsx").default({ searchParams: Promise.resolve({}) }), /redirect:\/auth\/complete-profile/);
+  const account = renderToStaticMarkup(await f.load("app/profile/page.tsx").default({ searchParams: Promise.resolve({}) }));
+  assert.match(account, /공연 보러 가기/);
+  assert.match(account, /href="\/auth\/complete-profile"/);
+  assert.match(account, /회원 권한 요청/);
+  assert.match(account, /로그아웃/);
+  assert.doesNotMatch(account, /profile-form|registration-form/);
 });
 
 test("approved members with optional missing sessions keep profile access", async () => {
@@ -201,14 +224,14 @@ test("approved members with optional missing sessions keep profile access", asyn
   assert.match(renderToStaticMarkup(await f.load("app/profile/page.tsx").default({ searchParams: Promise.resolve({}) })), /profile-form/);
 });
 
-test("OAuth callback uses the same completion rule as the approval queue", async () => {
+test("explicit club signup uses the same completion rule as the approval queue", async () => {
   for (const [profile, destination] of [
     [draft(), "/auth/complete-profile"],
     [member("blank", { part: "  " }), "/auth/complete-profile"],
     [member("submitted"), "/"],
   ]) {
     const f = fixture([profile], { isAdmin: false, userId: profile.id });
-    const response = await f.load("app/auth/callback/route.ts").GET(new Request("http://localhost/auth/callback?code=test"));
+    const response = await f.load("app/auth/callback/route.ts").GET(new Request("http://localhost/auth/callback?code=test&intent=join"));
     assert.equal(response.headers.get("location"), `http://localhost${destination}`);
   }
 });

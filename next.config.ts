@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Auth actions contain credentials and consent receipts.
+  logging: { serverFunctions: false },
   images: {
     remotePatterns: process.env.NEXT_PUBLIC_SUPABASE_URL?.startsWith("https://")
       ? [{

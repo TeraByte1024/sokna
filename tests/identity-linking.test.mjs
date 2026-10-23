@@ -14,6 +14,11 @@ const origin = "https://sokna.example";
 const sources = new Map();
 
 function load(relativePath, mocks = {}) {
+  mocks = {
+    "@/lib/record-signup-consent": { recordSignupConsent: async () => null },
+    "@/lib/signup-consent": { readSignupConsent: () => null },
+    ...mocks,
+  };
   const filename = path.join(root, relativePath);
   if (!sources.has(filename)) {
     sources.set(filename, ts.transpileModule(readFileSync(filename, "utf8"), {
@@ -36,6 +41,7 @@ function load(relativePath, mocks = {}) {
 const socialProviders = load("lib/auth/social-providers.ts");
 const helperMocks = { "@/lib/auth/social-providers": socialProviders };
 const helpers = load("lib/auth/identity-linking.ts", helperMocks);
+const loginFlow = load("lib/auth/login-flow.ts", { "@/lib/auth/identity-linking": helpers });
 const memberApplication = load("lib/member-application.ts");
 const loginMethods = load("lib/auth/login-methods.ts", helperMocks);
 const validContext = { userId, nonce, createdAt: now };
@@ -115,6 +121,7 @@ function fixture({
   const mocks = {
     "node:crypto": { randomUUID: () => nonce },
     "@/lib/auth/identity-linking": helpers,
+    "@/lib/auth/login-flow": loginFlow,
     "@/lib/auth/login-methods": loginMethods,
     "@/lib/auth/social-providers": socialProviders,
     "next/cache": {
@@ -356,22 +363,21 @@ test("missing codes, exchange errors and thrown failures produce fixed callback 
   }
 });
 
-test("ordinary OAuth still loads the member profile and respects safe local destinations", async () => {
+test("ordinary OAuth respects safe local destinations without requiring membership", async () => {
   for (const [next, destination] of [["/events?view=mine#upcoming", "/events?view=mine#upcoming"], ["//evil.example", "/"], ["/auth/callback", "/"]]) {
     const f = fixture();
     assert.equal((await f.callback({ code: "normal-code", next })).location, `${origin}${destination}`);
     assert.deepEqual(f.operations, [
-      ["createClient"], ["exchange", "normal-code"], ["from", "users"],
-      ["select", "id, generation, part, status"], ["eq", "id", userId], ["maybeSingle"],
+      ["createClient"], ["exchange", "normal-code"],
     ]);
     assert.deepEqual(f.cookieWrites, []);
   }
 });
 
-test("ordinary OAuth new and incomplete members still complete their profile before any next route", async () => {
+test("explicit club signup completes missing membership information before any next route", async () => {
   for (const profile of [null, { generation: null, part: null }, { generation: 12, part: " " }]) {
     const f = fixture({ profile });
-    assert.equal((await f.callback({ code: "normal-code", next: "/events" })).location, `${origin}/auth/complete-profile`);
+    assert.equal((await f.callback({ code: "normal-code", intent: "join", next: "/events" })).location, `${origin}/auth/complete-profile`);
     assert.equal(did(f, "from"), true);
     assert.deepEqual(f.cookieWrites, []);
   }
@@ -386,6 +392,38 @@ test("ordinary OAuth failures retain the existing error route", async () => {
   assert.equal(new URL(result.location).pathname, "/auth/error");
   assert.doesNotMatch(result.location, /private provider details/);
   assert.equal(did(f, "from"), false);
+});
+
+test("audience OAuth skips membership onboarding without reading or changing membership", async () => {
+  for (const profile of [null, { generation: null, part: null }, { generation: 40, part: "기타", status: "approved" }]) {
+    const f = fixture({ profile });
+    const result = await f.callback({ code: "audience-code", mode: "audience", next: "/gigs/12?reserve=true" });
+    assert.equal(result.location, `${origin}/gigs/12?reserve=true`);
+    assert.deepEqual(f.operations, [["createClient"], ["exchange", "audience-code"]]);
+    assert.deepEqual(f.cookieWrites, []);
+  }
+});
+
+test("social signup authenticates first and opens the optional second step without creating a member application", async () => {
+  const f = fixture({ profile: null });
+  const result = await f.callback({ code: "signup-code", intent: "signup", next: "/gigs/42" });
+  assert.equal(result.location, `${origin}/auth/membership?redirect=%2Fgigs%2F42`);
+  assert.deepEqual(f.operations, [["createClient"], ["exchange", "signup-code"]]);
+});
+
+test("audience OAuth has a safe public default and still requires successful authentication", async () => {
+  for (const next of ["", "//evil.example", "/\\evil.example", "/auth/complete-profile", "https://evil.example"]) {
+    const f = fixture({ profile: null });
+    assert.equal((await f.callback({ code: "code", mode: "audience", next })).location, `${origin}/`);
+  }
+  const failed = fixture({ exchangeError: { message: "private" } });
+  assert.equal(new URL((await failed.callback({ code: "bad", mode: "audience" })).location).pathname, "/auth/error");
+  assert.equal(did(failed, "from"), false);
+});
+
+test("unknown purposes do not initiate club onboarding or grant membership", async () => {
+  const f = fixture({ profile: null });
+  assert.equal((await f.callback({ code: "code", intent: "admin" })).location, `${origin}/`);
 });
 const primaryGoogleIdentity = {
   identity_id: "google-identity-one",

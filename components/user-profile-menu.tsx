@@ -23,14 +23,16 @@ interface UserProfileMenuProps {
   userName: string | null;
   userEmail?: string;
   marketingOptIn: boolean;
+  isMember: boolean;
+  hasMembershipApplication: boolean;
 }
 
-export function UserProfileMenu({ userName, userEmail, marketingOptIn }: UserProfileMenuProps) {
+export function UserProfileMenu({ userName, userEmail, marketingOptIn, isMember, hasMembershipApplication }: UserProfileMenuProps) {
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const [consentDialogOpen, setConsentDialogOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const push = usePushNotificationDevice(marketingOptIn, menuOpen);
+  const push = usePushNotificationDevice(marketingOptIn, menuOpen && isMember);
 
   const handleLogout = async () => {
     if (isLoggingOut) return;
@@ -71,7 +73,7 @@ export function UserProfileMenu({ userName, userEmail, marketingOptIn }: UserPro
           <>
             <div className="px-2.5 py-1.5 text-xs">
               <p className="font-semibold truncate text-foreground">
-                {userName ? `${userName} 님` : "회원"}
+                {userName ? `${userName} 님` : "내 계정"}
               </p>
               {userEmail && (
                 <p className="text-[11px] text-muted-foreground truncate">
@@ -89,11 +91,17 @@ export function UserProfileMenu({ userName, userEmail, marketingOptIn }: UserPro
             className="flex items-center gap-2 cursor-pointer font-medium text-xs sm:text-sm py-2 w-full"
           >
             <User className="w-4 h-4 text-muted-foreground shrink-0" />
-            <span>내 정보</span>
+            <span>{isMember ? "회원 정보" : "내 계정"}</span>
           </Link>
         </DropdownMenuItem>
 
-        <DropdownMenuItem
+        {!isMember && !hasMembershipApplication && (
+          <DropdownMenuItem asChild>
+            <Link href="/auth/complete-profile" className="py-2 text-xs sm:text-sm">회원 권한 요청</Link>
+          </DropdownMenuItem>
+        )}
+
+        {isMember && <DropdownMenuItem
           disabled={push.isPending || push.permission === "unsupported" || push.permission === "denied"}
           onSelect={(event) => {
             event.preventDefault();
@@ -132,7 +140,7 @@ export function UserProfileMenu({ userName, userEmail, marketingOptIn }: UserPro
               )}
             />
           </span>
-        </DropdownMenuItem>
+        </DropdownMenuItem>}
 
         <DropdownMenuSeparator />
 

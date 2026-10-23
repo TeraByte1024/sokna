@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { hasCompletedMemberProfile } from "@/lib/member-application";
+import { getMembershipStepUrl } from "@/lib/auth/login-flow";
 import { cookies } from "next/headers";
 import {
   getIdentityLinkErrorCode,
@@ -9,6 +10,8 @@ import {
 } from "@/lib/auth/identity-linking";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { recordSignupConsent } from "@/lib/record-signup-consent";
+import { readSignupConsent, signSignupConsent, SIGNUP_CONSENT_COOKIE } from "@/lib/signup-consent";
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
@@ -52,18 +55,43 @@ export async function GET(request: NextRequest) {
   }
 
   if (code) {
+    const consentState = searchParams.get("consent_state");
+    const consentCookie = consentState ? (await cookies()).get(SIGNUP_CONSENT_COOKIE)?.value : undefined;
+    const consentTicket = readSignupConsent(consentCookie);
+    if (consentState && (!consentTicket || !["google", "kakao"].includes(consentTicket.method) ||
+      consentCookie?.split(".")[1] !== consentState || Date.now() - consentTicket.acceptedAt > 3600_000)) {
+      return NextResponse.redirect(new URL(`/auth/sign-up?${new URLSearchParams({ redirect: next })}`, origin));
+    }
     const supabase = await createClient();
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error && data.user) {
-      const { data: profile } = await supabase
-        .from("users")
-        .select("id, generation, part, status")
-        .eq("id", data.user.id)
-        .maybeSingle();
+      if (consentState) {
+        try {
+          const recorded = await recordSignupConsent(data.user, consentCookie);
+          if (!recorded) throw new Error("Invalid signup consent");
+          (await cookies()).set(SIGNUP_CONSENT_COOKIE,
+            recorded.preview ? signSignupConsent({ ...recorded.ticket, userId: data.user.id }) : "", {
+              httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: recorded.preview ? 3600 : 0,
+            });
+        } catch {
+          await supabase.auth.signOut({ scope: "local" });
+          return NextResponse.redirect(new URL("/auth/error?error=약관 동의 내역을 저장하지 못했습니다. 다시 로그인해 주세요.", origin));
+        }
+      }
+      if (searchParams.get("intent") === "signup") {
+        return NextResponse.redirect(new URL(getMembershipStepUrl(next, origin), origin));
+      }
+      if (searchParams.get("intent") === "join") {
+        const { data: profile } = await supabase
+          .from("users")
+          .select("id, generation, part, status")
+          .eq("id", data.user.id)
+          .maybeSingle();
 
-      if (!hasCompletedMemberProfile(profile)) {
-        return NextResponse.redirect(`${origin}/auth/complete-profile`);
+        if (profile?.status !== "approved" && !hasCompletedMemberProfile(profile)) {
+          return NextResponse.redirect(`${origin}/auth/complete-profile`);
+        }
       }
 
       return NextResponse.redirect(`${origin}${next}`);

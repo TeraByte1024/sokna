@@ -8,16 +8,23 @@ import { createClient } from "@/lib/supabase/client";
 import { isSocialProviderEnabled } from "@/lib/auth/provider-availability";
 import { cn } from "@/lib/utils";
 import { KAKAO_AUTH_QUERY_PARAMS } from "@/lib/auth/social-providers";
+import { getOAuthCallbackUrl, type SignupIntent } from "@/lib/auth/login-flow";
+import { useSignupConsent } from "@/components/signup-consent";
 
 interface KakaoSignInButtonProps {
+  text?: string;
   className?: string;
   disabled?: boolean;
+  intent?: SignupIntent;
+  next?: string;
+  signupConsentToken?: string;
 }
 
-export function KakaoSignInButton({ className, disabled = false }: KakaoSignInButtonProps) {
+export function KakaoSignInButton({ text = "카카오로 로그인", className, disabled = false, intent, next, signupConsentToken }: KakaoSignInButtonProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const submittingRef = useRef(false);
+  const consent = useSignupConsent("kakao", undefined, signupConsentToken);
 
   useEffect(() => {
     const restoreAfterBackNavigation = (event: PageTransitionEvent) => {
@@ -41,10 +48,16 @@ export function KakaoSignInButton({ className, disabled = false }: KakaoSignInBu
         setIsLoading(false);
         return;
       }
+      const choice = signupConsentToken ? await consent.request() : undefined;
+      if (signupConsentToken && !choice) {
+        submittingRef.current = false;
+        setIsLoading(false);
+        return;
+      }
       const { data, error: signInError } = await createClient().auth.signInWithOAuth({
         provider: "kakao",
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: getOAuthCallbackUrl(window.location.origin, intent, next, choice?.consentState),
           skipBrowserRedirect: true,
           queryParams: KAKAO_AUTH_QUERY_PARAMS,
         },
@@ -75,9 +88,10 @@ export function KakaoSignInButton({ className, disabled = false }: KakaoSignInBu
         onClick={handleLogin}
       >
         {isLoading ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <KakaoLogo />}
-        <span>{isLoading ? "카카오 연결 중..." : "카카오 로그인"}</span>
+        <span>{isLoading ? "카카오 연결 중..." : text}</span>
       </Button>
       {error && <p role="alert" className="text-xs leading-relaxed text-destructive">{error}</p>}
+      {consent.dialog}
     </div>
   );
 }

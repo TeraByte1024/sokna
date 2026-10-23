@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { LeaveConfirmDialog, useUnsavedChangesWarning } from "@/components/ui/leave-confirm-dialog";
@@ -14,21 +15,22 @@ import {
 } from "@/components/ui/card";
 import { MemberProfileFields } from "@/components/member-profile-fields";
 import { completeProfileAction } from "./actions";
-import { Sparkles } from "lucide-react";
 
 interface Props {
   initialName?: string;
   email?: string;
+  initialMarketingOptIn?: boolean;
 }
 
-export function CompleteProfileForm({ initialName = "", email = "" }: Props) {
+export function CompleteProfileForm({ initialName = "", email = "", initialMarketingOptIn = false }: Props) {
   const router = useRouter();
   const [name, setName] = useState(initialName);
   const [generation, setGeneration] = useState("");
   const [selectedPreset, setSelectedPreset] = useState<string>("보컬(남)");
   const [customPart, setCustomPart] = useState("");
   const [agreeTerms, setAgreeTerms] = useState(false);
-  const [agreeMarketing, setAgreeMarketing] = useState(false);
+  const [agreeMarketing, setAgreeMarketing] = useState(initialMarketingOptIn);
+  useEffect(() => { setAgreeMarketing(initialMarketingOptIn); }, [initialMarketingOptIn]);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -39,9 +41,9 @@ export function CompleteProfileForm({ initialName = "", email = "" }: Props) {
       selectedPreset !== "보컬(남)" ||
       customPart.trim() ||
       agreeTerms ||
-      agreeMarketing
+      agreeMarketing !== initialMarketingOptIn
     );
-  }, [name, initialName, generation, selectedPreset, customPart, agreeTerms, agreeMarketing]);
+  }, [name, initialName, generation, selectedPreset, customPart, agreeTerms, agreeMarketing, initialMarketingOptIn]);
 
   const {
     showLeaveModal,
@@ -85,7 +87,7 @@ export function CompleteProfileForm({ initialName = "", email = "" }: Props) {
     }
 
     if (!agreeTerms) {
-      setError("개인정보 수집·이용 및 부원 명부 열람에 동의해야 가입을 완료할 수 있습니다.");
+      setError("개인정보 수집·이용 및 부원 명부 열람에 동의해야 회원 권한을 요청할 수 있습니다.");
       setIsLoading(false);
       return;
     }
@@ -99,7 +101,7 @@ export function CompleteProfileForm({ initialName = "", email = "" }: Props) {
 
     if (res.ok) {
       markSubmitting();
-      router.push("/auth/sign-up-success");
+      router.push("/auth/sign-up-success?type=member");
     } else {
       setError(res.error || "프로필 저장 중 오류가 발생했습니다.");
       setIsLoading(false);
@@ -110,11 +112,7 @@ export function CompleteProfileForm({ initialName = "", email = "" }: Props) {
     <>
       <Card className="border-border/60 shadow-sm">
       <CardHeader className="space-y-1 pb-4">
-        <div className="flex items-center gap-1.5 text-muted-foreground font-medium text-xs mb-1">
-          <Sparkles className="size-3.5" />
-          <span>Google 로그인 성공</span>
-        </div>
-        <CardTitle className="text-lg font-bold tracking-tight">부원 정보 등록</CardTitle>
+        <CardTitle className="text-lg font-bold tracking-tight">회원 권한 요청</CardTitle>
         <CardDescription className="text-xs text-muted-foreground leading-relaxed">
           동아리 활동 인증을 위해 <strong>기수와 담당 세션</strong>을 입력해 주세요. 운영진 확인 후 승인됩니다.
         </CardDescription>
@@ -137,7 +135,7 @@ export function CompleteProfileForm({ initialName = "", email = "" }: Props) {
         >
           {email && (
             <div className="rounded-lg bg-muted/40 p-3 text-xs border border-border/60 text-muted-foreground break-all">
-              <span className="font-semibold text-foreground">연동 계정:</span> {email}
+              <span className="font-semibold text-foreground">계정 이메일:</span> {email}
             </div>
           )}
 
@@ -197,8 +195,9 @@ export function CompleteProfileForm({ initialName = "", email = "" }: Props) {
             className="w-full h-10 font-semibold"
             disabled={isLoading || !agreeTerms}
           >
-            {isLoading ? "등록 처리 중..." : "회원가입 요청하기"}
+            {isLoading ? "요청 처리 중..." : "회원 권한 요청하기"}
           </Button>
+          <Link href="/profile" className="text-center text-xs text-muted-foreground underline underline-offset-4">나중에 요청하기</Link>
         </form>
       </CardContent>
     </Card>

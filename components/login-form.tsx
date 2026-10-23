@@ -2,12 +2,10 @@
 
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
-import { signOutWithPushSession } from "@/lib/supabase/logout";
 import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -18,7 +16,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { GoogleSignInButton } from "@/components/google-sign-in-button";
 import { KakaoSignInButton } from "@/components/kakao-sign-in-button";
-import { UserPlus } from "lucide-react";
+import { getLoginCompletionDestination, getLoginDestination } from "@/lib/auth/login-flow";
 
 export function LoginForm({
   className,
@@ -30,38 +28,26 @@ export function LoginForm({
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectUrl = searchParams.get("redirect") || "/";
+  const redirectUrl = getLoginDestination(searchParams.get("redirect"), "https://sokna.local");
+  const onboarding = searchParams.get("onboarding");
+  const destination = getLoginCompletionDestination(redirectUrl, "https://sokna.local", onboarding);
+  const signupHref = `/auth/sign-up?${new URLSearchParams({ redirect: redirectUrl })}`;
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLoading) return;
     const supabase = createClient();
     setIsLoading(true);
     setError(null);
 
     try {
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+      const { error: signInError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
       if (signInError) throw signInError;
 
-      // 승인 상태 확인
-      if (data.user) {
-        const { data: profile } = await supabase
-          .from("users")
-          .select("status")
-          .eq("id", data.user.id)
-          .maybeSingle();
-
-        if (profile?.status === "rejected") {
-          await signOutWithPushSession();
-          setError("가입 승인이 거절된 계정입니다. 동아리 운영진에게 문의해 주세요.");
-          setIsLoading(false);
-          return;
-        }
-      }
-
-      router.push(redirectUrl);
+      router.push(destination);
       router.refresh();
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : "로그인 중 오류가 발생했습니다.");
@@ -75,9 +61,6 @@ export function LoginForm({
       <Card className="border-border/60 shadow-lg">
         <CardHeader>
           <CardTitle className="text-2xl font-bold">로그인</CardTitle>
-          <CardDescription>
-            소크나 계정으로 로그인하세요.
-          </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin}>
@@ -133,26 +116,14 @@ export function LoginForm({
                 </div>
               </div>
 
-              <GoogleSignInButton text="Google 계정으로 로그인" />
-              <KakaoSignInButton disabled={isLoading} />
-            </div>
-            <div className="mt-6 pt-5 border-t border-border/60">
-              <div className="rounded-lg border border-primary/25 bg-primary/5 p-4 text-center space-y-2.5">
-                <div className="flex items-center justify-center gap-1.5 text-xs font-semibold text-foreground">
-                  <UserPlus className="w-4 h-4 text-primary" />
-                  <span>소리로 크는 나무가 처음이신가요?</span>
-                </div>
-                <p className="text-[11px] text-muted-foreground leading-relaxed">
-                  신규 부원 및 동문 회원은 회원가입 신청 후 운영진 승인을 통해 선곡 회의 및 공연 참가 등 모든 기능을 이용하실 수 있습니다.
-                </p>
-                <Button asChild variant="outline" size="sm" className="w-full border-primary/40 hover:border-primary hover:bg-primary/10 text-primary font-semibold text-xs h-9">
-                  <Link href="/auth/sign-up">
-                    신규 회원가입 신청하기
-                  </Link>
-                </Button>
-              </div>
+              <GoogleSignInButton disabled={isLoading} next={redirectUrl} intent={onboarding === "membership" ? "signup" : undefined} />
+              <KakaoSignInButton disabled={isLoading} next={redirectUrl} intent={onboarding === "membership" ? "signup" : undefined} />
             </div>
           </form>
+          <div className="mt-6 border-t border-border/60 pt-5 text-center text-sm">
+            <span className="text-muted-foreground">처음 이용하시나요? </span>
+            <Link href={signupHref} className="font-semibold underline underline-offset-4">회원가입</Link>
+          </div>
         </CardContent>
       </Card>
     </div>

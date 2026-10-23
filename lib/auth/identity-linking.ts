@@ -57,13 +57,13 @@ export function getIdentityLinkErrorMessage(code?: string): string {
   }
 }
 
-export function getSafeAuthNext(next: string | null, origin: string): string {
-  if (!next?.startsWith("/") || next.startsWith("//") || next.includes("\\")) return "/";
+export function getSafeAuthNext(next: string | null, origin: string, fallback = "/"): string {
+  if (!next?.startsWith("/") || next.startsWith("//") || next.includes("\\")) return fallback;
   try {
     const url = new URL(next, origin);
-    if (url.origin !== origin || url.pathname.startsWith("/auth/")) return "/";
+    if (url.origin !== origin || url.pathname.startsWith("/auth/")) return fallback;
     return `${url.pathname}${url.search}${url.hash}`;
   } catch {
-    return "/";
+    return fallback;
   }
 }

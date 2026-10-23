@@ -158,31 +158,34 @@ test("invalid stored timestamps cannot fall back to a broad event-type dispatch"
 });
 
 function signupFormFixture(user, options = {}) {
-  const consent = Object.hasOwn(options, "consent") ? options.consent : false;
   const signups = [];
   const dispatches = [];
   const navigation = [];
   const submitted = [];
   const stateValues = [
-    "new@example.test", "secure-password", "secure-password", "New member", "42",
-    "기타", "", true, consent, null, false,
+    "new@example.test", options.password ?? "secure-password", options.repeatPassword ?? "secure-password",
+    null, false,
   ];
   let stateIndex = 0;
   const stub = () => null;
   const mocks = {
-    react: { useState: () => [stateValues[stateIndex++], () => {}] },
+    react: { useState: () => {
+      const index = stateIndex++;
+      return [stateValues[index], (value) => { stateValues[index] = value; }];
+    } },
     "@/lib/utils": { cn: (...items) => items.filter(Boolean).join(" ") },
-    "@/lib/supabase/client": { createClient: () => ({ auth: { signUp: async (payload) => {
+    "@/app/auth/signup-actions": { signUpWithConsentAction: async (payload) => {
+      if (!payload.token) return { ok: false, error: "prior consent required" };
       signups.push(payload);
-      return { data: { user, session: null }, error: null };
-    } } }) },
+      return { ok: true, hasSession: Boolean(options.session) };
+    } },
     "@/components/ui/button": { Button: stub },
     "@/components/ui/card": { Card: stub, CardContent: stub, CardDescription: stub, CardHeader: stub, CardTitle: stub },
     "@/components/ui/input": { Input: stub },
     "@/components/ui/label": { Label: stub },
     "@/components/ui/checkbox": { Checkbox: stub },
     "next/link": stub,
-    "next/navigation": { useRouter: () => ({ push: (url) => navigation.push(url) }) },
+    "next/navigation": { useRouter: () => ({ push: (url) => navigation.push(url), refresh() {} }) },
     "@/components/google-sign-in-button": { GoogleSignInButton: stub },
     "@/components/kakao-sign-in-button": { KakaoSignInButton: stub },
     "@/components/member-profile-fields": { MemberProfileFields: stub },
@@ -196,7 +199,14 @@ function signupFormFixture(user, options = {}) {
       dispatches.push(id); return { ok: true };
     } },
   };
-  const tree = loadSource("components/sign-up-form.tsx", mocks).SignUpForm({});
+  const { SignUpForm } = loadSource("components/sign-up-form.tsx", mocks);
+  let tree;
+  const render = () => {
+    stateIndex = 0;
+    tree = SignUpForm({ next: "/gigs/42", consentToken: options.missingConsent ? undefined : "signed-prior-consent" });
+    return tree;
+  };
+  render();
   const findForm = (element) => {
     if (!element || typeof element !== "object") return null;
     if (element.type === "form") return element;
@@ -207,45 +217,46 @@ function signupFormFixture(user, options = {}) {
     }
     return null;
   };
-  return { form: findForm(tree), dispatches, navigation, submitted, signups };
+  const nodes = (element) => {
+    if (Array.isArray(element)) return element.flatMap((child) => nodes(child));
+    if (!element || typeof element !== "object") return [];
+    return [element, ...nodes(element.props?.children)];
+  };
+  return { get form() { return findForm(tree); }, nodes: () => nodes(tree), render, dispatches, navigation, submitted, signups };
 }
 
-test("the signup form forwards the returned applicant ID even when email confirmation creates no session", async () => {
-  const f = signupFormFixture({ id: APPLICANT_ID });
-  assert.ok(f.form);
-  await f.form.props.onSubmit({ preventDefault() {} });
-  assert.deepEqual(f.dispatches, [APPLICANT_ID]);
-  assert.deepEqual(f.navigation, ["/auth/sign-up-success"]);
-  assert.deepEqual(f.submitted, [true]);
-});
-
-test("a signup response without a user ID still completes through the action's no-op contract", async () => {
-  const f = signupFormFixture(null);
-  await f.form.props.onSubmit({ preventDefault() {} });
-  assert.deepEqual(f.dispatches, [undefined]);
-  assert.deepEqual(f.navigation, ["/auth/sign-up-success"]);
-});
-
-
-test("email signup sends the explicit consent choice with profile metadata and no client timestamp", async () => {
-  for (const consent of [false, true]) {
-    const f = signupFormFixture({ id: APPLICANT_ID }, { consent });
+test("account creation never submits membership metadata or requests admin approval", async () => {
+  for (const user of [{ id: APPLICANT_ID }, null]) {
+    const f = signupFormFixture(user);
     await f.form.props.onSubmit({ preventDefault() {} });
-    assert.equal(f.signups.length, 1);
-    assert.deepEqual(f.signups[0].options.data, {
-      name: "New member", generation: 42, part: "기타", marketing_opt_in: consent,
-    });
-    assert.deepEqual(f.dispatches, [APPLICANT_ID]);
+    assert.deepEqual(f.signups[0], { email: "new@example.test", password: "secure-password", token: "signed-prior-consent", next: "/gigs/42" });
+    assert.deepEqual(f.dispatches, []);
+    assert.deepEqual(f.navigation, ["/auth/sign-up-success?redirect=%2Fgigs%2F42"]);
+    assert.deepEqual(f.submitted, [true]);
+    assert.equal(f.nodes().some((e) => e.props?.id === "is-sokna-member"), false);
+    assert.equal(f.nodes().some((e) => Object.hasOwn(e.props ?? {}, "selectedPreset")), false);
+    const providers = f.nodes().filter((e) => ["Google로 가입하기", "카카오로 가입하기"].includes(e.props?.text));
+    assert.equal(providers.length, 2);
+    assert.ok(providers.every((e) => e.props.intent === "signup" && e.props.next === "/gigs/42"));
   }
 });
 
-test("email signup does not create an account when consent is missing or malformed", async () => {
-  for (const consent of [undefined, null, "false", "true", 0, 1]) {
-    const f = signupFormFixture({ id: APPLICANT_ID }, { consent });
+test("email signup never creates an account without prior consent or valid matching passwords", async () => {
+  for (const options of [
+    { missingConsent: true },
+    { password: "short", repeatPassword: "short" }, { repeatPassword: "different" },
+  ]) {
+    const f = signupFormFixture({ id: APPLICANT_ID }, options);
     await f.form.props.onSubmit({ preventDefault() {} });
     assert.deepEqual(f.signups, []);
     assert.deepEqual(f.dispatches, []);
     assert.deepEqual(f.navigation, []);
-    assert.deepEqual(f.submitted, []);
   }
+});
+
+test("a successfully authenticated signup opens the optional second step rather than creating a membership application", async () => {
+  const f = signupFormFixture({ id: APPLICANT_ID }, { session: { access_token: "mock" } });
+  await f.form.props.onSubmit({ preventDefault() {} });
+  assert.deepEqual(f.navigation, ["/auth/membership?redirect=%2Fgigs%2F42"]);
+  assert.deepEqual(f.dispatches, []);
 });

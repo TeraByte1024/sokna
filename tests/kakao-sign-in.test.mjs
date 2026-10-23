@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import * as jsxRuntime from "react/jsx-runtime";
 import ts from "typescript";
+import { loadTs } from "./helpers/load-ts.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const filename = path.join(root, "components/kakao-sign-in-button.tsx");
@@ -42,10 +43,15 @@ function fixture(options = {}) {
   const effects = new Map();
   const listeners = new Map();
   const operations = [];
+  const consentRequests = [];
   let stateIndex = 0;
   let tree;
   let props = {};
   const mocks = {
+    "@/components/signup-consent": { useSignupConsent: (method, _email, token) => ({ request: async () => {
+      consentRequests.push({ method, token });
+      return config.cancelConsent ? null : { consentState: "signed-signup-state" };
+    }, dialog: null }) },
     react: {
       useEffect(effect) {
         const index = stateIndex++;
@@ -67,6 +73,7 @@ function fixture(options = {}) {
     "@/components/kakao-logo": { KakaoLogo: () => null },
     "lucide-react": { Loader2: () => null },
     "@/lib/utils": { cn: (...classes) => classes.filter(Boolean).join(" ") },
+    "@/lib/auth/login-flow": loadTs("lib/auth/login-flow.ts"),
     "@/lib/auth/social-providers": {
       KAKAO_AUTH_QUERY_PARAMS: { prompt: "select_account", scope: "account_email" },
     },
@@ -125,6 +132,7 @@ function fixture(options = {}) {
   return {
     config,
     operations,
+    consentRequests,
     render,
     pageshow(persisted) {
       for (const listener of listeners.get("pageshow") ?? []) listener({ persisted });
@@ -142,6 +150,28 @@ function fixture(options = {}) {
 function did(f, operation) {
   return f.operations.some(([name]) => name === operation);
 }
+
+test("cancelling prior consent cannot create a Kakao OAuth request", async () => {
+  const f = fixture({ cancelConsent: true });
+  f.render({ intent: "signup", signupConsentToken: "prior-consent" });
+  await f.button().props.onClick();
+  assert.equal(did(f, "signInWithOAuth"), false);
+  assert.equal(did(f, "navigate"), false);
+  f.render(); assert.equal(f.button().props.disabled, false);
+});
+
+test("ordinary Kakao login bypasses signup consent while signup binds its earlier choice", async () => {
+  const login = fixture({ cancelConsent: true });
+  await login.button().props.onClick();
+  assert.deepEqual(login.consentRequests, []);
+  assert.equal(did(login, "signInWithOAuth"), true);
+  const signup = fixture();
+  signup.render({ intent: "signup", signupConsentToken: "prior-consent" });
+  await signup.button().props.onClick();
+  assert.deepEqual(signup.consentRequests, [{ method: "kakao", token: "prior-consent" }]);
+  const payload = signup.operations.find(([name]) => name === "signInWithOAuth")[1];
+  assert.equal(new URL(payload.options.redirectTo).searchParams.get("consent_state"), "signed-signup-state");
+});
 
 test("Kakao sign-in requests only email scope with its own provider and the shared callback", async () => {
   const f = fixture();
@@ -176,6 +206,17 @@ test("Kakao callback follows the active site origin including local development"
   await f.button().props.onClick();
   const [, payload] = f.operations.find(([name]) => name === "signInWithOAuth");
   assert.equal(payload.options.redirectTo, "http://localhost:3000/auth/callback");
+});
+
+test("Kakao club signup carries its explicit intent and the safe return path through OAuth", async () => {
+  const f = fixture();
+  f.render({ intent: "join", next: "/gigs/12?reserve=true" });
+  await f.button().props.onClick();
+  const [, payload] = f.operations.find(([name]) => name === "signInWithOAuth");
+  const callback = new URL(payload.options.redirectTo);
+  assert.equal(callback.origin, "https://sokna.example");
+  assert.equal(callback.searchParams.get("intent"), "join");
+  assert.equal(callback.searchParams.get("next"), "/gigs/12?reserve=true");
 });
 
 test("disabled Kakao buttons cannot start preflight or OAuth even if their handler is invoked", async () => {

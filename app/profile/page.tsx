@@ -6,11 +6,12 @@ import { getIsAdmin } from "@/lib/auth-admin";
 import { getLoginIdentities } from "@/lib/auth/login-methods";
 import { hasCompletedMemberProfile } from "@/lib/member-application";
 import { ProfileForm, ProfileUser } from "./profile-form";
+import { AudienceAccount } from "@/components/audience-account";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "내 정보 | 소크나",
-  description: "소크나 회원 프로필 조회 및 정보 수정",
+  description: "소크나 계정 정보 및 회원 프로필 조회",
 };
 
 function formatConsentTime(value: string | null | undefined) {
@@ -59,7 +60,13 @@ export default async function ProfilePage({
     (!userRow || userRow.status === "pending") &&
     !hasCompletedMemberProfile(userRow)
   ) {
-    redirect("/auth/complete-profile");
+    return (
+      <SiteLayout>
+        <PageContainer>
+          <AudienceAccount email={user.email} />
+        </PageContainer>
+      </SiteLayout>
+    );
   }
 
   const profileUser: ProfileUser = {
