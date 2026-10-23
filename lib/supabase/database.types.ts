@@ -553,6 +553,36 @@ export type Database = {
           },
         ]
       }
+      user_legal_consents: {
+        Row: {
+          accepted_at: string
+          document_content: string
+          document_hash: string
+          document_kind: string
+          document_title: string
+          document_version: string
+          user_id: string
+        }
+        Insert: {
+          accepted_at?: string
+          document_content: string
+          document_hash: string
+          document_kind: string
+          document_title: string
+          document_version: string
+          user_id: string
+        }
+        Update: {
+          accepted_at?: string
+          document_content?: string
+          document_hash?: string
+          document_kind?: string
+          document_title?: string
+          document_version?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       users: {
         Row: {
           applied_at: string

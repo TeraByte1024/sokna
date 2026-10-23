@@ -119,7 +119,7 @@ function recordFixture({ preferenceError = null, preview = false } = {}) {
     "server-only": {}, "@/lib/signup-consent": signing,
     "@/lib/legal-consent": { legalDocumentsAtRevision: (revision) => revision === current.revision ? current : null },
     "@/lib/supabase/server": { createClient: async () => ({ from: () => ({ select: () => ({ eq: async () => ({ data: records, error: null }) }) }) }) },
-    "@/lib/push-consent": { savePushConsent: async (_client, _id, choice) => { choices.push(choice); return { error: preferenceError }; } },
+    "@/lib/account-marketing-consent": { saveAccountMarketingConsent: async (_user, choice) => { choices.push(choice); if (preferenceError) throw preferenceError; } },
     "@/lib/supabase/service": { createServiceClient: () => ({ from: () => ({ upsert: async (rows, options) => {
       assert.equal(options.ignoreDuplicates, true); writes.push(rows); records.push(...rows); return { error: null };
     } }) }) },

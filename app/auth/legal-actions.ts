@@ -7,7 +7,7 @@ import { missingLegalConsents, type LegalConsentState } from "@/lib/legal-consen
 import type { LegalConsentDatabase } from "@/lib/legal-consent-database";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { savePushConsent } from "@/lib/push-consent";
+import { getAccountMarketingConsent, saveAccountMarketingConsent } from "@/lib/account-marketing-consent";
 import { restoreSignupConsent } from "@/lib/restore-signup-consent";
 
 export async function getLegalConsentStateAction(): Promise<LegalConsentState> {
@@ -29,10 +29,7 @@ export async function getLegalConsentStateAction(): Promise<LegalConsentState> {
     const missing = missingLegalConsents(documents, data ?? []);
     let marketingOptIn = false;
     if (missing.length) {
-      const { data: profile, error: profileError } = await client.from("users")
-        .select("marketing_opt_in").eq("id", user.id).maybeSingle();
-      if (profileError || !profile) throw profileError ?? new Error("Missing account preferences");
-      marketingOptIn = profile.marketing_opt_in === true;
+      marketingOptIn = await getAccountMarketingConsent(user);
     }
     return { status: missing.length ? "required" : "current", userId: user.id, documents, revision, missing, marketingOptIn };
   } catch {
@@ -56,10 +53,9 @@ export async function acceptLegalDocumentsAction(input: {
     }
     if (input.marketingAgreed !== undefined) {
       if (typeof input.marketingAgreed !== "boolean") return { ok: false as const, error: "마케팅 정보 수신 동의 여부를 확인해 주세요." };
-      // Reuse the authenticated account preference path and database-owned
-      // timestamps/device revocation. This does not register a push device.
-      const { error: preferenceError } = await savePushConsent(await createClient(), user.id, input.marketingAgreed);
-      if (preferenceError) return { ok: false as const, error: "마케팅 정보 수신 동의를 저장하지 못했습니다. 다시 시도해 주세요." };
+      // Audience choices use server-owned Auth metadata; members retain the
+      // database-owned push preference path. Neither registers a push device.
+      await saveAccountMarketingConsent(user, input.marketingAgreed);
     }
     const client = createServiceClient() as unknown as SupabaseClient<LegalConsentDatabase>;
     const { error } = await client.from("user_legal_consents").upsert(documents.map((document) => ({

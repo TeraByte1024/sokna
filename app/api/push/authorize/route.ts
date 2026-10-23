@@ -18,7 +18,7 @@ function respond(userId: string | null, status = 200, notification?: AuthorizedN
 }
 
 /** Read-only authorization for a service-worker push; never trusts a payload's account identity alone. */
-export async function GET(request?: Request) {
+export async function GET(request: Request) {
 	try {
 		const { supabase, user } = await getPushSession();
 		if (!user) return respond(null);

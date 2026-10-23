@@ -22,12 +22,13 @@ function fixture({ documents = definitions(), currentUser = user, authError = nu
     "@/lib/restore-signup-consent": { restoreSignupConsent: async () => null },
     "@/lib/auth-server-data": { getAuthUser: async () => ({ data: { user: currentUser }, error: authError }) },
     "@/lib/legal-consent": core,
-    "@/lib/push-consent": { savePushConsent: async (_client, id, choice) => {
-      assert.equal(id, currentUser.id);
+    "@/lib/account-marketing-consent": { getAccountMarketingConsent: async () => marketingOptIn,
+      saveAccountMarketingConsent: async (account, choice) => {
+      assert.equal(account.id, currentUser.id);
       assert.equal(typeof choice, "boolean");
       preferenceWrites.push(choice);
-      if (!preferenceError) marketingOptIn = choice;
-      return { error: preferenceError };
+      if (preferenceError) throw preferenceError;
+      marketingOptIn = choice;
     } },
     "@/lib/supabase/server": { createClient: async () => ({ from: (table) => {
       if (table === "users") return { select: () => ({ eq: (key, value) => {
@@ -130,10 +131,8 @@ test("updating a title or posting date also requests renewed consent", async () 
   }
 });
 
-test("drafts can be previewed before the migration but cannot produce consent records", async () => {
-  const f = fixture({ documents: definitions().map((document) => ({ ...document, published: false })) });
-  assert.equal((await f.getLegalConsentStateAction()).status, "draft");
-  assert.equal(f.reads(), 0);
+test("an incomplete required document set cannot produce consent records", async () => {
+  const f = fixture({ documents: definitions().slice(0, 1) });
   assert.equal((await f.acceptLegalDocumentsAction(f.input())).ok, false);
   assert.equal(f.writes.length, 0);
 });

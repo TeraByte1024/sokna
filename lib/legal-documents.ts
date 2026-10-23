@@ -4,7 +4,6 @@ export type LegalDocument = {
   postedOn: string;
   title: string;
   content: string;
-  published: boolean;
 };
 
 export type LegalDocumentRevision = {
@@ -15,11 +14,9 @@ export type LegalDocumentRevision = {
 };
 
 // Service documents and their revisions are tracked with the application source.
-// Publication remains disabled until the consent migration is applied.
 const SERVICE_LEGAL_DOCUMENTS: readonly LegalDocument[] = [
   {
     kind: "terms",
-    published: false,
     title: "이용약관 동의",
     content: `제1조 목적
 이 약관은 소리로 크는 나무의 공연 정보 및 동아리 활동 서비스 이용에 필요한 권리와 의무를 정합니다.
@@ -42,7 +39,6 @@ const SERVICE_LEGAL_DOCUMENTS: readonly LegalDocument[] = [
   },
   {
     kind: "privacy",
-    published: false,
     title: "개인정보 수집·이용 동의",
     content: `1. 수집·이용 목적
 계정 생성·로그인, 이용자 식별, 서비스 제공 및 약관 동의 이력 관리

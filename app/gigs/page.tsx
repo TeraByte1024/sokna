@@ -4,27 +4,12 @@ import { SiteLayout } from "@/components/site-layout";
 import type { Metadata } from "next";
 import { PageContainer } from "@/components/page-container";
 import { LoadingIndicator } from "@/components/ui/loading-indicator";
-import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
-import Link from "next/link";
-import { getGigViewer } from "@/lib/gig-viewer";
+import { AddGigButton } from "@/components/add-gig-button";
 
 export const metadata: Metadata = {
 	title: "공연 정보",
 	description: "공연 일정 및 참여자 안내",
 };
-
-export async function AddGigButton() {
-  const { isAdmin } = await getGigViewer();
-  if (!isAdmin) return null;
-  return (
-    <Button asChild className="shadow-sm font-semibold">
-      <Link href="/gigs/new">
-        <Plus className="size-4 mr-1.5" /> 공연 추가
-      </Link>
-    </Button>
-  );
-}
 
 export default function GigsPage() {
 	return (

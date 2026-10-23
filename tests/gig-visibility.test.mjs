@@ -130,7 +130,7 @@ for (const viewer of viewerCases) {
     }
     assert.equal(html.includes("회원 공개</div>"), viewer.visibleIds.includes(membersGig.id));
     assert.equal(html.includes("비공개</div>"), Boolean(viewer.options.admin));
-    const { AddGigButton } = loadSource("app/gigs/page.tsx", fixture.mocks);
+    const { AddGigButton } = loadSource("components/add-gig-button.tsx", fixture.mocks);
     const adminButton = renderToStaticMarkup(await AddGigButton());
     assert.equal(adminButton.includes('href="/gigs/new"'), Boolean(viewer.options.admin));
   });

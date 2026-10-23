@@ -29,16 +29,16 @@ test("service documents and revisions are available from source without a local 
   }
   const current = fixture("development", LEGAL_DOCUMENTS).currentLegalDocuments();
   assert.equal(current.documents.length, 2);
-  assert.ok(current.documents.every((item) => !item.published), "Storing content in Git does not enable publication");
+  assert.equal(current.published, true);
+  assert.ok(LEGAL_DOCUMENTS.every((item) => !("published" in item)), "Source documents have no manual publication switch");
 });
 
-test("unpublished source documents remain a development-only preview", () => {
-  const pending = documents().map((item) => ({ ...item, published: false }));
-  const local = fixture("development", pending).currentLegalDocuments();
-  assert.equal(local.documents.length, 2); assert.equal(local.published, false);
-  const production = fixture("production", pending).currentLegalDocuments();
-  assert.deepEqual(production.documents, []); assert.equal(production.published, false);
-  assert.deepEqual(fixture("production", [documents()[0], pending[1]]).currentLegalDocuments().documents, []);
+test("production signup documents are available without a publication toggle", () => {
+  const { LEGAL_DOCUMENTS } = loadTs("lib/legal-documents.ts");
+  const production = fixture("production", LEGAL_DOCUMENTS).currentLegalDocuments();
+  assert.equal(production.documents.length, 2);
+  assert.equal(production.published, true);
+  assert.equal(fixture("production", [documents()[0]]).currentLegalDocuments().published, false);
 });
 
 test("published source documents load in every environment and content edits change the revision", () => {

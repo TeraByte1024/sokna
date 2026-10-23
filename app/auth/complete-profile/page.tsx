@@ -44,7 +44,7 @@ export default async function CompleteProfilePage() {
         <CompleteProfileForm
           initialName={initialName}
           email={user.email}
-          initialMarketingOptIn={profile?.marketing_opt_in === true}
+          initialMarketingOptIn={profile ? profile.marketing_opt_in === true : user.app_metadata?.marketing_opt_in === true}
         />
       </div>
     </div>

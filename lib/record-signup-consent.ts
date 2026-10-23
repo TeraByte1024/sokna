@@ -5,7 +5,7 @@ import { missingLegalConsents } from "@/lib/legal-consent-model";
 import type { LegalConsentDatabase } from "@/lib/legal-consent-database";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { savePushConsent } from "@/lib/push-consent";
+import { saveAccountMarketingConsent } from "@/lib/account-marketing-consent";
 import { readSignupConsent, signupConsentMatchesUser } from "@/lib/signup-consent";
 
 /** A signed pre-auth choice is evidence only after a server-verified identity. */
@@ -25,8 +25,7 @@ export async function recordSignupConsent(user: User, rawTicket: unknown) {
     const createdAt = Date.parse(user.created_at);
     const isNew = createdAt >= ticket.acceptedAt - 60_000 && createdAt <= ticket.acceptedAt + 3600_000;
     if (isNew || ticket.marketingAgreed) {
-      const { error: preferenceError } = await savePushConsent(await createClient(), user.id, ticket.marketingAgreed);
-      if (preferenceError) throw preferenceError;
+      await saveAccountMarketingConsent(user, ticket.marketingAgreed);
     }
     const service = createServiceClient() as unknown as SupabaseClient<LegalConsentDatabase>;
     const { error: writeError } = await service.from("user_legal_consents").upsert(
