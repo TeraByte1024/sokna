@@ -44,7 +44,12 @@ function sectionFixture({ failedTable, admin = true } = {}) {
     "@/lib/auth-admin": { getIsAdmin: async () => admin },
     "@/lib/gig-visibility": { getGigVisibility: () => "members" },
     "@/components/gigs/gig-edit-form": { GigEditForm: "edit-form" },
-    "@/lib/gig-server-data": { getGigRow: async () => ({ data: { id: 7, title: "공연", perform_date: "2026-10-05" }, error: null }) },
+    "@/lib/gig-server-data": { getGigRow: async () => ({ data: {
+      id: 7, title: "공연", perform_date: "2026-10-05",
+      advance_booking_starts_at: "2026-10-01T03:00:00Z",
+      advance_booking_deadline: "2026-10-04T14:59:00Z",
+      admission_starts_at: "2026-10-05T09:30:00Z",
+    }, error: null }) },
     "@/lib/supabase/server": { createClient: async () => ({ from(table) {
       const query = {
         select: () => query,
@@ -64,12 +69,15 @@ function sectionFixture({ failedTable, admin = true } = {}) {
   return { render: () => GigEditSection({ gigId: "7", performerNotes: { member: "신청 메모" }, performerNotesLoadError: false }), filters };
 }
 
-test("integrated edit loader retains row identities, account links and setlists", async () => {
+test("integrated edit loader retains row identities, account links, setlists and ticket schedules", async () => {
   const { render, filters } = sectionFixture();
   const tree = await render();
   assert.equal(tree.type, "edit-form");
   assert.equal(tree.props.embedded, true);
   assert.equal(tree.props.gig.id, 7);
+  assert.equal(tree.props.gig.advance_booking_starts_at, "2026-10-01T03:00:00Z");
+  assert.equal(tree.props.gig.advance_booking_deadline, "2026-10-04T14:59:00Z");
+  assert.equal(tree.props.gig.admission_starts_at, "2026-10-05T09:30:00Z");
   assert.deepEqual(tree.props.performerNotes, { member: "신청 메모" });
   assert.equal(tree.props.performerNotesLoadError, false);
   assert.equal(tree.props.initialPerformers[0].performerId, 11);

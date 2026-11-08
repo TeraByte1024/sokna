@@ -8,6 +8,9 @@ import { SUPABASE_GIGS_TABLE } from "@/lib/supabase/gigs";
 import { getGigVisibility, isGigVisibility } from "@/lib/gig-visibility";
 import { processPendingPushNotifications } from "@/lib/push-notifications";
 import { mergeLinkedGigPerformers, planGigPerformerChanges, type IncomingGigPerformer } from "@/lib/gig-performer-reconcile";
+import { readTicketGigInput } from "@/lib/ticket-gig-input";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { TicketDatabase } from "@/lib/ticket-database";
 
 export type GigActionResult = { ok: true; gigId?: number } | { ok: false; error: string };
 
@@ -30,6 +33,8 @@ function parsePrice(val: FormDataEntryValue | null): number | null {
 export async function createGig(formData: FormData): Promise<GigActionResult> {
   const allowed = await getIsAdmin();
   if (!allowed) return { ok: false, error: "관리자만 접근 가능합니다." };
+  const ticketFields = readTicketGigInput(formData);
+  if (!ticketFields.ok) return ticketFields;
 
   const title = String(formData.get("title") ?? "").trim();
   if (!title) return { ok: false, error: "공연 제목은 필수입니다." };
@@ -60,13 +65,14 @@ export async function createGig(formData: FormData): Promise<GigActionResult> {
     console.error("참여자 데이터 파싱 실패:", e);
   }
 
-  const supabase = await createClient();
+  const supabase = await createClient() as unknown as SupabaseClient<TicketDatabase>;
 
   // 1. 공연(Gig) 정보 먼저 삽입
   // select()를 붙여야 생성된 gig의 ID를 가져올 수 있습니다.
   const { data: newGig, error: gigError } = await supabase
     .from(SUPABASE_GIGS_TABLE)
     .insert({
+      ...ticketFields.value,
       title,
       subtitle,
       advance_ticket_price,
@@ -154,6 +160,8 @@ export async function createGig(formData: FormData): Promise<GigActionResult> {
 export async function updateGig(formData: FormData): Promise<GigActionResult> {
   const allowed = await getIsAdmin();
   if (!allowed) return { ok: false, error: "관리자만 접근 가능합니다." };
+  const ticketFields = readTicketGigInput(formData);
+  if (!ticketFields.ok) return ticketFields;
 
   const idStr = formData.get("id");
   const gigId = Number(idStr);
@@ -198,7 +206,7 @@ export async function updateGig(formData: FormData): Promise<GigActionResult> {
     return { ok: false, error: "공연자 데이터 형식이 올바르지 않습니다." };
   }
 
-  const supabase = await createClient();
+  const supabase = await createClient() as unknown as SupabaseClient<TicketDatabase>;
 
   // 공연자 행 ID를 우선 사용해 기존 행을 갱신한다.
   const { data: existingPerformers, error: fetchPerfError } = await supabase
@@ -217,6 +225,7 @@ export async function updateGig(formData: FormData): Promise<GigActionResult> {
   const { error: gigError } = await supabase
     .from(SUPABASE_GIGS_TABLE)
     .update({
+      ...ticketFields.value,
       title,
       subtitle,
       advance_ticket_price,
@@ -390,6 +399,7 @@ export async function updateGig(formData: FormData): Promise<GigActionResult> {
   revalidatePath(`/gigs/${gigId}/edit`);
   revalidatePath("/admin/gigs");
   revalidatePath(`/admin/gigs/${gigId}`);
+  revalidatePath("/reservations", "layout");
   revalidatePath("/");
 
   return { ok: true, gigId };

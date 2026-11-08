@@ -59,9 +59,13 @@ import {
 } from "lucide-react";
 import { SessionOrderDialog } from "./session-order-dialog";
 import { toast } from "sonner";
+import { GigDateTimeInputs, gigScheduleInputClassName } from "@/components/gigs/gig-date-time-inputs";
+import { TicketGigFields, initialTicketGigForm } from "@/components/gigs/ticket-gig-fields";
+import type { TicketGigFields as TicketGigData } from "@/lib/ticket-database";
+import { defaultBookingDeadline } from "@/lib/ticket-reservations";
 import { cn, parseDateTime } from "@/lib/utils";
 
-export interface GigFormData {
+export interface GigFormData extends TicketGigData {
   id?: number;
   title: string | null;
   subtitle?: string | null;
@@ -717,6 +721,7 @@ export function GigForm({
 
   // 1. 공연 기본 정보 상태
   const [title, setTitle] = useState(gig?.title ?? "");
+  const [ticket, setTicket] = useState(() => initialTicketGigForm(gig));
   const [subtitle, setSubtitle] = useState(gig?.subtitle ?? "");
   const [advanceTicketPrice, setAdvanceTicketPrice] = useState<number | null>(
     gig?.advance_ticket_price ?? null
@@ -769,6 +774,7 @@ export function GigForm({
 
   // 작성 중 변경 사항 여부 (isDirty) 감지
   const isDirty = useMemo(() => {
+    if (JSON.stringify(ticket) !== JSON.stringify(initialTicketGigForm(gig))) return true;
     if (mode === "create") {
       return Boolean(
         title.trim() ||
@@ -846,6 +852,7 @@ export function GigForm({
     }
   }, [
     mode,
+    ticket,
     title,
     subtitle,
     performDate,
@@ -1414,6 +1421,20 @@ export function GigForm({
     }
     formData.set("title", title);
     formData.set("subtitle", subtitle);
+    formData.set("notice", ticket.notice);
+    if (ticket.admissionStartTime || gig?.admission_starts_at) {
+      const admissionDateTime = ticket.admissionStartTime
+        ? `${performDate}T${ticket.admissionStartTime}`
+        : "";
+      formData.set("admission_starts_at", admissionDateTime);
+    }
+    const ticketDateTimeForSubmit = (value: string) =>
+      !ticket.enabled && (value.startsWith("T") || value.endsWith("T")) ? "" : value;
+    formData.set("ticket_booking_enabled", String(ticket.enabled));
+    formData.set("ticket_capacity", ticket.capacity);
+    formData.set("advance_booking_starts_at", ticketDateTimeForSubmit(ticket.startsAt));
+    formData.set("advance_booking_deadline", ticketDateTimeForSubmit(ticket.deadline) || defaultBookingDeadline(performDate));
+    formData.set("ticket_refund_policy", ticket.refundPolicy);
     formData.set(
       "advance_ticket_price",
       advanceTicketPrice != null ? String(advanceTicketPrice) : ""
@@ -1672,176 +1693,111 @@ export function GigForm({
                   />
                 </div>
 
-                {/* 티켓 예매 가격 (사전예매 / 현장예매) */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-0.5">
-                  {/* 사전예매 가격 */}
-                  <div className="space-y-1.5">
-                    <Label htmlFor="advance_ticket_price" className="text-xs font-semibold text-foreground flex items-center justify-between">
-                      <span>사전예매 가격</span>
-                      <span className="text-[10px] text-muted-foreground font-normal">KRW (원)</span>
-                    </Label>
-                    <div className="relative">
-                      <Input
-                        id="advance_ticket_price"
-                        name="advance_ticket_price"
-                        type="text"
-                        inputMode="numeric"
-                        placeholder="예: 5,000"
-                        value={
-                          advanceTicketPrice != null
-                            ? advanceTicketPrice.toLocaleString("ko-KR")
-                            : ""
-                        }
-                        onChange={(e) => {
-                          const raw = e.target.value.replace(/[^\d]/g, "");
-                          setAdvanceTicketPrice(raw ? parseInt(raw, 10) : null);
-                        }}
-                        className="bg-background border-border text-foreground placeholder:text-muted-foreground text-sm h-10 pr-8 font-mono"
-                      />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-medium pointer-events-none">
-                        원
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* 현장예매 가격 */}
-                  <div className="space-y-1.5">
-                    <Label htmlFor="door_ticket_price" className="text-xs font-semibold text-foreground flex items-center justify-between">
-                      <span>현장예매 가격</span>
-                      <span className="text-[10px] text-muted-foreground font-normal">KRW (원)</span>
-                    </Label>
-                    <div className="relative">
-                      <Input
-                        id="door_ticket_price"
-                        name="door_ticket_price"
-                        type="text"
-                        inputMode="numeric"
-                        placeholder="예: 7,000"
-                        value={
-                          doorTicketPrice != null
-                            ? doorTicketPrice.toLocaleString("ko-KR")
-                            : ""
-                        }
-                        onChange={(e) => {
-                          const raw = e.target.value.replace(/[^\d]/g, "");
-                          setDoorTicketPrice(raw ? parseInt(raw, 10) : null);
-                        }}
-                        className="bg-background border-border text-foreground placeholder:text-muted-foreground text-sm h-10 pr-8 font-mono"
-                      />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-medium pointer-events-none">
-                        원
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* 일정 (공연 일시 & 선곡회의 일시) */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* 공연 일시 */}
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-foreground flex items-center justify-between">
-                  <span className="flex items-center gap-1.5">
-                    <Calendar className="size-3.5 text-primary" />
-                    공연 일시 <span className="text-destructive">*</span>
-                  </span>
-                </Label>
-                <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(8rem,9rem)] gap-2 max-[389px]:grid-cols-1 sm:grid-cols-3">
-                  <div className="min-w-0 sm:col-span-2">
-                    <Input
-                      id="perform_date"
-                      name="perform_date"
-                      type="date"
-                      required
-                      value={performDate}
-                      onChange={(e) => setPerformDate(e.target.value)}
-                      className="min-w-0 bg-background border-border text-foreground text-sm font-medium"
-                    />
-                  </div>
-                  <div className="min-w-0 sm:col-span-1">
-                    <Input
-                      id="perform_time"
-                      name="perform_time"
-                      type="time"
-                      value={performTime}
-                      onChange={(e) => setPerformTime(e.target.value)}
-                      placeholder="18:00"
-                      className="min-w-0 bg-background border-border text-foreground text-sm"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* 선곡회의 일시 */}
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-foreground flex items-center justify-between">
-                  <span className="flex items-center gap-1.5">
-                    <Clock className="size-3.5 text-indigo-500" />
-                    선곡회의 일시
-                  </span>
-                </Label>
-                <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(8rem,9rem)] gap-2 max-[389px]:grid-cols-1 sm:grid-cols-3">
-                  <div className="min-w-0 sm:col-span-2">
-                    <Input
-                      id="meeting_date"
-                      name="meeting_date"
-                      type="date"
-                      value={meetingDate}
-                      onChange={(e) => setMeetingDate(e.target.value)}
-                      className="min-w-0 bg-background border-border text-foreground text-sm"
-                    />
-                  </div>
-                  <div className="min-w-0 sm:col-span-1">
-                    <Input
-                      id="meeting_time"
-                      name="meeting_time"
-                      type="time"
-                      value={meetingTime}
-                      onChange={(e) => setMeetingTime(e.target.value)}
-                      placeholder="19:00"
-                      className="min-w-0 bg-background border-border text-foreground text-sm"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {mode === "edit" && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* 현장예매 가격 */}
                 <div className="space-y-1.5">
-                  <Label htmlFor="nomination_deadline_date" className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                    <Clock className="size-3.5 text-indigo-500" />
+                  <Label htmlFor="door_ticket_price" className="text-xs font-semibold text-foreground flex items-center justify-between">
+                    <span>현장예매 가격</span>
+                    <span className="text-[10px] text-muted-foreground font-normal">KRW (원)</span>
+                  </Label>
+                  <div className="relative">
+                    <Input
+                      id="door_ticket_price"
+                      name="door_ticket_price"
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="예: 7,000"
+                      value={
+                        doorTicketPrice != null
+                          ? doorTicketPrice.toLocaleString("ko-KR")
+                          : ""
+                      }
+                      onChange={(e) => {
+                        const raw = e.target.value.replace(/[^\d]/g, "");
+                        setDoorTicketPrice(raw ? parseInt(raw, 10) : null);
+                      }}
+                      className="bg-background border-border text-foreground placeholder:text-muted-foreground text-sm h-10 pr-8 font-mono"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-medium pointer-events-none">
+                      원
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="meeting_date" className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                  <Clock className="size-3.5 text-indigo-500" aria-hidden="true" />
+                  선곡회의 일시
+                </Label>
+                <GigDateTimeInputs
+                  id="meeting"
+                  timeLabel="선곡회의 시간"
+                  date={meetingDate}
+                  time={meetingTime}
+                  onDateChange={setMeetingDate}
+                  onTimeChange={setMeetingTime}
+                />
+              </div>
+
+              {mode === "edit" && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="nomination_deadline_date" className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                    <Clock className="size-3.5 text-indigo-500" aria-hidden="true" />
                     추천곡 접수 마감 기한
                   </Label>
-                  <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(8rem,9rem)] gap-2 max-[389px]:grid-cols-1 sm:grid-cols-3">
-                    <div className="min-w-0 sm:col-span-2">
-                      <Input
-                        id="nomination_deadline_date"
-                        name="nomination_deadline_date"
-                        type="date"
-                        required={Boolean(deadlineTime)}
-                        value={deadlineDate}
-                        onChange={(e) => setDeadlineDate(e.target.value)}
-                        className="min-w-0 bg-background border-border text-foreground text-sm"
-                      />
-                    </div>
-                    <div className="min-w-0 sm:col-span-1">
-                      <Input
-                        id="nomination_deadline_time"
-                        name="nomination_deadline_time"
-                        type="time"
-                        required={Boolean(deadlineDate)}
-                        aria-label="추천곡 접수 마감 시간"
-                        value={deadlineTime}
-                        onChange={(e) => setDeadlineTime(e.target.value)}
-                        className="min-w-0 bg-background border-border text-foreground text-sm"
-                      />
-                    </div>
-                  </div>
+                  <GigDateTimeInputs
+                    id="nomination_deadline"
+                    timeLabel="추천곡 접수 마감 시간"
+                    date={deadlineDate}
+                    time={deadlineTime}
+                    onDateChange={setDeadlineDate}
+                    onTimeChange={setDeadlineTime}
+                    dateRequired={Boolean(deadlineTime)}
+                    timeRequired={Boolean(deadlineDate)}
+                  />
                 </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="perform_date" className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                  <Calendar className="size-3.5 text-primary" aria-hidden="true" />
+                  공연 일시 <span className="text-destructive">*</span>
+                </Label>
+                <GigDateTimeInputs
+                  id="perform"
+                  timeLabel="공연 시작 시간"
+                  date={performDate}
+                  time={performTime}
+                  onDateChange={setPerformDate}
+                  onTimeChange={setPerformTime}
+                  dateRequired
+                  timeRequired={Boolean(ticket.admissionStartTime)}
+                />
               </div>
-            )}
+
+              <div className="space-y-1.5">
+                <Label htmlFor="gig-admission-start-time" className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                  <Clock className="size-3.5 text-primary" aria-hidden="true" />
+                  입장 시작 시간
+                </Label>
+                <Input
+                  id="gig-admission-start-time"
+                  type="time"
+                  value={ticket.admissionStartTime}
+                  onChange={(event) => setTicket({ ...ticket, admissionStartTime: event.target.value })}
+                  max={performTime || undefined}
+                  aria-describedby="gig-admission-start-hint"
+                  className={cn(gigScheduleInputClassName, "sm:max-w-[9rem]")}
+                />
+                <p id="gig-admission-start-hint" className="text-xs text-muted-foreground">
+                  공연 날짜 기준 · 한국 시간
+                </p>
+              </div>
+            </div>
 
             {/* 장소 (공연 장소 & 선곡회의 장소) */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1875,6 +1831,8 @@ export function GigForm({
                 />
               </div>
             </div>
+
+            <TicketGigFields value={ticket} onChange={setTicket} performDate={performDate} advanceTicketPrice={advanceTicketPrice} onAdvanceTicketPriceChange={setAdvanceTicketPrice} />
 
             {/* 공개 범위 */}
             <div className="space-y-2 pt-2 border-t border-border/60">

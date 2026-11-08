@@ -10,7 +10,7 @@ import { AudienceAccount } from "@/components/audience-account";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "내 정보 | 소크나",
+  title: "프로필 | 소크나",
   description: "소크나 계정 정보 및 회원 프로필 조회",
 };
 

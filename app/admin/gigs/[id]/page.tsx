@@ -56,6 +56,7 @@ export default async function AdminGigDetailPage({ params }: Props) {
       />
       {(gigResult.error || performersResult.error || rsvpsResult.error) && <p role="alert" className="rounded-xl border border-destructive/30 p-4 text-sm text-destructive">일부 공연 정보를 불러오지 못했습니다. 새로고침해 주세요.</p>}
       <div className="flex flex-wrap gap-2">
+        <Button asChild variant="outline"><Link href={`/admin/gigs/${gigId}/reservations`}>예매 관리</Link></Button>
         {gig && <GigSectionLinks />}
         {pending > 0 && <Button asChild variant="outline"><Link href="/admin/approvals">대기 신청 처리하기 →</Link></Button>}
       </div>

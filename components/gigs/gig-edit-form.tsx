@@ -4,11 +4,12 @@ import React from "react";
 import { GigForm, type SetlistItem } from "@/components/gigs/gig-form";
 import type { Performer } from "@/components/performer-selector";
 import { getGigVisibility, type GigVisibility } from "@/lib/gig-visibility";
+import type { TicketGigFields } from "@/lib/ticket-database";
 
 export type { SetlistItem };
 
 interface GigEditFormProps {
-  gig: {
+  gig: TicketGigFields & {
     id: number;
     title: string | null;
     subtitle?: string | null;
@@ -50,6 +51,7 @@ export function GigEditForm({
       performerNotes={performerNotes}
       performerNotesLoadError={performerNotesLoadError}
       gig={{
+        ...gig,
         id: gig.id,
         title: gig.title,
         subtitle: gig.subtitle,

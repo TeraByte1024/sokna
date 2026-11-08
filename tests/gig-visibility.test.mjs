@@ -8,6 +8,7 @@ import vm from "node:vm";
 import React from "react";
 import { renderToStaticMarkup, renderToReadableStream } from "react-dom/server";
 import ts from "typescript";
+import { loadTs } from "./helpers/load-ts.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const requireDependency = createRequire(import.meta.url);
@@ -53,6 +54,79 @@ const viewerCases = [
   { name: "performers", options: { performer: true }, visibleIds: [1, 2, 4, 5] },
   { name: "administrators without a member profile", options: { admin: true, profile: null }, visibleIds: [1, 2, 3, 4, 5] },
 ];
+
+const bookingGig = {
+  ...publicGig,
+  perform_date: "2026-11-20",
+  perform_time: "19:00",
+  meeting_date: "2026-11-10",
+  meeting_time: "10:00",
+  ticket_booking_enabled: true,
+  advance_booking_starts_at: "2026-11-11T03:00:00Z",
+  advance_booking_deadline: "2026-11-19T14:59:00Z",
+};
+
+test("landing selects the nearest public presale and changes the destination when it opens", async () => {
+  for (const [now, expectedHref] of [
+    ["2026-11-10T15:30:00Z", "/gigs/1"],
+    ["2026-11-11T03:00:00Z", "/gigs/1/reserve"],
+    ["2026-11-19T15:00:00Z", null],
+  ]) {
+    class FixedDate extends Date { static now() { return Date.parse(now); } }
+    const filters = [];
+    const query = {
+      select: () => query,
+      eq(field, value) { filters.push(["eq", field, value]); return query; },
+      gte(field, value) { filters.push(["gte", field, value]); return query; },
+      order: () => query,
+      then(resolve) {
+        return Promise.resolve({ error: null, data: [
+          { ...bookingGig, id: 7, advance_booking_deadline: "2026-11-08T14:59:00Z", advance_booking_starts_at: null },
+          bookingGig,
+          { ...bookingGig, id: 8, perform_date: "2026-11-21" },
+        ] }).then(resolve);
+      },
+    };
+    const { default: Home } = loadTs("app/page.tsx", {
+      "@/lib/gig-viewer": { getGigViewer: async () => ({ user: null, isLoggedIn: false }) },
+      "@/lib/supabase/server": { createClient: async () => ({ from: () => query }) },
+      "@/components/landing": { Landing: () => null },
+      "@/components/site-layout": { SiteLayout: ({ children }) => children },
+    }, { Date: FixedDate });
+    const page = await Home();
+    assert.equal(page.props.children.props.upcomingBookingGig?.href ?? null, expectedHref);
+    assert.deepEqual(filters, [
+      ["eq", "visibility", "public"],
+      ["eq", "ticket_booking_enabled", true],
+      ["gte", "perform_date", now.includes("11-19") ? "2026-11-20" : "2026-11-11"],
+    ]);
+  }
+});
+
+test("gig detail shows presale notice, checks the Korea meeting cutoff, and gives open booking priority", async () => {
+  for (const [now, signedOut, performer, expected] of [
+    ["2026-11-10T00:59:59Z", false, false, "join"],
+    ["2026-11-10T01:00:00Z", false, false, "notice"],
+    ["2026-11-10T01:00:00Z", false, true, "nomination"],
+    ["2026-11-11T03:00:00Z", false, true, "booking"],
+    ["2026-11-11T03:00:00Z", true, false, "booking"],
+  ]) {
+    class FixedDate extends Date { static now() { return Date.parse(now); } }
+    const fixture = visibilityFixture({ gig: bookingGig, signedOut, performer });
+    fixture.mocks["@/components/gigs/gig-detail-actions"].GigDetailActions =
+      function MemberActionMock({ canJoin, isCurrentUserPerformer }) {
+        return isCurrentUserPerformer ? "nomination-action" : canJoin ? "join-action" : null;
+      };
+    const { GigDetailInner } = loadTs("app/gigs/[id]/gig-detail-inner.tsx", fixture.mocks, { Date: FixedDate });
+    const stream = await renderToReadableStream(await GigDetailInner({ gigId: "1" }));
+    await stream.allReady;
+    const html = await new Response(stream).text();
+    assert.equal(html.includes("사전예매 시작 전"), expected !== "booking");
+    assert.equal(html.includes('href="/gigs/1/reserve"'), expected === "booking");
+    assert.equal(html.includes("join-action"), expected === "join");
+    assert.equal(html.includes("nomination-action"), expected === "nomination");
+  }
+});
 
 function visibilityFixture({
   signedOut = false, admin = false, performer = false, gig = membersGig,

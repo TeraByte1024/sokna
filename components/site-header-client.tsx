@@ -2,14 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarDays, House, UserRound } from "lucide-react";
+import { CalendarDays, House, Ticket } from "lucide-react";
 import { SoknaLogo } from "@/components/sokna-logo";
 import { cn } from "@/lib/utils";
 
 const mobileLinks = [
   { href: "/", label: "홈", icon: House },
   { href: "/gigs", label: "공연", icon: CalendarDays },
-  { href: "/profile", label: "프로필", icon: UserRound },
+  { href: "/reservations", label: "예매", icon: Ticket },
 ];
 
 interface SiteHeaderClientProps {

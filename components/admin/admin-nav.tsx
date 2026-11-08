@@ -3,7 +3,7 @@
 import { useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarDays, ClipboardCheck, Menu, Users, X } from "lucide-react";
+import { CalendarDays, ClipboardCheck, Menu, Users, X, Ticket, Landmark } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ADMIN_GIG_SECTIONS } from "@/lib/admin-gig-sections";
@@ -11,6 +11,8 @@ import { ADMIN_GIG_SECTIONS } from "@/lib/admin-gig-sections";
 const links = [
   { href: "/admin/approvals", label: "가입/공연 신청 승인", icon: ClipboardCheck },
   { href: "/admin/gigs", label: "공연 관리", icon: CalendarDays },
+  { href: "/admin/reservations", label: "예매 관리", icon: Ticket },
+  { href: "/admin/payment-accounts", label: "납부 계좌 설정", icon: Landmark },
   { href: "/admin/members", label: "회원(관리자) 관리", icon: Users },
 ] as const;
 

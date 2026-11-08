@@ -372,7 +372,7 @@ test("the notification slot stays in the upper-right header on mobile rather tha
     "next/link": { default: ({ href, children, ...props }) => React.createElement("a", { href, ...props }, children), __esModule: true },
     "next/image": { default: () => React.createElement("img", { alt: "소크나" }), __esModule: true },
     "next/navigation": { usePathname: () => "/" },
-    "lucide-react": { CalendarDays: icon, House: icon, UserRound: icon },
+    "lucide-react": { CalendarDays: icon, House: icon, UserRound: icon, Ticket: icon },
     "@/components/sokna-logo": { SoknaLogo: () => React.createElement("span", null, "소크나") },
     "@/lib/club": { CLUB_NAME_KOREAN: "소크나" },
     "@/lib/utils": { cn: (...values) => values.filter(Boolean).join(" ") },

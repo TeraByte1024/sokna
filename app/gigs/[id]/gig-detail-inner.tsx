@@ -23,7 +23,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ResponsiveImage } from "@/components/ui/responsive-image";
 import { ShareGigButton } from "@/components/gigs/share-gig-button";
 import { PerformerCardGrid } from "@/components/gigs/performer-card-grid";
+import { GigActionBar } from "@/components/gigs/gig-action-bar";
 import { GigDetailActions } from "@/components/gigs/gig-detail-actions";
+import { getAdvanceBookingStatus, ticketDateTime, ticketPerformanceTime } from "@/lib/ticket-reservations";
 
 interface DetailSetlistItem {
   id: number;
@@ -101,6 +103,19 @@ export async function GigDetailInner({ gigId }: GigDetailInnerProps) {
     );
   }
 
+  const now = Date.now();
+  const bookingStatus = gig.visibility === "public" && gig.ticket_booking_enabled
+    ? getAdvanceBookingStatus(gig, now)
+    : "closed";
+  const performanceStart = gig.perform_date
+    ? ticketPerformanceTime(gig.perform_date, gig.perform_time || "23:59")
+    : null;
+  const meetingStart = gig.meeting_date
+    ? ticketPerformanceTime(gig.meeting_date, gig.meeting_time || "00:00")
+    : null;
+  const canJoin = (meetingStart === null || now < meetingStart) &&
+    (performanceStart === null || now < performanceStart);
+
   // 3. 참여 공연자 (Performers) 조회 (미연동 더미 포함)
   const performerQuery = supabase
     .from("performers")
@@ -129,7 +144,7 @@ export async function GigDetailInner({ gigId }: GigDetailInnerProps) {
   const performerRowsPromise = Promise.resolve(performerQuery);
   const setlistRowsPromise = Promise.resolve(setlistQuery);
 
-  const participantPromise = user && canParticipate ? Promise.all([
+  const participantPromise = user && canParticipate && bookingStatus !== "open" ? Promise.all([
     supabase
       .from("gig_rsvps")
       .select("*")
@@ -152,30 +167,27 @@ export async function GigDetailInner({ gigId }: GigDetailInnerProps) {
 
   async function ParticipationActions() {
     if (!participantPromise || !user) return null;
-    let isCurrentUserPerformer = false;
-    let userRsvp: GigRsvp | null = null;
-    let userProfile: { name: string | null; part: string | null } | null = null;
-    const [{ data: rsvpRow }, { data: profileRow }, { data: performerRow }] = await participantPromise;
-    if (rsvpRow) {
-      userRsvp = {
-        id: rsvpRow.id,
-        gig_id: rsvpRow.gig_id,
-        user_id: rsvpRow.user_id,
-        status: rsvpRow.status as "going" | "not_going" | "undecided",
-        review_status: rsvpRow.review_status as "pending" | "approved" | "rejected",
-        part: rsvpRow.part,
-        note: rsvpRow.note,
-        created_at: rsvpRow.created_at,
-        updated_at: rsvpRow.updated_at,
-      };
-    }
-    userProfile = profileRow;
-    isCurrentUserPerformer = Boolean(performerRow);
+    const [{ data: rsvpRow }, { data: userProfile }, { data: performerRow, error: performerError }] = await participantPromise;
+    if (performerError || (!performerRow && !canJoin)) return null;
+    const userRsvp: GigRsvp | null = rsvpRow
+      ? {
+          id: rsvpRow.id,
+          gig_id: rsvpRow.gig_id,
+          user_id: rsvpRow.user_id,
+          status: rsvpRow.status as "going" | "not_going" | "undecided",
+          review_status: rsvpRow.review_status as "pending" | "approved" | "rejected",
+          part: rsvpRow.part,
+          note: rsvpRow.note,
+          created_at: rsvpRow.created_at,
+          updated_at: rsvpRow.updated_at,
+        }
+      : null;
     return (
       <GigDetailActions
         gig={gig}
         existingRsvp={userRsvp}
-        isCurrentUserPerformer={isCurrentUserPerformer}
+        isCurrentUserPerformer={Boolean(performerRow)}
+        canJoin={canJoin}
         defaultPart={userProfile?.part ?? ""}
         userName={userProfile?.name ?? user.email ?? "부원"}
         isLoggedIn
@@ -315,7 +327,7 @@ export async function GigDetailInner({ gigId }: GigDetailInnerProps) {
   const dDay = getDDay(gig.perform_date);
   const isPast = !dDay && Boolean(gig.perform_date);
   return (
-    <div className={`flex flex-col gap-10 w-full max-w-4xl mx-auto ${isLoggedIn ? "pb-28 sm:pb-16" : "pb-16"}`}>
+    <div className={`flex flex-col gap-10 w-full max-w-4xl mx-auto ${bookingStatus === "open" || participantPromise ? "pb-28 sm:pb-16" : "pb-16"}`}>
       {/* 1. 상단 내비게이션 및 액션 바 */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <Link
@@ -459,18 +471,37 @@ export async function GigDetailInner({ gigId }: GigDetailInnerProps) {
               </div>
             </div>
 
-            {/* 주요 액션 버튼 (공연 참여 & 선곡회의 + 참가 신청 Dialog) - 승인 회원 또는 관리자에게 표시 */}
-            {canParticipate && (
-              <div className="pt-2">
-                <Suspense fallback={<div role="status" className="h-11 w-64 rounded-lg bg-muted/50 animate-pulse motion-reduce:animate-none"><span className="sr-only">공연 참여 상태를 불러오는 중…</span></div>}>
+            <div className="space-y-3">
+              {bookingStatus === "upcoming" && (
+                <p className="text-sm text-muted-foreground">
+                  <span className="font-semibold text-foreground">사전예매 시작 전</span>
+                  {" · "}
+                  <time dateTime={gig.advance_booking_starts_at ?? undefined}>
+                    {ticketDateTime(gig.advance_booking_starts_at ?? null)} 시작
+                  </time>
+                </p>
+              )}
+              {bookingStatus === "open" && (
+                <GigActionBar>
+                  <Button asChild size="lg" className="h-11 w-full gap-2 font-bold sm:w-auto">
+                    <Link href={`/gigs/${gig.id}/reserve`}>
+                      <Ticket className="size-4" aria-hidden="true" />
+                      공연 예매하기
+                    </Link>
+                  </Button>
+                </GigActionBar>
+              )}
+              {participantPromise && (
+                <Suspense fallback={<div role="status" className="h-11 w-40 rounded-lg bg-muted/50 animate-pulse motion-reduce:animate-none"><span className="sr-only">공연 참여 상태를 불러오는 중…</span></div>}>
                   <ParticipationActions />
                 </Suspense>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
       </div>
 
+      {gig.notice && <Card className="border-border/60 shadow-sm"><CardHeader><CardTitle className="text-lg">공연 유의사항</CardTitle></CardHeader><CardContent><p className="whitespace-pre-wrap break-words text-sm leading-7 text-muted-foreground">{gig.notice}</p></CardContent></Card>}
       <Suspense fallback={<DetailSectionSkeleton title="SETLIST" label="셋리스트를 불러오는 중…" />}>
         <SetlistSection />
       </Suspense>

@@ -4,6 +4,7 @@ import { getGigViewer } from "@/lib/gig-viewer";
 import { canViewGig, getGigVisibility } from "@/lib/gig-visibility";
 import { isNominationClosed } from "@/lib/nomination-deadline";
 import { createClient } from "@/lib/supabase/server";
+import { getAdvanceBookingStatus } from "@/lib/ticket-reservations";
 
 type GigViewer = Awaited<ReturnType<typeof getGigViewer>>;
 
@@ -41,15 +42,50 @@ async function getActiveNominationGig(viewer: GigViewer) {
   );
 }
 
+async function getUpcomingBookingGig() {
+  const supabase = await createClient();
+  const now = Date.now();
+  const today = new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "Asia/Seoul",
+    dateStyle: "short",
+  }).format(now);
+  const { data, error } = await supabase
+    .from("gigs")
+    .select("id, title, perform_date, perform_time, advance_booking_starts_at, advance_booking_deadline")
+    .eq("visibility", "public")
+    .eq("ticket_booking_enabled", true)
+    .gte("perform_date", today)
+    .order("perform_date")
+    .order("perform_time", { nullsFirst: false })
+    .order("id");
+
+  if (error) return null;
+  for (const gig of data ?? []) {
+    const status = getAdvanceBookingStatus(gig, now);
+    if (status !== "closed") {
+      return {
+        title: gig.title,
+        href: status === "open" ? `/gigs/${gig.id}/reserve` : `/gigs/${gig.id}`,
+      };
+    }
+  }
+  return null;
+}
+
 export default async function Home() {
-  const viewer = await getGigViewer();
-  const activeNominationGig = await getActiveNominationGig(viewer);
+  const viewerPromise = getGigViewer();
+  const [viewer, activeNominationGig, upcomingBookingGig] = await Promise.all([
+    viewerPromise,
+    viewerPromise.then(getActiveNominationGig),
+    getUpcomingBookingGig(),
+  ]);
 
   return (
     <SiteLayout>
       <Landing
         isLoggedIn={viewer.isLoggedIn}
         activeNominationGig={activeNominationGig}
+        upcomingBookingGig={upcomingBookingGig}
       />
     </SiteLayout>
   );

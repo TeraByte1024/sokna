@@ -208,30 +208,32 @@ const uiMocks = {
   sonner: { toast: { success() {}, error() {} } },
 };
 
-test("approved performers retain two visible disabled participation buttons and no dialog", () => {
+test("confirmed performers see only the nomination action and no dialog", () => {
   const { GigDetailActions } = loadSource("components/gigs/gig-detail-actions.tsx", uiMocks);
   for (const existingRsvp of [rsvp, null]) {
-    const html = renderToStaticMarkup(React.createElement(GigDetailActions, { gig, existingRsvp, isLoggedIn: true, isCurrentUserPerformer: true }));
-    assert.equal((html.match(/disabled=""/g) || []).length, 2);
-    assert.equal((html.match(/<span>공연 참여<\/span>/g) || []).length, 2);
-    assert.match(html, /text-emerald-300/);
+    const html = renderToStaticMarkup(React.createElement(GigDetailActions, { gig, existingRsvp, isLoggedIn: true, isCurrentUserPerformer: true, canJoin: false }));
+    assert.doesNotMatch(html, /공연 참여/);
+    assert.equal((html.match(/href="\/gigs\/1\/nominations"/g) || []).length, 1);
     assert.doesNotMatch(html, /role="dialog"/);
   }
 });
 
-test("pending and ignored requests retain enabled participation buttons", () => {
+test("pending and ignored requests have only the participation action before the meeting", () => {
   const { GigDetailActions } = loadSource("components/gigs/gig-detail-actions.tsx", uiMocks);
   for (const existingRsvp of [rsvp, null]) {
-    const html = renderToStaticMarkup(React.createElement(GigDetailActions, { gig, existingRsvp, isLoggedIn: true, isCurrentUserPerformer: false }));
+    const props = { gig, existingRsvp, isLoggedIn: true, isCurrentUserPerformer: false };
+    const html = renderToStaticMarkup(React.createElement(GigDetailActions, { ...props, canJoin: true }));
     assert.doesNotMatch(html, /disabled=""/);
+    assert.doesNotMatch(html, /\/nominations/);
     assert.match(html, existingRsvp ? /승인 대기 중/ : /공연 참여 등록/);
+    assert.equal(renderToStaticMarkup(React.createElement(GigDetailActions, { ...props, canJoin: false })), "");
   }
 });
 
 test("rejected application offers reapplication without losing the saved request", () => {
   const rejected = { ...rsvp, review_status: "rejected" };
   const { GigDetailActions } = loadSource("components/gigs/gig-detail-actions.tsx", uiMocks);
-  const actionsHtml = renderToStaticMarkup(React.createElement(GigDetailActions, { gig, existingRsvp: rejected, isLoggedIn: true, isCurrentUserPerformer: false }));
+  const actionsHtml = renderToStaticMarkup(React.createElement(GigDetailActions, { gig, existingRsvp: rejected, isLoggedIn: true, isCurrentUserPerformer: false, canJoin: true }));
   assert.match(actionsHtml, /반려됨/);
   const { GigJoinDialog } = loadSource("components/gigs/gig-join-dialog.tsx", uiMocks);
   const dialogHtml = renderToStaticMarkup(React.createElement(GigJoinDialog, { gig, isOpen: true, onClose() {}, existingRsvp: rejected }));

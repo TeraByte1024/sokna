@@ -119,6 +119,9 @@ export type Database = {
       }
       gigs: {
         Row: {
+          admission_starts_at: string | null
+          advance_booking_deadline: string | null
+          advance_booking_starts_at: string | null
           advance_ticket_price: number | null
           created_at: string
           door_ticket_price: number | null
@@ -129,14 +132,21 @@ export type Database = {
           meeting_location: string | null
           meeting_time: string | null
           nomination_deadline: string | null
+          notice: string | null
           perform_date: string
           perform_time: string | null
           poster_url: string | null
           subtitle: string | null
+          ticket_booking_enabled: boolean
+          ticket_capacity: number | null
+          ticket_refund_policy: string | null
           title: string | null
           visibility: string
         }
         Insert: {
+          admission_starts_at?: string | null
+          advance_booking_deadline?: string | null
+          advance_booking_starts_at?: string | null
           advance_ticket_price?: number | null
           created_at?: string
           door_ticket_price?: number | null
@@ -147,14 +157,21 @@ export type Database = {
           meeting_location?: string | null
           meeting_time?: string | null
           nomination_deadline?: string | null
+          notice?: string | null
           perform_date: string
           perform_time?: string | null
           poster_url?: string | null
           subtitle?: string | null
+          ticket_booking_enabled?: boolean
+          ticket_capacity?: number | null
+          ticket_refund_policy?: string | null
           title?: string | null
           visibility?: string
         }
         Update: {
+          admission_starts_at?: string | null
+          advance_booking_deadline?: string | null
+          advance_booking_starts_at?: string | null
           advance_ticket_price?: number | null
           created_at?: string
           door_ticket_price?: number | null
@@ -165,10 +182,14 @@ export type Database = {
           meeting_location?: string | null
           meeting_time?: string | null
           nomination_deadline?: string | null
+          notice?: string | null
           perform_date?: string
           perform_time?: string | null
           poster_url?: string | null
           subtitle?: string | null
+          ticket_booking_enabled?: boolean
+          ticket_capacity?: number | null
+          ticket_refund_policy?: string | null
           title?: string | null
           visibility?: string
         }
@@ -340,15 +361,40 @@ export type Database = {
           title?: string | null
           user_id?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "notifications_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
+      }
+      payment_accounts: {
+        Row: {
+          account_number: string
+          active: boolean
+          bank: string
+          created_at: string
+          created_by: string | null
+          holder: string
+          id: string
+          instruction: string
+        }
+        Insert: {
+          account_number: string
+          active?: boolean
+          bank: string
+          created_at?: string
+          created_by?: string | null
+          holder: string
+          id?: string
+          instruction?: string
+        }
+        Update: {
+          account_number?: string
+          active?: boolean
+          bank?: string
+          created_at?: string
+          created_by?: string | null
+          holder?: string
+          id?: string
+          instruction?: string
+        }
+        Relationships: []
       }
       performers: {
         Row: {
@@ -553,6 +599,212 @@ export type Database = {
           },
         ]
       }
+      ticket_fund_entries: {
+        Row: {
+          account_id: string | null
+          actor_id: string | null
+          amount: number
+          created_at: string
+          direction: string
+          id: string
+          reference: string
+          reservation_id: string
+        }
+        Insert: {
+          account_id?: string | null
+          actor_id?: string | null
+          amount: number
+          created_at?: string
+          direction: string
+          id?: string
+          reference: string
+          reservation_id: string
+        }
+        Update: {
+          account_id?: string | null
+          actor_id?: string | null
+          amount?: number
+          created_at?: string
+          direction?: string
+          id?: string
+          reference?: string
+          reservation_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_fund_entries_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "payment_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ticket_fund_entries_reservation_id_fkey"
+            columns: ["reservation_id"]
+            isOneToOne: false
+            referencedRelation: "ticket_reservations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ticket_reservation_events: {
+        Row: {
+          action: string
+          actor_id: string | null
+          created_at: string
+          detail: string
+          id: string
+          reservation_id: string
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          created_at?: string
+          detail?: string
+          id?: string
+          reservation_id: string
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          created_at?: string
+          detail?: string
+          id?: string
+          reservation_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_reservation_events_reservation_id_fkey"
+            columns: ["reservation_id"]
+            isOneToOne: false
+            referencedRelation: "ticket_reservations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ticket_reservations: {
+        Row: {
+          account_id: string | null
+          account_snapshot: Json | null
+          admitted_quantity: number
+          approved_at: string | null
+          buyer_name: string
+          cancellation_reason: string | null
+          cancellation_requested_at: string | null
+          checked_in_at: string | null
+          code: string
+          consented_at: string
+          created_at: string
+          depositor: string
+          gig_id: number
+          gig_snapshot: Json
+          id: string
+          notice_snapshot: string
+          paid_amount: number
+          payment_reported_at: string | null
+          phone: string
+          privacy_snapshot: string
+          quantity: number
+          refund_account: string | null
+          refund_amount: number
+          refund_bank: string | null
+          refund_holder: string | null
+          refund_policy_snapshot: string
+          refund_status: string
+          request_key: string
+          status: string
+          total_amount: number
+          unit_price: number
+          user_id: string
+          version: number
+        }
+        Insert: {
+          account_id?: string | null
+          account_snapshot?: Json | null
+          admitted_quantity?: number
+          approved_at?: string | null
+          buyer_name: string
+          cancellation_reason?: string | null
+          cancellation_requested_at?: string | null
+          checked_in_at?: string | null
+          code?: string
+          consented_at?: string
+          created_at?: string
+          depositor: string
+          gig_id: number
+          gig_snapshot: Json
+          id?: string
+          notice_snapshot: string
+          paid_amount?: number
+          payment_reported_at?: string | null
+          phone: string
+          privacy_snapshot: string
+          quantity: number
+          refund_account?: string | null
+          refund_amount?: number
+          refund_bank?: string | null
+          refund_holder?: string | null
+          refund_policy_snapshot: string
+          refund_status?: string
+          request_key: string
+          status?: string
+          total_amount: number
+          unit_price: number
+          user_id: string
+          version?: number
+        }
+        Update: {
+          account_id?: string | null
+          account_snapshot?: Json | null
+          admitted_quantity?: number
+          approved_at?: string | null
+          buyer_name?: string
+          cancellation_reason?: string | null
+          cancellation_requested_at?: string | null
+          checked_in_at?: string | null
+          code?: string
+          consented_at?: string
+          created_at?: string
+          depositor?: string
+          gig_id?: number
+          gig_snapshot?: Json
+          id?: string
+          notice_snapshot?: string
+          paid_amount?: number
+          payment_reported_at?: string | null
+          phone?: string
+          privacy_snapshot?: string
+          quantity?: number
+          refund_account?: string | null
+          refund_amount?: number
+          refund_bank?: string | null
+          refund_holder?: string | null
+          refund_policy_snapshot?: string
+          refund_status?: string
+          request_key?: string
+          status?: string
+          total_amount?: number
+          unit_price?: number
+          user_id?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_reservations_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "payment_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ticket_reservations_gig_id_fkey"
+            columns: ["gig_id"]
+            isOneToOne: false
+            referencedRelation: "gigs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_legal_consents: {
         Row: {
           accepted_at: string
@@ -644,9 +896,73 @@ export type Database = {
         }
         Returns: string
       }
+      create_ticket_reservation: {
+        Args: {
+          p_depositor: string
+          p_gig_id: number
+          p_name: string
+          p_offer_hash: string
+          p_phone: string
+          p_policy_agreed: boolean
+          p_privacy_agreed: boolean
+          p_quantity: number
+          p_request_key: string
+        }
+        Returns: string
+      }
       delete_my_account: { Args: { p_confirmation: string }; Returns: boolean }
+      get_ticket_booking_offer: { Args: { p_gig_id: number }; Returns: Json }
       is_admin: { Args: never; Returns: boolean }
       is_approved_member: { Args: never; Returns: boolean }
+      list_ticket_reservations: {
+        Args: {
+          p_admin?: boolean
+          p_gig_id?: number
+          p_offset?: number
+          p_search?: string
+        }
+        Returns: {
+          account_id: string | null
+          account_snapshot: Json | null
+          admitted_quantity: number
+          approved_at: string | null
+          buyer_name: string
+          cancellation_reason: string | null
+          cancellation_requested_at: string | null
+          checked_in_at: string | null
+          code: string
+          consented_at: string
+          created_at: string
+          depositor: string
+          gig_id: number
+          gig_snapshot: Json
+          id: string
+          notice_snapshot: string
+          paid_amount: number
+          payment_reported_at: string | null
+          phone: string
+          privacy_snapshot: string
+          quantity: number
+          refund_account: string | null
+          refund_amount: number
+          refund_bank: string | null
+          refund_holder: string | null
+          refund_policy_snapshot: string
+          refund_status: string
+          request_key: string
+          status: string
+          total_amount: number
+          unit_price: number
+          user_id: string
+          version: number
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "ticket_reservations"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       nomination_session_matches: {
         Args: { p_performer_part: string; p_session_part: string }
         Returns: boolean
@@ -659,6 +975,33 @@ export type Database = {
           p_updated_at: string
         }
         Returns: boolean
+      }
+      set_ticket_payment_account: {
+        Args: {
+          p_bank: string
+          p_holder: string
+          p_instruction: string
+          p_number: string
+        }
+        Returns: string
+      }
+      ticket_notify: {
+        Args: { p_action: string; p_detail?: string; p_reservation: string }
+        Returns: undefined
+      }
+      ticket_privacy_notice: { Args: never; Returns: string }
+      update_ticket_reservation: {
+        Args: {
+          p_action: string
+          p_id: string
+          p_payload?: Json
+          p_version: number
+        }
+        Returns: undefined
+      }
+      update_ticket_reservation_quantity: {
+        Args: { p_id: string; p_quantity: number; p_version: number }
+        Returns: undefined
       }
     }
     Enums: {

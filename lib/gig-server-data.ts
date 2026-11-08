@@ -1,10 +1,12 @@
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { SUPABASE_GIGS_TABLE } from "@/lib/supabase/gigs";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { TicketDatabase } from "@/lib/ticket-database";
 
 /** 메타데이터와 페이지 본문에서 같은 공연을 한 요청에 한 번만 조회합니다. */
 export const getGigRow = cache(async (id: number) => {
-  const supabase = await createClient();
+  const supabase = await createClient() as unknown as SupabaseClient<TicketDatabase>;
   return supabase
     .from(SUPABASE_GIGS_TABLE)
     .select("*")

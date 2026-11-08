@@ -6,6 +6,9 @@ import { LogoutButton } from "@/components/logout-button";
 export function AudienceAccount({ email }: { email?: string }) {
   return (
     <div className="mx-auto w-full max-w-lg space-y-5 py-6">
+      <header>
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">프로필</h1>
+      </header>
       <Card className="border-border/60 shadow-sm">
         <CardHeader>
           <CardTitle className="text-lg">내 계정</CardTitle>
@@ -17,6 +20,7 @@ export function AudienceAccount({ email }: { email?: string }) {
             <p className="break-all text-sm">{email}</p>
           </div>}
           <div className="flex flex-wrap items-center justify-between gap-3">
+            <Button asChild variant="outline" size="sm"><Link href="/reservations">내 예매</Link></Button>
             <Button asChild size="sm"><Link href="/gigs">공연 보러 가기</Link></Button>
             <LogoutButton />
           </div>

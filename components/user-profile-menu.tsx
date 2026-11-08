@@ -69,6 +69,7 @@ export function UserProfileMenu({ userName, userEmail, marketingOptIn, isMember,
       </DropdownMenuTrigger>
 
       <DropdownMenuContent align="end" className="w-56 mt-1.5 shadow-lg border-border/60">
+        <DropdownMenuItem asChild><Link href="/reservations">내 예매</Link></DropdownMenuItem>
         {(userName || userEmail) && (
           <>
             <div className="px-2.5 py-1.5 text-xs">

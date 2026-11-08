@@ -75,6 +75,17 @@ html {
   scrollbar-gutter: stable;
 }
 
+.ticket-dialog {
+  position: fixed;
+  inset: 0;
+  /* Keep the centering margins when the trigger and dialog share a space-y parent. */
+  margin: auto !important;
+  width: calc(100% - 2rem);
+  height: fit-content;
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+}
+
 @keyframes admin-drawer-enter {
   from { transform: translateX(-100%); }
   to { transform: translateX(0); }

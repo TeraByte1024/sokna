@@ -146,3 +146,16 @@ test("updateGig stores or clears the optional nomination deadline", async () => 
   assert.equal((await fixture.actions.updateGig(form)).ok, false);
   assert.deepEqual(fixture.writes, []);
 });
+
+test("gig actions persist the admission schedule and refresh reservation details on edit", async () => {
+  for (const action of ["createGig", "updateGig"]) {
+    const fixture = actionsFixture();
+    const form = gigForm("public");
+    form.set("perform_date", "2026-11-20");
+    form.set("perform_time", "19:00");
+    form.set("admission_starts_at", "2026-11-20T18:30");
+    assert.equal((await fixture.actions[action](form)).ok, true);
+    assert.equal(fixture.writes[0].payload.admission_starts_at, "2026-11-20T09:30:00.000Z");
+    if (action === "updateGig") assert.ok(fixture.invalidations.includes("/reservations"));
+  }
+});

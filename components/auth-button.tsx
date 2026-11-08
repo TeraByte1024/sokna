@@ -8,7 +8,7 @@ import { UserProfileMenu } from "./user-profile-menu";
 import { LogoutButton } from "./logout-button";
 import { NotificationMenu } from "./notification-menu";
 import { getUnreadNotificationCount } from "@/lib/notifications";
-import { ShieldAlert, ShieldCheck, Clock } from "lucide-react";
+import { ShieldAlert, ShieldCheck, Clock, Ticket, UserRound } from "lucide-react";
 
 export async function AuthButton() {
   const supabase = await createClient();
@@ -95,6 +95,20 @@ export async function AuthButton() {
       )}
 
       <NotificationMenu key={user.sub} userId={user.sub} initialUnreadCount={unreadNotificationCount} />
+      <Link
+        href="/reservations"
+        className="hidden md:inline-flex items-center gap-1.5 rounded-full border border-border/50 px-2.5 py-1 text-xs sm:text-sm font-medium text-foreground transition-colors hover:border-border hover:bg-accent shrink-0"
+      >
+        <Ticket className="size-3.5 text-primary shrink-0" aria-hidden="true" />
+        <span>예매</span>
+      </Link>
+      <Link
+        href="/profile"
+        aria-label="프로필"
+        className="flex md:hidden size-8 shrink-0 items-center justify-center rounded-full border border-border/50 text-foreground transition-colors hover:border-border hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      >
+        <UserRound className="size-4" aria-hidden="true" />
+      </Link>
       <div className="hidden md:block">
         <UserProfileMenu
           userName={userName}

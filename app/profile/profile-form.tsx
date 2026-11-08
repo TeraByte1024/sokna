@@ -312,6 +312,9 @@ export function ProfileForm({ user, isAdmin, identities, identityLinkResult }: P
 
   return (
     <div className="max-w-2xl mx-auto space-y-6 pb-16">
+      <header>
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">프로필</h1>
+      </header>
       {/* 1. 상단 프로필 요약 카드 */}
       <Card className="border-border/60 shadow-sm overflow-hidden bg-gradient-to-br from-card to-card/90">
         <CardContent className="p-6">

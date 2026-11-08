@@ -9,6 +9,7 @@ import {
   Construction,
   Music2,
   Sparkles,
+  Ticket,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CLUB_NAME_ENGLISH, CLUB_NAME_KOREAN } from "@/lib/club";
@@ -40,9 +41,11 @@ const STATUS_ITEMS = [
 export function Landing({
   isLoggedIn,
   activeNominationGig,
+  upcomingBookingGig,
 }: {
   isLoggedIn: boolean;
   activeNominationGig: { id: number; title: string | null } | null;
+  upcomingBookingGig: { href: string; title: string | null } | null;
 }) {
   return (
     <div className="relative isolate w-full overflow-hidden border-b border-border/60 bg-background">
@@ -83,11 +86,22 @@ export function Landing({
 
           <div
             className={cn(
-              "gap-2.5 sm:flex sm:justify-center sm:gap-3 lg:justify-start",
-              isLoggedIn && !activeNominationGig ? "flex" : "grid grid-cols-2",
+              "gap-2.5 sm:flex sm:flex-wrap sm:justify-center sm:gap-3 lg:justify-start",
+              isLoggedIn && !activeNominationGig && !upcomingBookingGig ? "flex" : "grid grid-cols-2",
             )}
           >
-            <Button asChild size="lg" className="h-12 rounded-xl px-2 text-sm font-bold sm:h-11 sm:px-6">
+            {upcomingBookingGig && (
+              <Button asChild size="lg" className="col-span-2 h-12 rounded-xl px-2 text-sm font-bold sm:h-11 sm:px-6">
+                <Link
+                  href={upcomingBookingGig.href}
+                  aria-label={upcomingBookingGig.title ? `공연 예매하기 · ${upcomingBookingGig.title}` : undefined}
+                >
+                  <Ticket aria-hidden="true" className="size-4" />
+                  공연 예매하기
+                </Link>
+              </Button>
+            )}
+            <Button asChild size="lg" variant={upcomingBookingGig ? "outline" : "default"} className="h-12 rounded-xl px-2 text-sm font-bold sm:h-11 sm:px-6">
               <Link href="/gigs">
                 공연 둘러보기
                 <ArrowRight className="size-4" />

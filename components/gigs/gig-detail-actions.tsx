@@ -6,13 +6,15 @@ import { useSearchParams } from "next/navigation";
 import { type Gig, type GigRsvp } from "@/lib/gig";
 import { Button } from "@/components/ui/button";
 import { UserCheck, Music2, Clock } from "lucide-react";
-import { PositiveStatusIcon as CheckCircle2, NegativeStatusIcon as XCircle, UnknownStatusIcon as HelpCircle } from "@/components/ui/status-icons";
+import { NegativeStatusIcon as XCircle, UnknownStatusIcon as HelpCircle } from "@/components/ui/status-icons";
+import { GigActionBar } from "@/components/gigs/gig-action-bar";
 import { GigJoinDialog } from "@/components/gigs/gig-join-dialog";
 
 interface GigDetailActionsProps {
   gig: Gig;
   existingRsvp: GigRsvp | null;
   isCurrentUserPerformer: boolean;
+  canJoin: boolean;
   defaultPart?: string;
   userName?: string;
   isLoggedIn?: boolean;
@@ -22,30 +24,42 @@ export function GigDetailActions({
   gig,
   existingRsvp,
   isCurrentUserPerformer,
+  canJoin,
   defaultPart = "",
   userName = "부원",
   isLoggedIn = false,
 }: GigDetailActionsProps) {
   const [isJoinDialogOpen, setIsJoinDialogOpen] = useState(false);
   const searchParams = useSearchParams();
+  const showJoin = isLoggedIn && canJoin && !isCurrentUserPerformer;
 
   // URL 쿼리에 ?join=true 가 있으면 자동으로 다이얼로그 팝업
   useEffect(() => {
-    if (isLoggedIn && !isCurrentUserPerformer && searchParams.get("join") === "true") {
+    if (showJoin && searchParams.get("join") === "true") {
       setIsJoinDialogOpen(true);
     }
-  }, [isLoggedIn, isCurrentUserPerformer, searchParams]);
+  }, [showJoin, searchParams]);
 
   // 비회원일 경우 렌더링하지 않음
   if (!isLoggedIn) {
     return null;
   }
+  if (isCurrentUserPerformer) {
+    return (
+      <GigActionBar>
+        <Button asChild size="lg" className="h-11 w-full gap-2 font-bold sm:w-auto">
+          <Link href={`/gigs/${gig.id}/nominations`}>
+            <Music2 className="size-4" aria-hidden="true" />
+            선곡회의
+          </Link>
+        </Button>
+      </GigActionBar>
+    );
+  }
+  if (!showJoin) return null;
 
   // 내 참여 여부(RSVP)에 따른 아이콘
   const renderStatusIcon = (sizeClass = "size-4") => {
-    if (isCurrentUserPerformer) {
-      return <CheckCircle2 className={`${sizeClass} text-emerald-300 shrink-0`} />;
-    }
     if (!existingRsvp) {
       return <UserCheck className={`${sizeClass} shrink-0`} />;
     }
@@ -62,7 +76,6 @@ export function GigDetailActions({
   };
 
   const getStatusTitle = () => {
-    if (isCurrentUserPerformer) return "공연 참여 승인 완료";
     if (!existingRsvp) return "공연 참여 등록";
     if (existingRsvp.status === "going" && existingRsvp.review_status === "rejected") return "참여 신청 반려됨 (클릭 시 재신청)";
     if (existingRsvp.status === "going") return "참여 승인 대기 중 (클릭 시 수정)";
@@ -72,64 +85,23 @@ export function GigDetailActions({
 
   return (
     <>
-      {/* 1. 히어로 섹션 메인 CTA 버튼 그룹 */}
-      <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 pt-2">
+      <GigActionBar>
         <Button
           type="button"
           size="lg"
           onClick={() => setIsJoinDialogOpen(true)}
           title={getStatusTitle()}
           aria-label={`공연 참여: ${getStatusTitle()}`}
-          disabled={isCurrentUserPerformer}
-          className="h-11 px-6 font-bold shadow-md shadow-primary/20 gap-2 text-sm sm:text-base transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+          className="h-11 w-full gap-2 font-bold sm:w-auto"
         >
           {renderStatusIcon("size-4 sm:size-5")}
           <span>공연 참여</span>
         </Button>
-
-        <Button
-          asChild
-          size="lg"
-          variant="secondary"
-          className="h-11 px-6 font-bold gap-2 text-sm sm:text-base border border-border/70 bg-card hover:bg-muted shadow-sm transition-all hover:scale-[1.02] active:scale-[0.98]"
-        >
-          <Link href={`/gigs/${gig.id}/nominations`}>
-            <Music2 className="size-4 text-primary" />
-            선곡회의
-          </Link>
-        </Button>
-      </div>
-
-      {/* 2. 모바일 하단 플로팅 바 (Sticky Bottom Action Bar) */}
-      <div className="fixed bottom-[calc(4rem+env(safe-area-inset-bottom,0px))] left-0 right-0 z-40 border-t border-border/60 bg-background/90 p-3 shadow-[0_-4px_16px_rgba(0,0,0,0.08)] backdrop-blur-md sm:hidden">
-        <div className="flex items-center gap-2.5 max-w-md mx-auto">
-          <Button
-            type="button"
-            onClick={() => setIsJoinDialogOpen(true)}
-            title={getStatusTitle()}
-            aria-label={`공연 참여: ${getStatusTitle()}`}
-            disabled={isCurrentUserPerformer}
-            className="flex-1 h-11 font-bold shadow-sm gap-1.5 text-sm cursor-pointer"
-          >
-            {renderStatusIcon("size-4")}
-            <span>공연 참여</span>
-          </Button>
-          <Button
-            asChild
-            variant="secondary"
-            className="flex-1 h-11 font-bold gap-1.5 text-sm border border-border/70 bg-card hover:bg-muted"
-          >
-            <Link href={`/gigs/${gig.id}/nominations`}>
-              <Music2 className="size-4 text-primary" />
-              선곡회의
-            </Link>
-          </Button>
-        </div>
-      </div>
+      </GigActionBar>
 
       {/* 3. 공연 참가 신청 다이얼로그 (포스터 제외 공연 정보 + 선곡회의 정보 포함) */}
       <GigJoinDialog
-        isOpen={isJoinDialogOpen && !isCurrentUserPerformer}
+        isOpen={isJoinDialogOpen}
         onClose={() => setIsJoinDialogOpen(false)}
         gig={gig}
         existingRsvp={existingRsvp}
