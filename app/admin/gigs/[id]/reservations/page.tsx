@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Download } from "lucide-react";
 import { ReservationList } from "@/components/tickets/reservation-list";
 import { AdminPageHeading } from "@/components/admin/admin-page-heading";
+import { Button } from "@/components/ui/button";
 import { parseTicketListFilter } from "@/lib/ticket-reservations";
 
 export const metadata = { title: "공연 예매 관리", robots: { index: false, follow: false } };
@@ -32,6 +33,14 @@ export default async function GigReservationsPage({
       <AdminPageHeading
         title="공연 예매 관리"
         description="예매번호·예매자·입금자명·연락처로 명단을 검색해 입금 확인, 환불 처리, 현장 입장을 관리합니다."
+        aside={(
+          <Button asChild variant="outline">
+            <a href={`/admin/reservations/export?gigId=${gigId}`}>
+              <Download aria-hidden="true" />
+              예매자 엑셀 다운로드
+            </a>
+          </Button>
+        )}
       />
       <ReservationList
         admin
