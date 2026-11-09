@@ -75,6 +75,23 @@ html {
   scrollbar-gutter: stable;
 }
 
+.landing-hero {
+  --landing-glow-cobalt: rgb(39 122 236 / .20);
+  --landing-glow-magenta: rgb(224 78 159 / .23);
+  --landing-glow-violet: rgb(118 92 228 / .13);
+  background:
+    radial-gradient(ellipse 70% 112% at 3% -6%, var(--landing-glow-cobalt), transparent 74%),
+    radial-gradient(ellipse 65% 110% at 98% 103%, var(--landing-glow-magenta), transparent 74%),
+    radial-gradient(ellipse 50% 80% at 80% 13%, var(--landing-glow-violet), transparent 80%),
+    hsl(var(--background));
+}
+
+.dark .landing-hero {
+  --landing-glow-cobalt: rgb(29 114 231 / .28);
+  --landing-glow-magenta: rgb(215 47 133 / .27);
+  --landing-glow-violet: rgb(108 73 222 / .17);
+}
+
 .ticket-dialog {
   position: fixed;
   inset: 0;
