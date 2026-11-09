@@ -322,32 +322,32 @@ export function ticketAdmissionGuidance(
   return { performance, admission: "지금 입장해 주세요. 현장에서 예매번호나 예매자 이름을 알려 주세요." };
 }
 
+export type TicketBookingMode = "manual" | "scheduled";
+
 export function getAdvanceBookingStatus(
   gig: {
     perform_date?: string | null;
     perform_time?: string | null;
+    ticket_booking_enabled?: boolean;
+    ticket_booking_mode?: string | null;
     advance_booking_starts_at?: string | null;
     advance_booking_deadline?: string | null;
   },
   nowMs: number = Date.now(),
 ): "upcoming" | "open" | "closed" {
-  if (!gig.perform_date) return "closed";
-
-  const deadlineSource = gig.advance_booking_deadline
-    ? gig.advance_booking_deadline
-    : (() => {
-        const fallback = defaultBookingDeadline(gig.perform_date);
-        return fallback ? `${fallback}:00+09:00` : null;
-      })();
-
-  const deadlineMs = Date.parse(deadlineSource ?? "");
-  if (!Number.isFinite(deadlineMs)) return "closed";
+  if (!gig.perform_date || gig.ticket_booking_enabled === false) return "closed";
   const performanceMs = ticketPerformanceTime(gig.perform_date, gig.perform_time || "23:59");
-  const endMs = Math.min(
-    Math.floor(deadlineMs / 60_000) * 60_000 + 60_000,
-    performanceMs ?? Infinity,
-  );
+  if (performanceMs === null || nowMs >= performanceMs) return "closed";
+  if (gig.ticket_booking_mode === "manual") return "open";
+
+  const fallback = gig.ticket_booking_mode == null ? defaultBookingDeadline(gig.perform_date) : "";
+  const deadlineSource = gig.advance_booking_deadline || (fallback ? `${fallback}:00+09:00` : "");
+
+  const deadlineMs = Date.parse(deadlineSource);
+  if (!Number.isFinite(deadlineMs)) return "closed";
+  const endMs = Math.min(Math.floor(deadlineMs / 60_000) * 60_000 + 60_000, performanceMs);
   const startMs = Math.floor(Date.parse(gig.advance_booking_starts_at ?? "") / 60_000) * 60_000;
+  if (gig.ticket_booking_mode === "scheduled" && !Number.isFinite(startMs)) return "closed";
   if (nowMs >= endMs || startMs >= endMs) return "closed";
   return nowMs < startMs ? "upcoming" : "open";
 }

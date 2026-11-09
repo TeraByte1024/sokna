@@ -114,6 +114,7 @@ export async function GigEditSection({ gigId, performerNotes, performerNotesLoad
         notice: gigRow.notice,
         admission_starts_at: gigRow.admission_starts_at,
         ticket_booking_enabled: gigRow.ticket_booking_enabled,
+        ticket_booking_mode: gigRow.ticket_booking_mode,
         ticket_capacity: gigRow.ticket_capacity,
         advance_booking_starts_at: gigRow.advance_booking_starts_at,
         advance_booking_deadline: gigRow.advance_booking_deadline,

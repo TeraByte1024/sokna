@@ -42,7 +42,7 @@ async function getActiveNominationGig(viewer: GigViewer) {
   );
 }
 
-async function getUpcomingBookingGig() {
+async function getUpcomingBookingGig(viewer: GigViewer) {
   const supabase = await createClient();
   const now = Date.now();
   const today = new Intl.DateTimeFormat("sv-SE", {
@@ -51,8 +51,7 @@ async function getUpcomingBookingGig() {
   }).format(now);
   const { data, error } = await supabase
     .from("gigs")
-    .select("id, title, perform_date, perform_time, advance_booking_starts_at, advance_booking_deadline")
-    .eq("visibility", "public")
+    .select("id, title, visibility, is_public, perform_date, perform_time, ticket_booking_mode, advance_booking_starts_at, advance_booking_deadline")
     .eq("ticket_booking_enabled", true)
     .gte("perform_date", today)
     .order("perform_date")
@@ -61,6 +60,7 @@ async function getUpcomingBookingGig() {
 
   if (error) return null;
   for (const gig of data ?? []) {
+    if (!canViewGig(getGigVisibility(gig), viewer)) continue;
     const status = getAdvanceBookingStatus(gig, now);
     if (status !== "closed") {
       return {
@@ -77,7 +77,7 @@ export default async function Home() {
   const [viewer, activeNominationGig, upcomingBookingGig] = await Promise.all([
     viewerPromise,
     viewerPromise.then(getActiveNominationGig),
-    getUpcomingBookingGig(),
+    viewerPromise.then(getUpcomingBookingGig),
   ]);
 
   return (

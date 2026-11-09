@@ -138,6 +138,7 @@ export type Database = {
           poster_url: string | null
           subtitle: string | null
           ticket_booking_enabled: boolean
+          ticket_booking_mode: string | null
           ticket_capacity: number | null
           ticket_refund_policy: string | null
           title: string | null
@@ -163,6 +164,7 @@ export type Database = {
           poster_url?: string | null
           subtitle?: string | null
           ticket_booking_enabled?: boolean
+          ticket_booking_mode?: string | null
           ticket_capacity?: number | null
           ticket_refund_policy?: string | null
           title?: string | null
@@ -188,6 +190,7 @@ export type Database = {
           poster_url?: string | null
           subtitle?: string | null
           ticket_booking_enabled?: boolean
+          ticket_booking_mode?: string | null
           ticket_capacity?: number | null
           ticket_refund_policy?: string | null
           title?: string | null

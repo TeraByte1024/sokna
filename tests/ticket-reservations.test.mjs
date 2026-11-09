@@ -71,6 +71,25 @@ test("ticket settings preserve missing legacy inputs and validate enabled sale c
   assert.equal(model.getAdvanceBookingStatus(gig, Date.parse("2026-11-19T15:00:00Z")), "closed");
   form.set("advance_ticket_price", ""); assert.equal(readTicketGigInput(form).ok, false);
 });
+test("manual booking uses the switch and showtime while scheduled booking requires both dates", () => {
+  const { readTicketGigInput } = loadTs("lib/ticket-gig-input.ts");
+  const form = new FormData();
+  for (const [key, value] of Object.entries({ ticket_booking_mode: "manual", ticket_booking_enabled: "true",
+    ticket_capacity: "100", advance_ticket_price: "0", advance_booking_starts_at: "2026-11-18T18:00",
+    advance_booking_deadline: "2026-11-19T23:59" })) form.set(key, value);
+  const manual = readTicketGigInput(form);
+  assert.equal(manual.ok, true);
+  assert.equal(manual.value.advance_booking_starts_at, null);
+  assert.equal(manual.value.advance_booking_deadline, null);
+  const gig = { perform_date: "2026-11-20", perform_time: "19:00", ...manual.value };
+  assert.equal(model.getAdvanceBookingStatus(gig, Date.parse("2026-11-20T09:59:00Z")), "open");
+  assert.equal(model.getAdvanceBookingStatus(gig, Date.parse("2026-11-20T10:00:00Z")), "closed");
+  assert.equal(model.getAdvanceBookingStatus({ ...gig, ticket_booking_enabled: false }, Date.parse("2026-11-18T03:00:00Z")), "closed");
+  form.set("ticket_booking_mode", "scheduled");
+  assert.equal(readTicketGigInput(form).ok, true);
+  form.delete("advance_booking_starts_at");
+  assert.equal(readTicketGigInput(form).ok, false);
+});
 function fixture({ consent = "current", admin = false, error = null } = {}) {
   const calls = [], invalidations = [], pageReads = [];
   const actions = loadTs("app/reservations/actions.ts", {

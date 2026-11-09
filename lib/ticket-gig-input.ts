@@ -33,12 +33,19 @@ export function readTicketGigInput(form: FormData): { ok: true; value: TicketGig
   }
   if (!form.has("ticket_booking_enabled")) return { ok: true, value };
   const enabled = form.get("ticket_booking_enabled");
+  const mode = form.get("ticket_booking_mode");
+  if (mode !== null && mode !== "manual" && mode !== "scheduled") {
+    return { ok: false, error: "사전예매 운영 방식을 확인해 주세요." };
+  }
   const capacity = String(form.get("ticket_capacity") ?? "").trim();
-  const startsAt = String(form.get("advance_booking_starts_at") ?? "").trim();
-  const deadline = String(form.get("advance_booking_deadline") ?? "").trim();
+  const startsAt = mode === "manual" ? "" : String(form.get("advance_booking_starts_at") ?? "").trim();
+  const deadline = mode === "manual" ? "" : String(form.get("advance_booking_deadline") ?? "").trim();
   const policy = String(form.get("ticket_refund_policy") ?? "").trim();
   if (!["true", "false"].includes(String(enabled)) || (capacity && (!/^\d+$/.test(capacity) || Number(capacity) < 1 || Number(capacity) > 1000000))) return { ok: false, error: "판매 매수를 확인해 주세요." };
   if (policy.length > 10000) return { ok: false, error: "취소/환불 안내는 10000자 이내로 입력해 주세요." };
+  if (mode === "scheduled" && (enabled !== "true" || !startsAt || !deadline)) {
+    return { ok: false, error: "기간 지정 예매의 시작 일시와 마감 일시를 입력해 주세요." };
+  }
   const startTimestamp = startsAt ? Date.parse(`${startsAt}:00+09:00`) : null;
   if (startsAt && (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(startsAt) || !Number.isFinite(startTimestamp))) return { ok: false, error: "사전예매 시작 일시를 확인해 주세요." };
   const timestamp = deadline ? Date.parse(`${deadline}:00+09:00`) : null;
@@ -50,6 +57,7 @@ export function readTicketGigInput(form: FormData): { ok: true; value: TicketGig
     value: {
       ...value,
       ticket_booking_enabled: enabled === "true",
+      ...(mode ? { ticket_booking_mode: mode } : {}),
       ticket_capacity: capacity ? Number(capacity) : null,
       advance_booking_starts_at: startTimestamp === null ? null : new Date(startTimestamp).toISOString(),
       advance_booking_deadline: timestamp === null ? null : new Date(timestamp).toISOString(),

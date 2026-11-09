@@ -6,6 +6,7 @@ export type Gig = {
   subtitle?: string | null;
   notice?: string | null;
   ticket_booking_enabled?: boolean;
+  ticket_booking_mode?: string | null;
   advance_booking_starts_at?: string | null;
   advance_booking_deadline?: string | null;
   advance_ticket_price?: number | null;
@@ -208,6 +209,7 @@ export function mapGigRow(row: Record<string, unknown>): Gig {
         : String(row.meeting_location),
     notice: row.notice == null ? null : String(row.notice),
     ticket_booking_enabled: row.ticket_booking_enabled === true,
+    ticket_booking_mode: typeof row.ticket_booking_mode === "string" ? row.ticket_booking_mode : null,
     advance_booking_starts_at:
       row.advance_booking_starts_at == null || row.advance_booking_starts_at === ""
         ? null

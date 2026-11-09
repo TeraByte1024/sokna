@@ -6,6 +6,7 @@ import { getGigViewer } from "@/lib/gig-viewer";
 import { mapGigRow, type Gig } from "@/lib/gig";
 import { canViewGig } from "@/lib/gig-visibility";
 import { getDDay } from "@/lib/utils";
+import { getAdvanceBookingStatus } from "@/lib/ticket-reservations";
 import { createClient } from "@/lib/supabase/server";
 import { SUPABASE_GIGS_TABLE } from "@/lib/supabase/gigs";
 import { Calendar, Music, History, Sparkles, MapPin, Lock, Users } from "lucide-react";
@@ -50,19 +51,19 @@ export async function GigsInner() {
 	);
 
 	// 현재 날짜 기준으로 공연 분류
-	const now = new Date();
-	now.setHours(0, 0, 0, 0);
+	const now = Date.now();
+	const today = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul", dateStyle: "short" }).format(now);
 
 	const upcomingGigs = gigs
 		.filter((gig) => {
 			if (!gig.perform_date) return false;
-			return new Date(gig.perform_date + "T00:00:00") >= now;
+			return gig.perform_date >= today;
 		})
 		.reverse(); // 예정된 공연은 가까운 날짜순으로 표시
 
 	const pastGigs = gigs.filter((gig) => {
 		if (!gig.perform_date) return true;
-		return new Date(gig.perform_date + "T00:00:00") < now;
+		return gig.perform_date < today;
 	});
 
 	return (
@@ -82,7 +83,7 @@ export async function GigsInner() {
 						현재 준비 중인 공연이 없습니다.
 					</div>
 				) : (
-					<GigGrid list={upcomingGigs} />
+					<GigGrid list={upcomingGigs} now={now} />
 				)}
 			</section>
 
@@ -113,7 +114,7 @@ export async function GigsInner() {
 						지난 공연 기록이 없습니다.
 					</p>
 				) : (
-					<GigGrid list={pastGigs} isPast />
+					<GigGrid list={pastGigs} now={now} isPast />
 				)}
 			</section>
 		</div>
@@ -122,15 +123,18 @@ export async function GigsInner() {
 
 function GigGrid({
 	list,
+	now,
 	isPast = false,
 }: {
 	list: Gig[];
+	now: number;
 	isPast?: boolean;
 }) {
 	return (
 		<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
 			{list.map((gig) => {
 				const dDay = !isPast ? getDDay(gig.perform_date) : null;
+				const bookingOpen = !isPast && getAdvanceBookingStatus(gig, now) === "open";
 
 				return (
 					<Link
@@ -180,8 +184,13 @@ function GigGrid({
 							{/* 2. 공연 텍스트 정보 (순수 공연 정보만 표시) */}
 							<div className="space-y-1.5 px-1">
 								<div>
-									<h3 className="text-lg sm:text-xl font-bold text-foreground leading-snug group-hover:text-primary transition-colors truncate">
-										{gig.title || "제목 없음"}
+									<h3 className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-lg sm:text-xl font-bold text-foreground leading-snug group-hover:text-primary transition-colors">
+										<span className="max-w-full truncate">{gig.title || "제목 없음"}</span>
+										{bookingOpen && (
+											<Badge variant="secondary" className="shrink-0 whitespace-nowrap bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">
+												사전예매 중
+											</Badge>
+										)}
 									</h3>
 									{gig.subtitle && (
 										<p className="text-xs text-muted-foreground font-medium truncate mt-0.5">

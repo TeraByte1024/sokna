@@ -104,9 +104,7 @@ export async function GigDetailInner({ gigId }: GigDetailInnerProps) {
   }
 
   const now = Date.now();
-  const bookingStatus = gig.visibility === "public" && gig.ticket_booking_enabled
-    ? getAdvanceBookingStatus(gig, now)
-    : "closed";
+  const bookingStatus = getAdvanceBookingStatus(gig, now);
   const performanceStart = gig.perform_date
     ? ticketPerformanceTime(gig.perform_date, gig.perform_time || "23:59")
     : null;

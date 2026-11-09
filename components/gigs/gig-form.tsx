@@ -1428,12 +1428,15 @@ export function GigForm({
         : "";
       formData.set("admission_starts_at", admissionDateTime);
     }
-    const ticketDateTimeForSubmit = (value: string) =>
-      !ticket.enabled && (value.startsWith("T") || value.endsWith("T")) ? "" : value;
-    formData.set("ticket_booking_enabled", String(ticket.enabled));
+    const scheduledBooking = ticket.mode !== "manual";
+    const bookingMode = ticket.mode ?? (ticket.startsAt ? "scheduled" : null);
+    if (bookingMode) formData.set("ticket_booking_mode", bookingMode);
+    formData.set("ticket_booking_enabled", String(scheduledBooking || ticket.enabled));
     formData.set("ticket_capacity", ticket.capacity);
-    formData.set("advance_booking_starts_at", ticketDateTimeForSubmit(ticket.startsAt));
-    formData.set("advance_booking_deadline", ticketDateTimeForSubmit(ticket.deadline) || defaultBookingDeadline(performDate));
+    if (scheduledBooking) {
+      formData.set("advance_booking_starts_at", ticket.startsAt);
+      formData.set("advance_booking_deadline", ticket.deadline || defaultBookingDeadline(performDate));
+    }
     formData.set("ticket_refund_policy", ticket.refundPolicy);
     formData.set(
       "advance_ticket_price",

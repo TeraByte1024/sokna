@@ -8,6 +8,7 @@ export type TicketGigFields = {
   advance_booking_starts_at?: string | null;
   advance_booking_deadline?: string | null;
   ticket_booking_enabled?: boolean;
+  ticket_booking_mode?: string | null;
   ticket_capacity?: number | null;
   ticket_refund_policy?: string | null;
 };

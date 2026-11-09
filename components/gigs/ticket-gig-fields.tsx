@@ -5,12 +5,13 @@ import { GigDateTimeInputs } from "@/components/gigs/gig-date-time-inputs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { defaultBookingDeadline, bookingDeadlineInput } from "@/lib/ticket-reservations";
+import { defaultBookingDeadline, bookingDeadlineInput, type TicketBookingMode } from "@/lib/ticket-reservations";
 import type { TicketGigFields } from "@/lib/ticket-database";
 
 export type TicketGigForm = {
   admissionStartTime: string;
   notice: string;
+  mode: TicketBookingMode | null;
   enabled: boolean;
   capacity: string;
   startsAt: string;
@@ -22,6 +23,9 @@ export function initialTicketGigForm(gig?: TicketGigFields): TicketGigForm {
   return {
     admissionStartTime: bookingDeadlineInput(gig?.admission_starts_at).slice(11),
     notice: gig?.notice ?? "",
+    mode: !gig || gig.ticket_booking_enabled === false || gig.ticket_booking_mode === "manual"
+      ? "manual"
+      : gig.ticket_booking_mode === "scheduled" ? "scheduled" : null,
     enabled: gig?.ticket_booking_enabled ?? true,
     capacity: gig?.ticket_capacity?.toString() ?? "",
     startsAt: bookingDeadlineInput(gig?.advance_booking_starts_at),
@@ -45,6 +49,8 @@ export function TicketGigFields({
 }) {
   const set = <K extends keyof TicketGigForm>(key: K, next: TicketGigForm[K]) =>
     onChange({ ...value, [key]: next });
+  const scheduled = value.mode !== "manual";
+  const enabled = scheduled || value.enabled;
   const [startDate, startTime = ""] = value.startsAt.split("T");
   const [endDate, endTime = ""] = (value.deadline || defaultBookingDeadline(performDate)).split("T");
   const setDateTime = (key: "startsAt" | "deadline", date: string, time: string) =>
@@ -68,21 +74,52 @@ export function TicketGigFields({
       </div>
 
       <div className="space-y-4">
-        <div className="flex items-center space-x-2.5">
-          <Checkbox
-            id="ticket-booking-enabled"
-            checked={value.enabled}
-            onCheckedChange={(checked) => set("enabled", Boolean(checked))}
-          />
-          <Label
-            htmlFor="ticket-booking-enabled"
-            className="text-xs font-semibold text-foreground cursor-pointer"
-          >
-            관객 사전예매 받기
-          </Label>
-        </div>
+        <fieldset className="space-y-2">
+          <legend className="text-sm font-semibold">사전예매 운영 방식</legend>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border bg-background p-3 has-[:checked]:border-primary/50 has-[:checked]:bg-muted/50">
+              <input
+                type="radio"
+                name="ticket-booking-mode-choice"
+                checked={!scheduled}
+                onChange={() => set("mode", "manual")}
+                className="mt-0.5 accent-primary"
+              />
+              <span className="space-y-0.5">
+                <span className="block text-sm font-semibold">수동</span>
+                <span className="block text-xs text-muted-foreground">공연 시작 전까지 관리자가 직접 켜고 끕니다.</span>
+              </span>
+            </label>
+            <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border bg-background p-3 has-[:checked]:border-primary/50 has-[:checked]:bg-muted/50">
+              <input
+                type="radio"
+                name="ticket-booking-mode-choice"
+                checked={scheduled}
+                onChange={() => set("mode", "scheduled")}
+                className="mt-0.5 accent-primary"
+              />
+              <span className="space-y-0.5">
+                <span className="block text-sm font-semibold">기간 지정</span>
+                <span className="block text-xs text-muted-foreground">설정한 시작·마감 시각에 맞춰 자동으로 열리고 닫힙니다.</span>
+              </span>
+            </label>
+          </div>
+        </fieldset>
 
-        {value.enabled && (
+        {!scheduled && (
+          <div className="flex items-center gap-2.5">
+            <Checkbox
+              id="ticket-booking-enabled"
+              checked={value.enabled}
+              onCheckedChange={(checked) => set("enabled", Boolean(checked))}
+            />
+            <Label htmlFor="ticket-booking-enabled" className="cursor-pointer text-xs font-semibold">
+              관객 사전예매 받기
+            </Label>
+          </div>
+        )}
+
+        {enabled && (
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label
@@ -100,7 +137,7 @@ export function TicketGigFields({
                   name="advance_ticket_price"
                   type="text"
                   inputMode="numeric"
-                  required={value.enabled}
+                  required
                   placeholder="예: 5,000"
                   value={
                     advanceTicketPrice != null
@@ -132,69 +169,73 @@ export function TicketGigFields({
                 value={value.capacity}
                 onChange={(e) => set("capacity", e.target.value)}
                 placeholder="예: 200"
-                required={value.enabled}
+                required
                 className="bg-background border-border text-foreground placeholder:text-muted-foreground text-sm h-10"
               />
             </div>
 
-            <div className="min-w-0 space-y-1.5 sm:col-span-2 md:col-span-1">
-              <Label htmlFor="ticket-starts-at_date" className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
-                <Clock className="size-3.5 text-indigo-500" aria-hidden="true" />
-                사전예매 시작 일시
-              </Label>
-              <GigDateTimeInputs
-                id="ticket-starts-at"
-                timeLabel="사전예매 시작 시간"
-                date={startDate}
-                time={startTime}
-                onDateChange={(date) => setDateTime("startsAt", date, startTime)}
-                onTimeChange={(time) => setDateTime("startsAt", startDate, time)}
-                dateRequired={Boolean(startTime)}
-                timeRequired={Boolean(startDate)}
-              />
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <button
-                  type="button"
-                  className="text-xs text-muted-foreground underline"
-                  onClick={() => set("startsAt", bookingDeadlineInput(new Date().toISOString()))}
-                >
-                  현재 시각으로 설정
-                </button>
-                {value.startsAt && (
+            {scheduled && (
+              <div className="grid min-w-0 gap-4 sm:col-span-2 md:grid-cols-2">
+                <div className="min-w-0 space-y-1.5">
+                  <Label htmlFor="ticket-starts-at_date" className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                    <Clock className="size-3.5 text-indigo-500" aria-hidden="true" />
+                    사전예매 시작 일시{value.mode === "scheduled" && <span className="text-destructive">*</span>}
+                  </Label>
+                  <GigDateTimeInputs
+                    id="ticket-starts-at"
+                    timeLabel="사전예매 시작 시간"
+                    date={startDate}
+                    time={startTime}
+                    onDateChange={(date) => setDateTime("startsAt", date, startTime)}
+                    onTimeChange={(time) => setDateTime("startsAt", startDate, time)}
+                    dateRequired={value.mode === "scheduled" || Boolean(startTime)}
+                    timeRequired={value.mode === "scheduled" || Boolean(startDate)}
+                  />
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <button
+                      type="button"
+                      className="text-xs text-muted-foreground underline"
+                      onClick={() => set("startsAt", bookingDeadlineInput(new Date().toISOString()))}
+                    >
+                      현재 시각으로 설정
+                    </button>
+                    {value.mode === null && value.startsAt && (
+                      <button
+                        type="button"
+                        className="text-xs text-muted-foreground underline"
+                        onClick={() => set("startsAt", "")}
+                      >
+                        시작 제한 해제 (즉시 오픈)
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="min-w-0 space-y-1.5">
+                  <Label htmlFor="ticket-deadline_date" className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                    <Clock className="size-3.5 text-indigo-500" aria-hidden="true" />
+                    사전예매 마감 일시 <span className="text-destructive">*</span>
+                  </Label>
+                  <GigDateTimeInputs
+                    id="ticket-deadline"
+                    timeLabel="사전예매 마감 시간"
+                    date={endDate}
+                    time={endTime}
+                    onDateChange={(date) => setDateTime("deadline", date, endTime)}
+                    onTimeChange={(time) => setDateTime("deadline", endDate, time)}
+                    dateRequired
+                    timeRequired
+                  />
                   <button
                     type="button"
                     className="text-xs text-muted-foreground underline"
-                    onClick={() => set("startsAt", "")}
+                    onClick={() => set("deadline", "")}
                   >
-                    시작 제한 해제 (즉시 오픈)
+                    공연 전날 23:59로 설정
                   </button>
-                )}
+                </div>
               </div>
-            </div>
-
-            <div className="min-w-0 space-y-1.5 sm:col-span-2 md:col-span-1">
-              <Label htmlFor="ticket-deadline_date" className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
-                <Clock className="size-3.5 text-indigo-500" aria-hidden="true" />
-                사전예매 마감 일시 <span className="text-destructive">*</span>
-              </Label>
-              <GigDateTimeInputs
-                id="ticket-deadline"
-                timeLabel="사전예매 마감 시간"
-                date={endDate}
-                time={endTime}
-                onDateChange={(date) => setDateTime("deadline", date, endTime)}
-                onTimeChange={(time) => setDateTime("deadline", endDate, time)}
-                dateRequired
-                timeRequired
-              />
-              <button
-                type="button"
-                className="text-xs text-muted-foreground underline"
-                onClick={() => set("deadline", "")}
-              >
-                공연 전날 23:59로 설정
-              </button>
-            </div>
+            )}
           </div>
         )}
       </div>

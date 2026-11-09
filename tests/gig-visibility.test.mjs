@@ -66,7 +66,7 @@ const bookingGig = {
   advance_booking_deadline: "2026-11-19T14:59:00Z",
 };
 
-test("landing selects the nearest public presale and changes the destination when it opens", async () => {
+test("landing selects the nearest visible presale and changes the destination when it opens", async () => {
   for (const [now, expectedHref] of [
     ["2026-11-10T15:30:00Z", "/gigs/1"],
     ["2026-11-11T03:00:00Z", "/gigs/1/reserve"],
@@ -82,6 +82,7 @@ test("landing selects the nearest public presale and changes the destination whe
       then(resolve) {
         return Promise.resolve({ error: null, data: [
           { ...bookingGig, id: 7, advance_booking_deadline: "2026-11-08T14:59:00Z", advance_booking_starts_at: null },
+          { ...bookingGig, id: 9, visibility: "private", is_public: false },
           bookingGig,
           { ...bookingGig, id: 8, perform_date: "2026-11-21" },
         ] }).then(resolve);
@@ -96,7 +97,6 @@ test("landing selects the nearest public presale and changes the destination whe
     const page = await Home();
     assert.equal(page.props.children.props.upcomingBookingGig?.href ?? null, expectedHref);
     assert.deepEqual(filters, [
-      ["eq", "visibility", "public"],
       ["eq", "ticket_booking_enabled", true],
       ["gte", "perform_date", now.includes("11-19") ? "2026-11-20" : "2026-11-11"],
     ]);
@@ -104,15 +104,16 @@ test("landing selects the nearest public presale and changes the destination whe
 });
 
 test("gig detail shows presale notice, checks the Korea meeting cutoff, and gives open booking priority", async () => {
-  for (const [now, signedOut, performer, expected] of [
+  for (const [now, signedOut, performer, expected, visibility = "public"] of [
     ["2026-11-10T00:59:59Z", false, false, "join"],
     ["2026-11-10T01:00:00Z", false, false, "notice"],
     ["2026-11-10T01:00:00Z", false, true, "nomination"],
     ["2026-11-11T03:00:00Z", false, true, "booking"],
     ["2026-11-11T03:00:00Z", true, false, "booking"],
+    ["2026-11-11T03:00:00Z", false, false, "booking", "members"],
   ]) {
     class FixedDate extends Date { static now() { return Date.parse(now); } }
-    const fixture = visibilityFixture({ gig: bookingGig, signedOut, performer });
+    const fixture = visibilityFixture({ gig: { ...bookingGig, visibility, is_public: visibility === "public" }, signedOut, performer });
     fixture.mocks["@/components/gigs/gig-detail-actions"].GigDetailActions =
       function MemberActionMock({ canJoin, isCurrentUserPerformer }) {
         return isCurrentUserPerformer ? "nomination-action" : canJoin ? "join-action" : null;
