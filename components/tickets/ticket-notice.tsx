@@ -4,13 +4,13 @@ import { Card } from "@/components/ui/card";
 export function TicketNotice({
   title,
   body,
-  actions,
+  children,
 }: {
   title: string;
   body?: string;
-  actions?: ReactNode;
+  children?: ReactNode;
 }) {
-  if (!body && !actions) return null;
+  if (!body && !children) return null;
 
   return (
     <Card className="space-y-1.5 p-4 shadow-sm sm:p-5">
@@ -20,7 +20,7 @@ export function TicketNotice({
           {body}
         </p>
       )}
-      {actions && <div className="pt-2">{actions}</div>}
+      {children && <div className="space-y-3 pt-2">{children}</div>}
     </Card>
   );
 }

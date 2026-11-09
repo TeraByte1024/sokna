@@ -34,7 +34,7 @@ test("admission guidance respects the start boundary and reservation eligibility
     performance: "공연 시작까지 31분 남았습니다.",
     admission: "입장 시작까지 1분 남았습니다.",
   });
-  assert.match(model.ticketAdmissionGuidance(performance, admission, admission, true).admission, /^지금 입장해 주세요/);
+  assert.equal(model.ticketAdmissionGuidance(performance, admission, admission, true).admission, "지금 입장해 주세요!");
   assert.equal(model.ticketAdmissionGuidance(performance, admission, admission, false).admission, null);
   assert.match(model.ticketAdmissionGuidance(performance, null, admission, true).admission, /현장 안내/);
   assert.deepEqual(model.ticketAdmissionGuidance(performance, admission, performance, true), {
@@ -152,17 +152,20 @@ test("payment instructions show immutable account snapshots only while payment i
     sonner: { toast: { success: () => {}, error: () => {} } },
     "@/components/ui/button": { Button: ({ children, ...props }) => React.createElement("button", props, children) },
   });
-  const reservation = { status: "awaiting_payment", refund_status: "none", cancellation_requested_at: null, total_amount: 20000, code: "CODE", depositor: "Payer",
+  const reservation = { status: "awaiting_payment", refund_status: "none", cancellation_requested_at: null, total_amount: 20000, paid_amount: 0, code: "CODE", depositor: "Payer",
     account_snapshot: { bank: "Frozen bank", account_number: "123456789", holder: "Frozen holder", instruction: "Account-specific instructions" } };
   const html = renderToStaticMarkup(React.createElement(PaymentInstructions, { reservation }));
   assert.match(html, /123456789/); assert.match(html, /계좌번호 복사/); assert.match(html, /20,000/);
   assert.match(html, /아래 계좌로 입금해 주세요/); assert.match(html, /Account-specific instructions/);
+  const manualConfirmationNotice = /운영진이 입금 내역을 확인한 뒤 예매를 확정하므로 처리에 시간이 걸릴 수 있습니다/;
+  assert.match(html, manualConfirmationNotice);
   for (const changes of [{ payment_reported_at: "reported" }, { paid_amount: 5000 }]) {
     const pendingReview = renderToStaticMarkup(React.createElement(PaymentInstructions, { reservation: { ...reservation, ...changes } }));
     assert.match(pendingReview, /다시 송금하지 마세요/); assert.match(pendingReview, /총 예매 금액/);
+    assert.match(pendingReview, manualConfirmationNotice);
     assert.doesNotMatch(pendingReview, /아래 계좌로 입금해 주세요|Account-specific instructions/);
   }
-  for (const changes of [{ status: "cancelled" }, { status: "approved" }, { cancellation_requested_at: "date" }, { refund_status: "requested" }, { total_amount: 0 }]) {
+  for (const changes of [{ status: "cancelled" }, { status: "approved" }, { paid_amount: 20000 }, { cancellation_requested_at: "date" }, { refund_status: "requested" }, { total_amount: 0 }]) {
     assert.equal(renderToStaticMarkup(React.createElement(PaymentInstructions, { reservation: { ...reservation, ...changes } })), "");
   }
 });

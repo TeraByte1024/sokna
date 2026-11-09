@@ -186,7 +186,8 @@ export function canRequestTicketCancellationOrRefund(
 }
 
 export function getTicketPaymentAccount(r: TicketReservation) {
-  return r.status === "awaiting_payment" && r.total_amount > 0 && !isRefundRequestItem(r)
+  return r.status === "awaiting_payment" && r.total_amount > 0 &&
+    r.paid_amount < r.total_amount && !isRefundRequestItem(r)
     ? r.account_snapshot
     : null;
 }
@@ -319,7 +320,7 @@ export function ticketAdmissionGuidance(
   if (nowMs < admissionMs) {
     return { performance, admission: `입장 시작까지 ${ticketTimeRemaining(admissionMs - nowMs)} 남았습니다.` };
   }
-  return { performance, admission: "지금 입장해 주세요. 현장에서 예매번호나 예매자 이름을 알려 주세요." };
+  return { performance, admission: "지금 입장해 주세요!" };
 }
 
 export type TicketBookingMode = "manual" | "scheduled";

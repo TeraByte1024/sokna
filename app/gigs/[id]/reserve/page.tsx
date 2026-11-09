@@ -1,11 +1,9 @@
-import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import { SiteLayout } from "@/components/site-layout";
 import { PageContainer } from "@/components/page-container";
 import { Card } from "@/components/ui/card";
 import { BookingForm } from "@/components/tickets/booking-form";
-import { GigTicketLink } from "@/components/tickets/gig-ticket-link";
-import { TicketNotice } from "@/components/tickets/ticket-notice";
+import { GigBookingCard } from "@/components/tickets/gig-booking-card";
 import { ticketClient, ticketDatabaseError } from "@/lib/ticket-server";
 import { ticketDateTime, type TicketOffer } from "@/lib/ticket-reservations";
 
@@ -52,20 +50,9 @@ export default async function ReservePage({
     <SiteLayout>
       <PageContainer>
         <div className="w-full space-y-5">
-          <nav aria-label="공연 예매 바로가기" className="flex justify-end text-sm">
-            <Link
-              href="/reservations"
-              className="font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-            >
-              내 예매
-            </Link>
-          </nav>
-
           <header className="space-y-3">
             <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">공연 예매</h1>
-            <GigTicketLink gigId={gigId} gig={offer} />
-            <TicketNotice title="공연 유의사항" body={offer?.notice} />
-            <TicketNotice title="예매·취소/환불 안내" body={offer?.refund_policy} />
+            <GigBookingCard gigId={gigId} gig={offer} />
           </header>
 
           {error || !offer ? (

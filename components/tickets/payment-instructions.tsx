@@ -43,13 +43,16 @@ export function PaymentInstructions({
   };
 
   return (
-    <Card className="space-y-4 p-4 shadow-sm sm:p-5">
+    <Card className="space-y-4 border-amber-500/40 bg-amber-500/10 p-4 shadow-sm sm:p-5">
       <div className="space-y-1">
-        <h2 className="font-semibold">입금 안내</h2>
+        <h2 className="text-lg font-semibold text-amber-900 dark:text-amber-200">입금 안내</h2>
         <p className="text-sm text-muted-foreground">
           {awaitingReview
             ? "이미 입금했다면 다시 송금하지 마세요. 입금액이 다르면 운영진에게 문의해 주세요."
-            : "아래 계좌로 입금해 주세요. 입금 확인 후 예매가 확정됩니다."}
+            : "아래 계좌로 입금해 주세요."}
+        </p>
+        <p className="text-sm text-muted-foreground">
+          운영진이 입금 내역을 확인한 뒤 예매를 확정하므로 처리에 시간이 걸릴 수 있습니다.
         </p>
       </div>
 
@@ -58,9 +61,9 @@ export function PaymentInstructions({
         <p className="break-words text-sm text-muted-foreground">예금주 {a.holder}</p>
       </div>
 
-      <dl className="grid grid-cols-[5rem_minmax(0,1fr)] gap-x-2 gap-y-2 border-t pt-3 text-sm">
+      <dl className="grid grid-cols-[5rem_minmax(0,1fr)] items-baseline gap-x-2 gap-y-2 border-t border-amber-500/25 pt-3 text-sm">
         <dt className="text-muted-foreground">{amountLabel}</dt>
-        <dd className="font-semibold tabular-nums">{won(r.total_amount)}</dd>
+        <dd className="text-lg font-semibold tabular-nums">{won(r.total_amount)}</dd>
         <dt className="text-muted-foreground">입금자명</dt>
         <dd className="break-words">{r.depositor}</dd>
       </dl>

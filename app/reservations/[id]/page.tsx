@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
-import { ArrowLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { SiteLayout } from "@/components/site-layout";
 import { PageContainer } from "@/components/page-container";
 import { Card } from "@/components/ui/card";
@@ -10,6 +10,7 @@ import { getGigRow } from "@/lib/gig-server-data";
 import { AdmissionGuidance } from "@/components/tickets/admission-guidance";
 import { PaymentInstructions } from "@/components/tickets/payment-instructions";
 import { ReservationControls } from "@/components/tickets/reservation-controls";
+import { TicketCardLink } from "@/components/tickets/ticket-card-link";
 import { TicketNotice } from "@/components/tickets/ticket-notice";
 import { TicketStatusBadge } from "@/components/tickets/ticket-status-badge";
 import {
@@ -56,7 +57,7 @@ export default async function ReservationPage({ params }: { params: Promise<{ id
     : r.gig_snapshot;
   const admissionTimestamp = Date.parse(currentGig?.admission_starts_at ?? "");
   const admissionMs = Number.isFinite(admissionTimestamp) ? admissionTimestamp : null;
-  const admission = parseDateTime(currentGig?.admission_starts_at);
+  const { time: admissionTime } = parseDateTime(currentGig?.admission_starts_at);
   const showPayment = Boolean(getTicketPaymentAccount(r));
   const canEnter = r.status === "approved" && !isRefundRequestItem(r);
   const showRefundAmount = r.refund_status === "processing" || r.refund_status === "completed";
@@ -85,24 +86,24 @@ export default async function ReservationPage({ params }: { params: Promise<{ id
           </nav>
 
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">예매 상세</h1>
+          {showPayment && <PaymentInstructions reservation={r} />}
+
           <div className="grid items-start gap-5 md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-            <section aria-labelledby="reservation-gig-heading" className="min-w-0 space-y-4">
-              <Card className="space-y-3 p-4 shadow-sm sm:p-5">
-                <h2 id="reservation-gig-heading" className="font-semibold">공연 정보</h2>
-                <Link
-                  href={`/gigs/${r.gig_id}`}
-                  className="flex items-center gap-1.5 font-semibold underline-offset-4 hover:underline focus-visible:underline"
-                >
-                  <span className="min-w-0 break-words break-keep">{gig.title}</span>
-                  <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                </Link>
+            <section aria-labelledby="reservation-gig-heading" className="min-w-0">
+              <TicketCardLink
+                href={`/gigs/${r.gig_id}`}
+                stacked
+                stub={<span className="underline-offset-4 group-hover:underline group-focus-visible:underline">공연 상세</span>}
+              >
+                <h2 id="reservation-gig-heading" className="text-sm font-semibold text-muted-foreground">공연 정보</h2>
+                <p className="break-words break-keep text-lg font-bold leading-snug tracking-tight sm:text-xl">{gig.title}</p>
                 <dl className="grid grid-cols-[5rem_minmax(0,1fr)] gap-x-2 gap-y-2 text-sm">
                   <dt className="text-muted-foreground">공연 일시</dt>
                   <dd>{formatKoreanDateTime(gig.date, gig.time?.slice(0, 5))}</dd>
                   <dt className="text-muted-foreground">공연 장소</dt>
                   <dd className="break-words">{gig.location || "추후 안내"}</dd>
                   <dt className="text-muted-foreground">입장 시작</dt>
-                  <dd>{admission.date ? formatKoreanDateTime(admission.date, admission.time) : "추후 안내"}</dd>
+                  <dd>{admissionTime || "추후 안내"}</dd>
                 </dl>
                 <AdmissionGuidance
                   performanceMs={ticketPerformanceTime(gig.date, gig.time)}
@@ -110,8 +111,15 @@ export default async function ReservationPage({ params }: { params: Promise<{ id
                   initialNow={Date.now()}
                   canEnter={canEnter && !isTicketAdmissionComplete(r)}
                 />
-              </Card>
-              <TicketNotice title="공연 유의사항" body={r.notice_snapshot} />
+                {r.notice_snapshot && (
+                  <div className="space-y-1.5 border-t pt-3">
+                    <h3 className="text-sm font-semibold">공연 유의사항</h3>
+                    <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-muted-foreground">
+                      {r.notice_snapshot}
+                    </p>
+                  </div>
+                )}
+              </TicketCardLink>
             </section>
 
             <section aria-labelledby="reservation-info-heading" className="min-w-0 space-y-4">
@@ -128,24 +136,18 @@ export default async function ReservationPage({ params }: { params: Promise<{ id
                   <dd className="tabular-nums">{formatPhoneNumber(r.phone)}</dd>
                   <dt className="text-muted-foreground">예매 수량</dt>
                   <dd className="tabular-nums">{r.quantity}매</dd>
-                  {!showPayment && (
+                  <dt className="text-muted-foreground">총 결제 금액</dt>
+                  <dd className="font-medium tabular-nums">{won(r.total_amount)}</dd>
+                  {!showPayment && r.total_amount > 0 && (
                     <>
-                      {r.total_amount > 0 && (
-                        <>
-                          <dt className="text-muted-foreground">입금자명</dt>
-                          <dd className="break-words">{r.depositor}</dd>
-                        </>
-                      )}
-                      <dt className="text-muted-foreground">총 예매 금액</dt>
-                      <dd className="font-medium tabular-nums">{won(r.total_amount)}</dd>
+                      <dt className="text-muted-foreground">입금자명</dt>
+                      <dd className="break-words">{r.depositor}</dd>
                     </>
                   )}
                   <dt className="text-muted-foreground">접수 일시</dt>
                   <dd>{ticketDateTime(r.created_at)}</dd>
                 </dl>
               </Card>
-
-              {showPayment && <PaymentInstructions reservation={r} />}
 
               {showCancellationDetails && (
                 <Card className="space-y-3 p-4 shadow-sm sm:p-5">
@@ -178,28 +180,28 @@ export default async function ReservationPage({ params }: { params: Promise<{ id
               <TicketNotice
                 title="예매·취소/환불 안내"
                 body={r.refund_policy_snapshot}
-                actions={canRequestTicketCancellationOrRefund(r)
-                  ? <ReservationControls key={r.version} reservation={r} />
-                  : null}
-              />
+              >
+                {canRequestTicketCancellationOrRefund(r) && (
+                  <ReservationControls key={r.version} reservation={r} />
+                )}
+                <details className="group/disclosure border-t pt-3">
+                  <DisclosureSummary className="text-sm font-medium">
+                    {r.privacy_snapshot ? "예매 개인정보 수집·이용 동의 및 문의" : "예매·환불 문의"}
+                  </DisclosureSummary>
+                  <div className="mt-2 space-y-2 text-sm leading-relaxed text-muted-foreground">
+                    {r.privacy_snapshot && (
+                      <p className="whitespace-pre-wrap break-words">
+                        {privacyIncludesContact
+                          ? <>{r.privacy_snapshot.slice(0, -contactEmail.length)}{contactLink}</>
+                          : r.privacy_snapshot}
+                      </p>
+                    )}
+                    {!privacyIncludesContact && <p>예매·환불 문의 {contactLink}</p>}
+                  </div>
+                </details>
+              </TicketNotice>
             </section>
           </div>
-
-          <details className="group/disclosure rounded-xl border px-4 py-3">
-            <DisclosureSummary className="text-sm font-medium">
-              {r.privacy_snapshot ? "예매 개인정보 수집·이용 동의 및 문의" : "예매·환불 문의"}
-            </DisclosureSummary>
-            <div className="mt-2 space-y-2 text-sm leading-relaxed text-muted-foreground">
-              {r.privacy_snapshot && (
-                <p className="whitespace-pre-wrap break-words">
-                  {privacyIncludesContact
-                    ? <>{r.privacy_snapshot.slice(0, -contactEmail.length)}{contactLink}</>
-                    : r.privacy_snapshot}
-                </p>
-              )}
-              {!privacyIncludesContact && <p>예매·환불 문의 {contactLink}</p>}
-            </div>
-          </details>
         </div>
       </PageContainer>
     </SiteLayout>
